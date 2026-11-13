@@ -11,7 +11,13 @@ Je hebt alleen Xcode nodig (staat al op je Mac). Open Terminal in deze map en ty
 ./scripts/run.sh
 ```
 
-Dat bouwt de app en opent hem. De app staat daarna in `dist/HomeFinance.app`; die kun je naar je map Apps slepen.
+Dat bouwt de app en opent hem vanuit `dist/HomeFinance.app`. Wil je hem in je map Apps (Launchpad, Spotlight)?
+
+```bash
+./scripts/run.sh --install
+```
+
+Dat zet de nieuwste versie in `/Applications/HomeFinance.app`. Na elke wijziging in de code doe je dat opnieuw.
 De eerste keer duurt het bouwen een paar minuten, daarna seconden.
 
 Bij de eerste start kies je tussen **rondkijken met voorbeelddata** (een verzonnen gezin) en **je eigen
@@ -36,7 +42,8 @@ administratie beginnen**. Je kunt later altijd wisselen via Instellingen › Ove
 | Reserveringen | Wat je maandelijks opzijzet voor jaarlijkse of onregelmatige kosten. Eén overboeking naar spaar, verdeeld over potten. |
 | Pot | Een deel van het saldo op je spaarrekening met een eigen doel. |
 | Anti-rood | Buffer die altijd op de betaalrekening moet blijven staan. |
-| Besteedbaar | Saldo betaalrekening − anti-rood − tijdelijk anti-rood. Geld met een bestemming staat in potten op de spaarrekening. |
+| Besteedbaar | Saldo betaalrekening − anti-rood − wat je tijdelijk van spaar hebt geleend. Geld met een bestemming staat in potten op de spaarrekening. |
+| Tijdelijk geleend van spaar | Geld dat je even naar de betaalrekening haalt en later terugboekt. Je markeert beide overboekingen; de app houdt bij wat er uitstaat. |
 | Vergoeden uit spaar | Een uitgave van de betaalrekening die je later terugboekt vanaf de spaarrekening. |
 | Tag | Label om uitgaven te volgen (tanken, uit eten). Telt niet als extra uitgave. |
 

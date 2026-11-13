@@ -202,6 +202,13 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Tijdelijk anti-rood wordt afgeleid uit gemarkeerde boekingen in plaats van een instelling per jaar.
+        m.registerMigration("v2-temporaryLoan") { db in
+            try db.alter(table: "entry") { t in
+                t.add(column: "temporaryLoan", .boolean).notNull().defaults(to: false)
+            }
+        }
+
         return m
     }
 }

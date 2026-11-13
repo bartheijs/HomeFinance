@@ -327,21 +327,25 @@ struct SettingsYearTab: View {
 
 // MARK: - Buffers
 
-/// De drie buffers van het jaar. Bewaart bij Enter of zodra je een veld verlaat.
+/// De anti-roodbuffer van het jaar, en wat er tijdelijk van spaar geleend is. Bewaart bij Enter of zodra je het veld verlaat.
 struct SettingsBuffersCard: View {
+    @Environment(AppModel.self) private var model
     let year: BudgetYear
+    /// Uitstaand tijdelijk geleend bedrag; volgt uit de transacties.
+    private var outstanding: Money {
+        _ = model.revision
+        return model.read(.zero) { try Insight.temporaryLoanOutstanding($0, on: model.today) }
+    }
     var onSave: (Money, Money) -> Void
 
-    private enum Field: Hashable { case antiRood, tijdelijk }
+    private enum Field: Hashable { case antiRood }
 
     @State private var antiRood: Money?
-    @State private var tijdelijk: Money?
     @FocusState private var focus: Field?
 
     init(year: BudgetYear, onSave: @escaping (Money, Money) -> Void) {
         self.year = year; self.onSave = onSave
         _antiRood = State(initialValue: year.antiRood)
-        _tijdelijk = State(initialValue: year.tijdelijkAntiRood)
     }
 
     var body: some View {
@@ -352,10 +356,11 @@ struct SettingsBuffersCard: View {
             .help("Deze buffer telt niet mee als besteedbaar.")
             .padding(.horizontal, 18).padding(.vertical, 12)
             Divider().padding(.leading, 18)
-            SettingsRow("Tijdelijk anti-rood", text: "Extra buffer voor even. Meestal € 0,00.") {
-                field($tijdelijk, .tijdelijk)
+            SettingsRow("Tijdelijk geleend van spaar",
+                        text: "Haal je even extra geld van spaar? Markeer die overboeking bij Transacties als ‘Tijdelijk geleend van spaar’, en het terugboeken ook. De app houdt bij wat er nog uitstaat.") {
+                MoneyText(outstanding).foregroundStyle(outstanding.isZero ? .secondary : .primary)
             }
-            .help("Bijvoorbeeld vlak voor een grote afschrijving. Telt ook niet mee als besteedbaar.")
+            .help("Wat er uitstaat telt niet mee als besteedbaar. Je vult hier niets in; het volgt uit je transacties.")
             .padding(.horizontal, 18).padding(.vertical, 12)
         }
         .font(.title3)
@@ -375,9 +380,8 @@ struct SettingsBuffersCard: View {
     }
 
     private func commit() {
-        guard let antiRood, let tijdelijk else { return }
-        guard antiRood != year.antiRood || tijdelijk != year.tijdelijkAntiRood else { return }
-        onSave(antiRood, tijdelijk)
+        guard let antiRood, antiRood != year.antiRood else { return }
+        onSave(antiRood, .zero)
     }
 }
 

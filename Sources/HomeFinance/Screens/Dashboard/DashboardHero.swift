@@ -74,8 +74,8 @@ struct DashboardHero: View {
             line("Anti-rood", spendable.antiRood, sign: "−",
                  help: "Vaste buffer die altijd op de rekening blijft staan, zodat je niet rood komt te staan.")
             if !spendable.tijdelijkAntiRood.isZero {
-                line("Tijdelijk anti-rood", spendable.tijdelijkAntiRood, sign: "−",
-                     help: "Extra buffer die je tijdelijk aanhoudt, bijvoorbeeld voor een grote uitgave die eraan komt.")
+                line("Tijdelijk geleend van spaar", spendable.tijdelijkAntiRood, sign: "−",
+                     help: "Geld dat je tijdelijk van spaar naar de betaalrekening hebt gehaald en nog moet terugboeken. Het staat op de rekening, maar is niet van jou om uit te geven.")
             }
             Divider()
             total("Besteedbaar", spendable.spendable)

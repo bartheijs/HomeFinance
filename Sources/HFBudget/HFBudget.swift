@@ -32,6 +32,7 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
     case potWrongAccount(pot: String)
     case reimburseOnSavings
     case reimburseNotExpense
+    case temporaryLoanOnSavings
     /// De boeking zit in een spaaroverboeking en mag daarom niet zo gewijzigd worden.
     case inSavingsTransfer
     /// Bedrag, dag en rekening van een boeking uit een banktransactie liggen vast.
@@ -85,6 +86,8 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
             return "'Vergoeden uit spaar' kan alleen bij een boeking op een betaalrekening."
         case .reimburseNotExpense:
             return "'Vergoeden uit spaar' kan alleen bij een uitgave (negatief bedrag)."
+        case .temporaryLoanOnSavings:
+            return "'Tijdelijk geleend van spaar' kan alleen bij een boeking op een betaalrekening."
         case .inSavingsTransfer:
             return "Deze boeking zit in een spaaroverboeking. Verwijder eerst die spaaroverboeking."
         case .bankEntryImmutable:

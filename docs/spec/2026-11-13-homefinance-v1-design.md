@@ -47,7 +47,7 @@ Modules kennen elkaar niet onderling (`HFInsight` leest alleen en rekent zelf me
 Zie `Sources/HFCore/Records.swift` (records met uitleg) en `Schema.swift` (tabellen). Kern:
 
 - **Account**: betaal of spaar, met beginsaldo en begindatum.
-- **BudgetYear**: jaar, `antiRood`, `tijdelijkAntiRood`, `closed`.
+- **BudgetYear**: jaar, `antiRood`, `closed`.
 - **BudgetItem**: vaste post in één jaar (rij in het grid): label, richting IN/UIT/RES, planbedrag met teken,
   frequentie, verwachte maanden en dag. Eén post per jaar is `isReserveTotal` (de regel RESERVERINGEN).
 - **Pot**: deel van het saldo van een spaarrekening; soort reservering of spaar; maandbedrag.
@@ -82,14 +82,19 @@ Zie `Sources/HFCore/Records.swift` (records met uitleg) en `Schema.swift` (tabel
 - Een banktransactie is `verwerkt` als de som van zijn boekingen gelijk is aan zijn bedrag.
 
 ### Besteedbaar
-- **Besteedbaar** = saldo betaalrekening − `antiRood` − `tijdelijkAntiRood`.
+- **Besteedbaar** = saldo betaalrekening − `antiRood` − tijdelijk geleend van spaar.
+- **Anti-rood** is een vast bedrag per jaar (Instellingen).
+- **Tijdelijk geleend van spaar** (voorheen "tijdelijk anti-rood") is geen instelling maar volgt uit de
+  transacties: een boeking op de betaalrekening kan de markering `temporaryLoan` krijgen. Lenen is een
+  bijschrijving (+), terugboeken een afschrijving (−); het uitstaande bedrag is de som van alle gemarkeerde
+  boekingen t/m de peildag, met nul als ondergrens. Het Dashboard meldt wat er nog uitstaat.
 - Op de betaalrekening staat geen geld met een bestemming. Alles wat gereserveerd is, staat in een pot op de
   spaarrekening (besluit 13-11-2026). De Excel hield één reservering op de betaalrekening aan: een jaarlijkse
   schenking waaruit maandelijks rente op een privélening wordt betaald. In de app is dat een pot: de schenking
   gaat één keer per jaar naar die pot, de maandelijkse rentebetaling krijgt via een regel "vergoeden uit spaar"
   uit die pot en loopt mee in de maandelijkse spaaroverboeking.
-- De kolommen `budgetYear.reserveBase` en `budgetItem.reducesReserve` bestaan nog in het schema maar worden niet
-  meer gebruikt.
+- De kolommen `budgetYear.reserveBase`, `budgetYear.tijdelijkAntiRood` en `budgetItem.reducesReserve` bestaan
+  nog in het schema maar worden niet meer gebruikt.
 - **Besteedbaar eind van de maand** (simulatie) = besteedbaar + som van het plan van alle vaste posten die deze
   maand verwacht worden en nog geen boeking hebben (RESERVERINGEN telt mee, RES-regels niet).
 

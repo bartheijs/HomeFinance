@@ -1,7 +1,8 @@
 #!/bin/zsh
 # Bouwt HomeFinance en start het als gewone Mac-app (dist/HomeFinance.app).
 # Gebruik: ./scripts/run.sh          bouwen en starten
-#          ./scripts/run.sh --build  alleen bouwen
+#          ./scripts/run.sh --build    alleen bouwen
+#          ./scripts/run.sh --install  bouwen, in de map Apps zetten en starten
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -38,4 +39,13 @@ PLIST
 
 codesign --force --sign - "$APP" >/dev/null 2>&1 || true
 echo "Gebouwd: $APP"
-[ "${1:-}" = "--build" ] || open "$APP"
+case "${1:-}" in
+  --build) ;;
+  --install)
+    # Zet de app in de map Apps, zodat hij in Launchpad en Spotlight staat.
+    rm -rf "/Applications/HomeFinance.app"
+    cp -R "$APP" "/Applications/HomeFinance.app"
+    echo "Geinstalleerd: /Applications/HomeFinance.app"
+    open "/Applications/HomeFinance.app" ;;
+  *) open "$APP" ;;
+esac

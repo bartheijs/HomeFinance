@@ -61,6 +61,8 @@ for try await dashboard in observation.values(in: appDatabase.reader) {
 | Functie | Geeft |
 |---|---|
 | `spendable(db, year:today:)` | `Spendable`: `balance`, `antiRood`, `tijdelijkAntiRood`, `spendable`, en de simulatie: `expectedItems`, `expectedTotal`, `spendableEndOfMonth` |
+| `temporaryLoanOutstanding(db, on:)` | wat er op een dag nog uitstaat van tijdelijk van spaar geleend geld (boekingen met `temporaryLoan`) |
+| `temporaryLoanEntries(db)` | de gemarkeerde boekingen, nieuwste eerst |
 | `yearSummary(db, year:today:)` | `YearSummary`: op de rekening op 1-1, IN, UIT, op de rekening, buffers, besteedbaar, IN/UIT divers en gemiddelden per verstreken maand |
 | `spendableSeries(db, year:today:)` | `[SpendablePoint]` per maandeinde t/m de peildag |
 

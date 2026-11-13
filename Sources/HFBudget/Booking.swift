@@ -18,10 +18,13 @@ public struct Allocation: Equatable, Sendable {
     public var confidence: Confidence?
     /// Nagekeken; standaard false ("nog nakijken") voor boekingen uit een import.
     public var reviewed: Bool
+    /// Tijdelijk geleend van spaar (tijdelijk anti-rood); alleen op een betaalrekening.
+    public var temporaryLoan: Bool
 
     public init(amount: Money, label: String, budgetItemId: Int64? = nil, potId: Int64? = nil,
                 reimburse: Bool = false, tagIds: [Int64] = [], note: String = "", ruleId: Int64? = nil,
-                confidence: Confidence? = nil, reviewed: Bool = false) {
+                confidence: Confidence? = nil, reviewed: Bool = false, temporaryLoan: Bool = false) {
+        self.temporaryLoan = temporaryLoan
         self.amount = amount; self.label = label; self.budgetItemId = budgetItemId; self.potId = potId
         self.reimburse = reimburse; self.tagIds = tagIds; self.note = note; self.ruleId = ruleId
         self.confidence = confidence; self.reviewed = reviewed
@@ -55,6 +58,7 @@ public enum BookingService {
                 try Check.assignment(db, account: account, day: transaction.day, amount: allocation.amount,
                                      budgetItemId: allocation.budgetItemId, potId: allocation.potId,
                                      reimburse: allocation.reimburse)
+                if allocation.temporaryLoan, account.kind != .betaal { throw BudgetError.temporaryLoanOnSavings }
                 try Check.tagsExist(db, allocation.tagIds)
                 if let ruleId = allocation.ruleId { _ = try Check.fetch(db, Rule.self, ruleId, "Regel") }
             }
@@ -65,7 +69,8 @@ public enum BookingService {
                                   day: transaction.day, amount: allocation.amount, label: allocation.label,
                                   budgetItemId: allocation.budgetItemId, potId: allocation.potId,
                                   reimburse: allocation.reimburse, reviewed: allocation.reviewed,
-                                  note: allocation.note, ruleId: allocation.ruleId, confidence: allocation.confidence)
+                                  note: allocation.note, ruleId: allocation.ruleId, confidence: allocation.confidence,
+                                  temporaryLoan: allocation.temporaryLoan)
                 try entry.insert(db)
                 try Check.replaceTags(db, entryId: entry.id!, tagIds: allocation.tagIds)
                 entries.append(entry)
@@ -145,10 +150,13 @@ public struct EntryDraft: Equatable, Sendable {
     public var note: String
     /// Handinvoer is standaard nagekeken.
     public var reviewed: Bool
+    /// Tijdelijk geleend van spaar (tijdelijk anti-rood); alleen op een betaalrekening.
+    public var temporaryLoan: Bool
 
     public init(accountId: Int64, day: Day, amount: Money, label: String, budgetItemId: Int64? = nil,
                 potId: Int64? = nil, reimburse: Bool = false, tagIds: [Int64] = [], note: String = "",
-                reviewed: Bool = true) {
+                reviewed: Bool = true, temporaryLoan: Bool = false) {
+        self.temporaryLoan = temporaryLoan
         self.accountId = accountId; self.day = day; self.amount = amount; self.label = label
         self.budgetItemId = budgetItemId; self.potId = potId; self.reimburse = reimburse
         self.tagIds = tagIds; self.note = note; self.reviewed = reviewed
@@ -164,10 +172,11 @@ public enum EntryService {
             let account = try Check.account(db, draft.accountId)
             try Check.assignment(db, account: account, day: draft.day, amount: draft.amount,
                                  budgetItemId: draft.budgetItemId, potId: draft.potId, reimburse: draft.reimburse)
+            if draft.temporaryLoan, account.kind != .betaal { throw BudgetError.temporaryLoanOnSavings }
             try Check.tagsExist(db, draft.tagIds)
             var entry = Entry(accountId: draft.accountId, day: draft.day, amount: draft.amount, label: draft.label,
                               budgetItemId: draft.budgetItemId, potId: draft.potId, reimburse: draft.reimburse,
-                              reviewed: draft.reviewed, note: draft.note)
+                              reviewed: draft.reviewed, note: draft.note, temporaryLoan: draft.temporaryLoan)
             try entry.insert(db)
             try Check.replaceTags(db, entryId: entry.id!, tagIds: draft.tagIds)
             return entry
@@ -179,7 +188,8 @@ public enum EntryService {
         let entry = try Check.entry(db, entryId)
         return EntryDraft(accountId: entry.accountId, day: entry.day, amount: entry.amount, label: entry.label,
                           budgetItemId: entry.budgetItemId, potId: entry.potId, reimburse: entry.reimburse,
-                          tagIds: try tagIds(db, entryId: entryId), note: entry.note, reviewed: entry.reviewed)
+                          tagIds: try tagIds(db, entryId: entryId), note: entry.note, reviewed: entry.reviewed,
+                          temporaryLoan: entry.temporaryLoan)
     }
 
     /// Werkt een boeking bij. Bij een boeking uit een banktransactie liggen bedrag, dag en rekening vast.
@@ -200,7 +210,9 @@ public enum EntryService {
             let account = try Check.account(db, draft.accountId)
             try Check.assignment(db, account: account, day: draft.day, amount: draft.amount,
                                  budgetItemId: draft.budgetItemId, potId: draft.potId, reimburse: draft.reimburse)
+            if draft.temporaryLoan, account.kind != .betaal { throw BudgetError.temporaryLoanOnSavings }
             try Check.tagsExist(db, draft.tagIds)
+            entry.temporaryLoan = draft.temporaryLoan
             entry.accountId = draft.accountId; entry.day = draft.day; entry.amount = draft.amount
             entry.label = draft.label; entry.budgetItemId = draft.budgetItemId; entry.potId = draft.potId
             entry.reimburse = draft.reimburse; entry.note = draft.note; entry.reviewed = draft.reviewed
@@ -221,6 +233,18 @@ public enum EntryService {
             if entry.savingsTransferId != nil, !reimburse { throw BudgetError.inSavingsTransfer }
             draft.reimburse = reimburse
             draft.potId = reimburse ? potId : nil
+            return try update(db, entryId: entryId, draft)
+        }
+    }
+
+    /// Markeert een boeking op een betaalrekening als tijdelijk geleend van spaar, of haalt de markering weg.
+    /// Gebruik dit bij de overboeking van spaar (+) én bij het terugboeken (−).
+    @discardableResult
+    public static func setTemporaryLoan(_ db: Database, entryId: Int64, _ temporaryLoan: Bool) throws -> Entry {
+        try atomic(db) {
+            var draft = try self.draft(db, entryId: entryId)
+            guard draft.temporaryLoan != temporaryLoan else { return try Check.entry(db, entryId) }
+            draft.temporaryLoan = temporaryLoan
             return try update(db, entryId: entryId, draft)
         }
     }

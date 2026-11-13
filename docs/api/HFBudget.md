@@ -67,6 +67,7 @@ Regels bij boeken (ook voor handmatige boekingen):
 | `draft(db, entryId:) -> EntryDraft` | Huidige waarden, om te bewerken. |
 | `update(db, entryId:, EntryDraft) -> Entry` | Alles wijzigen; bij een boeking uit de bank liggen bedrag, dag en rekening vast. |
 | `setReimburse(db, entryId:, Bool, potId:)` | Vergoeden aan/uit. Uitzetten wordt geweigerd als de boeking in een spaaroverboeking zit. |
+| `setTemporaryLoan(db, entryId:, Bool)` | Markeert een boeking op een betaalrekening als tijdelijk geleend van spaar (bij het lenen én bij het terugboeken). `Allocation` en `EntryDraft` hebben hetzelfde veld `temporaryLoan`. |
 | `delete(db, entryId:)` | Alleen handmatige boekingen. |
 | `setReviewed(db, entryIds:, Bool)` | Nagekeken aan/uit. |
 | `markAllReviewed(db, accountId:) -> Int` | Alles van een rekening nagekeken (afgesloten jaren overgeslagen); geeft het aantal. |

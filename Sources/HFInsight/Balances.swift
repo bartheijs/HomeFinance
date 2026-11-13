@@ -75,6 +75,8 @@ public struct Spendable: Equatable, Sendable {
     /// Saldo van alle betaalrekeningen.
     public let balance: Money
     public let antiRood: Money
+    /// Wat nu nog uitstaat van bedragen die tijdelijk van spaar geleend zijn (boekingen met `temporaryLoan`
+    /// op betaalrekeningen, alle jaren t/m de peildag; nooit negatief).
     public let tijdelijkAntiRood: Money
     /// Besteedbaar = saldo − antiRood − tijdelijkAntiRood.
     /// Geld met een bestemming staat in potten op de spaarrekening, niet op de betaalrekening.
@@ -227,13 +229,29 @@ extension Insight {
         return zip(days, values).map { BalancePoint(day: $0, balance: $1) }
     }
 
+    /// Uitstaand tijdelijk anti-rood op een dag: som van de boekingen met `temporaryLoan` op betaalrekeningen
+    /// t/m die dag (lenen is +, terugboeken is −), met nul als ondergrens.
+    public static func temporaryLoanOutstanding(_ db: Database, on day: Day) throws -> Money {
+        let sum = try Money.fetchOne(db, sql: """
+            SELECT COALESCE(SUM(e.amount), 0) FROM entry e
+            WHERE e.temporaryLoan = 1 AND e.accountId IN \(Q.betaal) AND e.day <= ?
+            """, arguments: [day]) ?? .zero
+        return max(sum, .zero)
+    }
+
+    /// De boekingen die als tijdelijk geleend zijn gemarkeerd, nieuwste eerst.
+    public static func temporaryLoanEntries(_ db: Database) throws -> [EntryRow] {
+        try entryRows(db, where: "e.temporaryLoan = 1", arguments: [], order: "e.day DESC, e.id DESC")
+    }
+
     /// Besteedbaar van een jaar op de peildag, met de simulatie tot het eind van de lopende maand.
     /// Gooit `InsightError.yearNotFound` als het jaar nog geen begroting heeft.
     public static func spendable(_ db: Database, year: Int, today: Day) throws -> Spendable {
         let budgetYear = try Q.budgetYear(db, year)
         let asOf = Q.asOf(year, today)
         let balance = try checkingBalance(db, on: asOf)
-        let spendable = balance - budgetYear.antiRood - budgetYear.tijdelijkAntiRood
+        let borrowed = try temporaryLoanOutstanding(db, on: asOf)
+        let spendable = balance - budgetYear.antiRood - borrowed
 
         var expected: [ExpectedItem] = []
         if today.year == year {
@@ -251,7 +269,7 @@ extension Insight {
         }
         let expectedTotal = expected.map(\.plan).sum()
         return Spendable(year: year, asOf: asOf, balance: balance, antiRood: budgetYear.antiRood,
-                         tijdelijkAntiRood: budgetYear.tijdelijkAntiRood, spendable: spendable,
+                         tijdelijkAntiRood: borrowed, spendable: spendable,
                          expectedItems: expected, expectedTotal: expectedTotal,
                          spendableEndOfMonth: spendable + expectedTotal)
     }
@@ -284,9 +302,10 @@ extension Insight {
         let asOf = Q.asOf(year, today)
         let days = seriesDays(from: Day(year: year, month: 1, day: 1)!, to: asOf, step: .monthEnd)
         let balances = try balances(db, accountClause: "IN \(Q.betaal)", arguments: [], at: days)
-        let buffers = budgetYear.antiRood + budgetYear.tijdelijkAntiRood
+        let borrowed = try days.map { try temporaryLoanOutstanding(db, on: $0) }
         return days.indices.map {
-            SpendablePoint(day: days[$0], balance: balances[$0], spendable: balances[$0] - buffers)
+            SpendablePoint(day: days[$0], balance: balances[$0],
+                           spendable: balances[$0] - budgetYear.antiRood - borrowed[$0])
         }
     }
 }

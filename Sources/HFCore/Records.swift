@@ -38,7 +38,8 @@ public struct BudgetYear: Codable, Identifiable, Equatable, Sendable, FetchableR
     public var year: Int
     /// Vaste buffer om niet rood te staan (positief bedrag).
     public var antiRood: Money
-    /// Tijdelijke extra buffer (positief bedrag, meestal 0).
+    /// Niet meer in gebruik (besluit 13-11-2026): tijdelijk anti-rood volgt uit boekingen met
+    /// `Entry.temporaryLoan`. De kolom blijft bestaan omdat migraties niet worden aangepast.
     public var tijdelijkAntiRood: Money
     /// Niet meer in gebruik (besluit 13-11-2026): geld met een bestemming staat in een pot op de
     /// spaarrekening. De kolom blijft bestaan omdat migraties niet worden aangepast.
@@ -254,12 +255,17 @@ public struct Entry: Codable, Identifiable, Equatable, Sendable, FetchableRecord
     public var ruleId: Int64?
     public var confidence: Confidence?
     public var createdAt: Date
+    /// Tijdelijk geleend van spaar (tijdelijk anti-rood): een bedrag dat op de betaalrekening staat maar terug
+    /// moet. Erbij (+) bij het lenen, eraf (−) bij het terugboeken. Het uitstaande saldo telt niet als besteedbaar.
+    public var temporaryLoan: Bool
 
     public static let databaseTableName = "entry"
     public init(id: Int64? = nil, accountId: Int64, bankTransactionId: Int64? = nil, day: Day, amount: Money,
                 label: String, budgetItemId: Int64? = nil, potId: Int64? = nil, reimburse: Bool = false,
                 savingsTransferId: Int64? = nil, counterEntryId: Int64? = nil, reviewed: Bool = true,
-                note: String = "", ruleId: Int64? = nil, confidence: Confidence? = nil, createdAt: Date = Date()) {
+                note: String = "", ruleId: Int64? = nil, confidence: Confidence? = nil, createdAt: Date = Date(),
+                temporaryLoan: Bool = false) {
+        self.temporaryLoan = temporaryLoan
         self.id = id; self.accountId = accountId; self.bankTransactionId = bankTransactionId
         self.day = day; self.amount = amount; self.label = label
         self.budgetItemId = budgetItemId; self.potId = potId; self.reimburse = reimburse

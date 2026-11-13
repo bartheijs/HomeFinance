@@ -130,6 +130,8 @@ public enum YearService {
     @discardableResult
     public static func createYear(_ db: Database, year: Int, antiRood: Money = .zero,
                                   tijdelijkAntiRood: Money = .zero) throws -> BudgetYear {
+        // `tijdelijkAntiRood` wordt niet meer gebruikt (volgt uit boekingen met `temporaryLoan`); de parameter
+        // blijft voor bestaande aanroepen.
         try atomic(db) {
             guard (1900...2200).contains(year) else { throw BudgetError.validation("\(year) is geen geldig jaar.") }
             let exists = try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM budgetYear WHERE year = ?)",

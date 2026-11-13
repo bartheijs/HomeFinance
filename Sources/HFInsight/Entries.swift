@@ -37,6 +37,8 @@ public struct EntryRow: Identifiable, Equatable, Sendable {
     public let potId: Int64?
     public let potName: String?
     public let reimburse: Bool
+    /// Tijdelijk geleend van spaar (tijdelijk anti-rood).
+    public let temporaryLoan: Bool
     public let savingsTransferId: Int64?
     public let counterEntryId: Int64?
     public let reviewed: Bool
@@ -133,7 +135,7 @@ extension Insight {
 
     static let entrySelect = """
         SELECT e.id, e.accountId, a.name AS accountName, a.kind AS accountKind, e.day, e.amount, e.label, e.note,
-               e.budgetItemId, i.label AS itemLabel, e.potId, p.name AS potName, e.reimburse, e.savingsTransferId,
+               e.budgetItemId, i.label AS itemLabel, e.potId, p.name AS potName, e.reimburse, e.temporaryLoan, e.savingsTransferId,
                e.counterEntryId, e.reviewed, e.confidence, e.bankTransactionId,
                b.counterpartyName AS bName, b.counterpartyIban AS bIban, b.descriptionText AS bDesc,
                b.reference AS bRef, b.transactionCode AS bCode, b.amount AS bAmount
@@ -161,7 +163,7 @@ extension Insight {
                             accountKind: r["accountKind"], day: r["day"], amount: r["amount"], label: r["label"],
                             note: r["note"], budgetItemId: r["budgetItemId"], itemLabel: r["itemLabel"],
                             potId: r["potId"], potName: r["potName"], reimburse: r["reimburse"],
-                            savingsTransferId: r["savingsTransferId"], counterEntryId: r["counterEntryId"],
+                            temporaryLoan: r["temporaryLoan"], savingsTransferId: r["savingsTransferId"], counterEntryId: r["counterEntryId"],
                             reviewed: r["reviewed"], confidence: r["confidence"], bankTransactionId: bankId,
                             bank: bank, tags: [])
         }

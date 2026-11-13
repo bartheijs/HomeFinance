@@ -212,27 +212,26 @@ private let today = Fixture.today
         let s = try f.db.read { try Insight.spendable($0, year: 2027, today: today) }
         // saldo betaalrekening                      3.540,00
         // antiRood                                    500,00
-        // tijdelijkAntiRood                           100,00
-        // besteedbaar = 3540 − 500 − 100            2.940,00
+        // besteedbaar = 3540 − 500                  3.040,00
         #expect(s.balance == eur(3540))
-        #expect(s.spendable == eur(2940))
+        #expect(s.spendable == eur(3040))
         // Simulatie maart: nog verwacht en niet geboekt:
         //   Salaris +3000 · Energie −150 · RESERVERINGEN −250 (som RES-regels) · Lening −200 = +2400
         //   (Huur is al geboekt, Verzekering is in maart niet verwacht, RES-regels tellen niet mee)
-        // besteedbaar eind van de maand = 2940 + 2400 = 5.340,00
+        // besteedbaar eind van de maand = 3040 + 2400 = 5.440,00
         #expect(s.expectedItems.map(\.label) == ["Salaris", "Energie", "RESERVERINGEN", "Lening"])
         #expect(s.expectedItems.map(\.plan) == [eur(3000), eur(-150), eur(-250), eur(-200)])
         #expect(s.expectedItems.map(\.isLate) == [false, false, true, false])
         #expect(s.expectedTotal == eur(2400))
-        #expect(s.spendableEndOfMonth == eur(5340))
+        #expect(s.spendableEndOfMonth == eur(5440))
     }
 
     @Test func spendableForPastYearUsesYearEnd() throws {
         let s = try f.db.read { try Insight.spendable($0, year: 2027, today: d("2028-02-01")) }
         #expect(s.asOf == d("2027-12-31"))
-        #expect(s.spendable == eur(2940))
+        #expect(s.spendable == eur(3040))
         #expect(s.expectedItems.isEmpty)
-        #expect(s.spendableEndOfMonth == eur(2940))
+        #expect(s.spendableEndOfMonth == eur(3040))
     }
 
     @Test func yearSummary() throws {
@@ -244,8 +243,8 @@ private let today = Fixture.today
         #expect(y.expenses == eur(-5520))
         #expect(y.balance == eur(3540))
         #expect(y.result == eur(540))
-        #expect(y.buffers == eur(600))
-        #expect(y.spendable == eur(2940))
+        #expect(y.buffers == eur(500))
+        #expect(y.spendable == eur(3040))
         #expect(y.inDivers == eur(60))
         #expect(y.uitDivers == eur(-510))
         #expect(y.elapsedMonths == 3)
@@ -258,8 +257,8 @@ private let today = Fixture.today
     @Test func spendableSeries() throws {
         let s = try f.db.read { try Insight.spendableSeries($0, year: 2027, today: today) }
         #expect(s.map(\.day) == [d("2027-01-31"), d("2027-02-28"), today])
-        // 31-1: 3760 − 600 = 3160 · 28-2: 4930 − 600 = 4330 · 15-3: 3540 − 600 = 2940
-        #expect(s.map(\.spendable) == [eur(3160), eur(4330), eur(2940)])
+        // 31-1: 3760 − 500 = 3260 · 28-2: 4930 − 500 = 4430 · 15-3: 3540 − 500 = 3040
+        #expect(s.map(\.spendable) == [eur(3260), eur(4430), eur(3040)])
     }
 }
 
@@ -517,8 +516,8 @@ private let today = Fixture.today
 
     @Test func dashboard() throws {
         let dash = try f.db.read { try Insight.dashboard($0, today: today, recentLimit: 3) }
-        #expect(dash.spendable?.spendable == eur(2940))
-        #expect(dash.spendable?.spendableEndOfMonth == eur(5340))
+        #expect(dash.spendable?.spendable == eur(3040))
+        #expect(dash.spendable?.spendableEndOfMonth == eur(5440))
         #expect(dash.accounts.map(\.balance) == [eur(3540), eur(5335)])
         #expect((dash.paidCount, dash.openCount, dash.lateCount) == (1, 3, 1))
         #expect(dash.recentEntries.map(\.label) == ["Terugbetaling", "Tandarts", "Boodschappen"])
@@ -576,5 +575,33 @@ private let today = Fixture.today
             try #expect(Insight.checkingBalance(db, on: today) == .zero)
             try #expect(Insight.openReimbursements(db).total == .zero)
         }
+    }
+}
+
+@Suite struct TemporaryLoanTests {
+    @Test func outstandingLoanIsNotSpendable() throws {
+        let f = try Fixture()
+        let today = d("2027-03-15")
+        let before = try f.db.read { try Insight.spendable($0, year: 2027, today: today) }
+        let betaal = try f.db.read { try Account.filter(Column("kind") == "betaal").fetchOne($0)! }
+        try f.db.write { db in
+            // 1 maart: € 1.000 tijdelijk van spaar gehaald; 10 maart: € 400 teruggeboekt.
+            var lend = Entry(accountId: betaal.id!, day: d("2027-03-01"), amount: eur(1000), label: "Tijdelijk van spaar",
+                             temporaryLoan: true)
+            try lend.insert(db)
+            var back = Entry(accountId: betaal.id!, day: d("2027-03-10"), amount: eur(-400), label: "Terug naar spaar",
+                             temporaryLoan: true)
+            try back.insert(db)
+        }
+        let after = try f.db.read { try Insight.spendable($0, year: 2027, today: today) }
+        // Saldo +600, uitstaand 600: besteedbaar verandert niet.
+        #expect(after.balance == before.balance + eur(600))
+        #expect(after.tijdelijkAntiRood == eur(600))
+        #expect(after.spendable == before.spendable)
+        // Op 5 maart stond nog de volle € 1.000 uit.
+        #expect(try f.db.read { try Insight.temporaryLoanOutstanding($0, on: d("2027-03-05")) } == eur(1000))
+        let dash = try f.db.read { try Insight.dashboard($0, today: today) }
+        #expect(dash.attention.contains(.temporaryLoanOutstanding(amount: eur(600))))
+        #expect(try f.db.read { try Insight.temporaryLoanEntries($0) }.count == 2)
     }
 }

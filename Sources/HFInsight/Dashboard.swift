@@ -16,6 +16,8 @@ public enum AttentionItem: Equatable, Sendable {
     case reconciliationOld(accountId: Int64, accountName: String, lastDay: Day?, daysAgo: Int)
     /// Er is nog geen begroting voor het jaar van vandaag.
     case yearMissing(year: Int)
+    /// Er staat nog een bedrag uit dat tijdelijk van spaar geleend is.
+    case temporaryLoanOutstanding(amount: Money)
 
     /// Nederlandse tekst voor de gebruiker.
     public var message: String {
@@ -33,6 +35,8 @@ public enum AttentionItem: Equatable, Sendable {
             return "\(name): nog nooit afgestemd."
         case .yearMissing(let year):
             return "Er is nog geen begroting voor \(year)."
+        case .temporaryLoanOutstanding(let amount):
+            return "\(amount.formatted()) tijdelijk geleend van spaar staat nog uit."
         }
     }
 }
@@ -85,6 +89,8 @@ extension Insight {
         if (open["c"] as Int) > 0 {
             attention.append(.openReimbursements(amount: -(open["s"] as Money), count: open["c"]))
         }
+        let borrowed = try temporaryLoanOutstanding(db, on: today)
+        if !borrowed.isZero { attention.append(.temporaryLoanOutstanding(amount: borrowed)) }
         let openingDates = Dictionary(uniqueKeysWithValues: try Row.fetchAll(db, sql: "SELECT id, openingDate FROM account")
             .map { ($0["id"] as Int64, $0["openingDate"] as Day) })
         for a in accounts {

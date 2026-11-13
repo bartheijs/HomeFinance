@@ -82,6 +82,9 @@ private struct DashboardAttentionLook {
             icon = "clock.arrow.circlepath"; tint = .secondary; action = "Afstemmen"; target = .settings
             settingsTab = "rekeningen"
             help = "Afstemmen is het berekende saldo vergelijken met het saldo bij de bank. Doe dit ongeveer elke maand."
+        case .temporaryLoanOutstanding:
+            icon = "arrow.uturn.backward.circle"; tint = Theme.warning; action = "Bekijk"; target = .transactions
+            help = "Dit bedrag heb je tijdelijk van spaar naar de betaalrekening gehaald. Het telt niet mee als besteedbaar tot je het terugboekt en die boeking ook markeert als tijdelijk geleend."
         case .yearMissing:
             icon = "calendar.badge.plus"; tint = .secondary; action = "Aanmaken"; target = .settings
             settingsTab = "jaar"
