@@ -67,6 +67,60 @@ let results2 = try importer.commitArchive(archive, skipFaultyRows: true)
 results[0].account; results[0].fileName; results[0].result   // result is een ImportResult
 ```
 
+### Eerste import na de Excel-historie: de naad zoeken
+
+Alles tot de overgang staat al als Excel-historie in de app (boekingen met `note == "Excel-historie"`,
+zonder banktransactie). De vingerafdruk herkent die regels niet. De volgorde is: **eerst op saldo, dan op
+datum, dan met de hand.**
+
+```swift
+guard try importer.needsSeam(accountId: id) else { /* gewone import; de vingerafdruk doet het werk */ }
+
+let preview = try importer.preview(
+    url: fileURL, accountId: id,
+    skipThrough: try importer.historyCutover(accountId: id),   // terugval op datum
+    resumeFromBalance: saldoVanDeAdministratie)                // Money: het berekende saldo in de app
+
+if let seam = preview.seam {
+    seam.method          // .foundByBalance, .alreadyProcessed, .byDate, .notFound, .manual
+    seam.lineNumber      // eerste regel die meegaat (nil als er niets meegaat)
+    seam.day; seam.balance; seam.skippedCount
+    seam.seamCandidates  // regelnummers waar het saldo aansluit; meer dan één = twijfel
+    seam.isAmbiguous; seam.balanceNotFound
+    seam.soughtBalance; seam.fileOpeningBalance; seam.fileClosingBalance
+}
+
+// Niet gevonden of twijfel: de gebruiker kiest zelf per regel. Geeft een nieuw voorbeeld terug.
+let chosen = preview.overriding(includeLineNumbers: [12], excludeLineNumbers: [3, 4])
+try importer.commit(chosen)   // volgt de keuze
+
+// Zip: per rekening een eigen saldo (alleen rekeningen waarvoor needsSeam true is).
+try importer.previewArchive(url: zipURL, skipThroughByAccount: [checkingId: dayA],
+                            resumeFromBalance: [checkingId: saldoA, savingsId: saldoB])
+```
+
+### Overgangsdag op datum (terugval)
+
+Alles tot en met de overgangsdag staat al als Excel-historie in de app (boekingen met
+`note == "Excel-historie"`, zonder banktransactie). Die regels herkent de vingerafdruk niet, dus ze moeten
+op datum buiten de import blijven.
+
+```swift
+let cutover = try importer.historyCutover(accountId: id)     // laatste historie-dag, of nil
+let preview = try importer.preview(url: fileURL, accountId: id, skipThrough: cutover)
+
+preview.cutoverSkippedCount   // regels van op of vóór de overgangsdag
+preview.rows[0].isBeforeCutover
+preview.newCount              // telt ze niet mee
+preview.openingBalance        // saldo vóór de eerste regel die wel meegaat
+preview.fileOpeningBalance    // saldo vóór de allereerste regel van het bestand
+try importer.commit(preview)  // importeert alleen de latere regels
+
+// Zip: één dag voor alles, of per rekening een eigen dag (gaat voor).
+try importer.previewArchive(url: zipURL, skipThrough: cutover)
+try importer.previewArchive(url: zipURL, skipThroughByAccount: [checkingId: dayA, savingsId: dayB])
+```
+
 ### Los bestand: bij welke rekening hoort het?
 
 ```swift
@@ -105,17 +159,20 @@ let json = String(decoding: try JSONEncoder().encode(profile), as: UTF8.self)
 
 | Type | Wat |
 |---|---|
-| `BankImporter` | `init(database:)`, `preview(data:fileName:accountId:profile:)`, `preview(url:accountId:profile:)`, `commit(_:skipFaultyRows:)`, `importFile(data:…)`, `importFile(url:…)`, `previewArchive(url:)`, `previewArchive(data:fileName:)`, `commitArchive(_:skipFaultyRows:)`, `matchAccount(forFileNamed:rows:)`, `matchAccount(data:fileName:)` |
-| `ArchivePreview` | `fileName`, `items`, `importableItems`, `skippedItems`, `newCount`, `duplicateCount`, `errorCount`, `canCommit` |
+| `BankImporter` | `init(database:)`, `preview(data:fileName:accountId:profile:skipThrough:)`, `preview(url:accountId:profile:skipThrough:)`, `commit(_:skipFaultyRows:)`, `importFile(data:…)`, `importFile(url:…)` (beide met `skipThrough:`), `historyCutover(accountId:)`, `previewArchive(url:skipThrough:skipThroughByAccount:)`, `previewArchive(data:fileName:skipThrough:skipThroughByAccount:)`, `commitArchive(_:skipFaultyRows:)`, `matchAccount(forFileNamed:rows:)`, `matchAccount(data:fileName:)` |
+| `ImportSeam` | `method`, `soughtBalance`, `lineNumber`, `day`, `balance`, `skippedCount`, `seamCandidates`, `closingBalanceMatches`, `isAmbiguous`, `balanceNotFound`, `fileOpeningBalance`, `fileClosingBalance` |
+| `ImportPreview` (naad) | `seam`, `overriding(includeLineNumbers:excludeLineNumbers:)`; `preview(…)`, `importFile(…)` en `ImportPreview.build(…)` hebben `resumeFromBalance: Money?`, `previewArchive(…)` heeft `resumeFromBalance: [Int64: Money]` |
+| `BankImporter` (naad) | `needsSeam(accountId:)`, `historyCutover(accountId:)` |
+| `ArchivePreview` | `fileName`, `items`, `importableItems`, `skippedItems`, `newCount`, `duplicateCount`, `cutoverSkippedCount`, `errorCount`, `canCommit` |
 | `ArchiveItem` | `fileName`, `iban`, `account`, `preview`, `message`, `isImportable` |
 | `ArchiveImportResult` | `fileName`, `account`, `result` |
 | `AccountMatch` | `iban`, `account`, `message` |
-| `ImportPreview` | `rows`, `errors`, `warnings`, `rowsChronological`, `chainOK`, `chainBreaks`, `openingBalance`, `closingBalance`, `firstDay`, `lastDay`, `rowCount`, `newCount`, `duplicateCount`, `errorCount`, `canCommit`, `profile`, `encodingName`, `dialect`; `ImportPreview.build(file:fileName:account:profile:existingFingerprints:)` zonder database |
-| `ImportRow` | `lineNumber`, `day`, `amount`, `balanceBefore`, `balanceAfter`, `counterpartyName`, `counterpartyIban`, `descriptionText`, `reference`, `transactionCode`, `sequence`, `statementNumber`, `ownIban`, `fingerprint`, `isDuplicate` |
+| `ImportPreview` | `rows`, `errors`, `warnings`, `rowsChronological`, `chainOK`, `chainBreaks`, `openingBalance`, `fileOpeningBalance`, `closingBalance`, `firstDay`, `lastDay`, `skipThrough`, `rowCount`, `newCount`, `duplicateCount`, `cutoverSkippedCount`, `errorCount`, `canCommit`, `profile`, `encodingName`, `dialect`; `ImportPreview.build(file:fileName:account:profile:existingFingerprints:skipThrough:)` zonder database |
+| `ImportRow` | `lineNumber`, `day`, `amount`, `balanceBefore`, `balanceAfter`, `counterpartyName`, `counterpartyIban`, `descriptionText`, `reference`, `transactionCode`, `sequence`, `statementNumber`, `ownIban`, `fingerprint`, `isDuplicate`, `isBeforeCutover` |
 | `ImportRowError` | `lineNumber`, `message`, `fields`, `description` ("Regel 12: …") |
 | `ChainBreak` | `lineNumber`, `previousLineNumber`, `expected`, `found`, `message` |
-| `ImportWarning` | `kind` (`ibanMismatch`, `chainBroken`, `chainNotChecked`), `message`, `suggestedAccount` (bij `ibanMismatch`) |
-| `ImportResult` | `batch`, `transactions`, `duplicateCount`, `skippedErrorCount` |
+| `ImportWarning` | `kind` (`ibanMismatch`, `chainBroken`, `chainNotChecked`, `beforeCutover`, `seamNotFound`, `seamAmbiguous`, `alreadyProcessed`, `manualSelection`), `message`, `suggestedAccount` (bij `ibanMismatch`) |
+| `ImportResult` | `batch`, `transactions`, `duplicateCount`, `cutoverSkippedCount`, `skippedErrorCount` |
 | `ImportError` | zie hierboven |
 | `BankProfile` | Codable. `BankProfile.asn`, `BankProfile.generic(headers:)`, `BankProfile.detect(for:)`, `BankProfile.parseDay(_:formats:)` |
 | `ColumnRef` | `.index(Int)` (vanaf 0) of `.header(String)`; in JSON een getal of een tekst |
@@ -174,6 +231,66 @@ opnieuw importeren voegt niets dubbel toe. Naam van de tegenpartij en saldo tell
 naar nieuw. Dubbelen worden binnen de transactie opnieuw bepaald. Bij een fout wordt alles teruggedraaid.
 Ook als alle regels dubbel zijn komt er een `ImportBatch` (met `newCount == 0`), zodat de poging en het
 eindsaldo vastliggen. `ImportBatch.rowCount` telt goede en foute regels samen.
+
+## De naad met de Excel-historie
+
+Alleen nodig bij de eerste bankimport van een rekening na de Excel-historie; `needsSeam(accountId:)` is true
+als de rekening boekingen met `note = 'Excel-historie'` heeft en nog geen enkele `bankTransaction`. Daarna
+herkent de vingerafdruk wat al geïmporteerd is en geef je niets mee.
+
+**1. Op saldo (`resumeFromBalance`).** Het bestand moet voor elke regel een saldo hebben (CSV met saldokolom,
+of PDF met beginsaldo). In tijdsvolgorde wordt de regel gezocht waarvan het saldo vóór mutatie gelijk is aan
+het saldo van de administratie. Dat werkt ook midden op een dag, waar een datum tekortschiet.
+- **Gevonden (`foundByBalance`):** alle regels daarvóór krijgen `isBeforeCutover` en gaan niet mee;
+  `openingBalance` is het gezochte saldo. Zijn er regels overgeslagen, dan volgt een waarschuwing
+  `beforeCutover` ("N regels vóór regel X (datum) zijn overgeslagen: het saldo … sluit daar aan.").
+- **Meer kandidaten:** de vroegste waarvoor de keten daarna nergens breekt wint. `seamCandidates` bevat alle
+  regelnummers, `isAmbiguous` is true en er komt een waarschuwing `seamAmbiguous`. Breekt de keten na elke
+  kandidaat, dan wint het eindsaldo als dat aansluit, anders de vroegste kandidaat.
+- **Alles al verwerkt (`alreadyProcessed`):** het saldo is gelijk aan het saldo ná de laatste regel en geen
+  regel sluit beter aan. Alle regels krijgen `isBeforeCutover`, `newCount == 0`, waarschuwing
+  `alreadyProcessed`. Sluit het saldo ook op een regel aan, dan wint die regel (met `seamAmbiguous`).
+- **Niet gevonden:** waarschuwing `seamNotFound` ("Geen regel in dit bestand sluit aan op het saldo € … van je
+  administratie. Het bestand begint met € … en eindigt met € ….") en `seam.balanceNotFound` is true. Levert
+  het bestand geen saldo per regel, dan zegt de waarschuwing dat.
+
+**2. Op datum (`skipThrough`).** Alleen als het saldo niet is gevonden of niet is meegegeven: `seam.method`
+is `.byDate` en de regels hieronder gelden. Zonder datum is het `.notFound` en gaan alle regels mee.
+
+**3. Met de hand.** `preview.overriding(includeLineNumbers:excludeLineNumbers:)` geeft een nieuw voorbeeld
+waarin regels zijn aan- of uitgezet (uitzetten wint als een regel in beide staat). `seam.method` wordt
+`.manual`, tellingen, `openingBalance`, `firstDay` en `lastDay` worden opnieuw bepaald, en er komt een
+waarschuwing `manualSelection` als er regels uit staan. De waarschuwing `seamNotFound` blijft staan.
+`commit` volgt de keuze. Een regel die al in de database staat (`isDuplicate`) wordt ook na aanzetten niet
+opnieuw geïmporteerd. De functie werkt op elk voorbeeld, ook zonder naad.
+
+`isBeforeCutover` betekent dus in alle drie de gevallen: deze regel gaat niet mee. `seam` is nil als er geen
+`resumeFromBalance` en geen `skipThrough` is meegegeven. Het saldo van de administratie rekent `HFImport`
+niet zelf uit; dat komt van het scherm (via `HFInsight`).
+
+## Overgangsdag op datum (`skipThrough`)
+
+- **Standaard nil:** dan verandert er niets. Met een dag krijgen regels met `day <= skipThrough` de vlag
+  `isBeforeCutover`; ook de regels óp de dag zelf. Ze blijven in `rows` staan (het scherm kan ze grijs tonen),
+  tellen niet mee in `newCount` of `duplicateCount`, en `commit`/`commitArchive` importeren ze niet.
+- **Waarschuwing `beforeCutover`:** "N regels van dd-mm-jjjj of eerder zijn overgeslagen: die periode staat
+  al in je Excel-historie." Alleen als er echt regels zijn overgeslagen.
+- **Saldoketen:** wordt over alle regels van het bestand gecontroleerd, ook de overgeslagen; een breuk in
+  het overgeslagen deel wordt dus nog steeds gemeld.
+- **`openingBalance`** is het saldo vóór de eerste regel na de overgangsdag (in tijdsvolgorde), zodat het
+  scherm het kan vergelijken met het berekende saldo in de app op de overgangsdag. `fileOpeningBalance` is
+  het saldo vóór de allereerste regel van het bestand. `closingBalance` blijft het saldo na de laatste regel.
+  `firstDay`/`lastDay` gaan over de regels die meegaan. Gaat er niets mee, dan zijn die nil en is
+  `openingBalance` gelijk aan `closingBalance`.
+- **`ImportBatch`** beschrijft wat er geïmporteerd is: `openingBalance`, `firstDay` en `lastDay` volgen de
+  preview (dus vanaf de eerste regel na de overgangsdag), zodat beginsaldo + de regels van de batch-periode
+  = eindsaldo. Zonder `skipThrough` is dat hetzelfde als voorheen: het saldo vóór de eerste regel van het
+  bestand. `rowCount` telt alle regels van het bestand; het aantal overgeslagen regels staat niet in de
+  tabel maar wel in `ImportResult.cutoverSkippedCount`.
+- **Foute regels** hebben geen leesbare datum en blijven fouten, ook als ze in de oude periode vallen.
+- **`historyCutover(accountId:)`** is `MAX(day)` van de boekingen van die rekening met
+  `note = 'Excel-historie'`; nil als die er niet zijn.
+- **PDF:** werkt hetzelfde; het saldo per regel is daar uitgerekend vanaf het beginsaldo van het afschrift.
 
 ## Zip van de bank
 

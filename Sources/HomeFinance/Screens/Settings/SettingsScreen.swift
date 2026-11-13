@@ -1,7 +1,7 @@
 import SwiftUI
 import HFCore
 
-/// Instellingen: vijf tabbladen, gekozen via `model.settingsTab`.
+/// Instellingen: zes tabbladen, gekozen via `model.settingsTab`.
 struct SettingsScreen: View {
     @Environment(AppModel.self) private var model
 
@@ -27,6 +27,7 @@ struct SettingsScreen: View {
                 case .rekeningen: SettingsAccountsTab()
                 case .tags: SettingsTagsTab()
                 case .backup: SettingsBackupTab()
+                case .telefoon: SettingsPhoneTab()
                 case .over: SettingsAboutTab()
                 }
             }

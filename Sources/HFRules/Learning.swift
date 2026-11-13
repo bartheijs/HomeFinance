@@ -152,7 +152,7 @@ extension RuleEngine {
 }
 
 /// De tegenpartij waarvoor een regel geleerd wordt.
-private enum Party {
+enum Party {
     case iban(String, name: String)
     case name(String, normalized: String)
     /// Geen naam en geen IBAN: een trefwoord uit een herkenbare omschrijving (bv. een pinbetaling).

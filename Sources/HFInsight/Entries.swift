@@ -40,6 +40,8 @@ public struct EntryRow: Identifiable, Equatable, Sendable {
     /// Tijdelijk geleend van spaar (tijdelijk anti-rood).
     public let temporaryLoan: Bool
     public let savingsTransferId: Int64?
+    /// De verrekening (per tag) waarin deze boeking is meegenomen, of nil.
+    public let settlementId: Int64?
     public let counterEntryId: Int64?
     public let reviewed: Bool
     public let confidence: Confidence?
@@ -82,6 +84,8 @@ public struct EntryFilter: Equatable, Sendable {
     public var diversOnly: Bool
     public var unreviewedOnly: Bool
     public var reimburseOnly: Bool
+    /// Alleen boekingen op een betaalrekening met een tag die verrekend wordt (`Tag.settles`) en nog geen verrekening.
+    public var unsettledOnly: Bool
     /// Grenzen op het bedrag zonder teken (10 … 50 vindt ook −25,00).
     public var minAmount: Money?
     public var maxAmount: Money?
@@ -93,12 +97,13 @@ public struct EntryFilter: Equatable, Sendable {
 
     public init(accountId: Int64? = nil, year: Int? = nil, month: Int? = nil, from: Day? = nil, to: Day? = nil,
                 text: String? = nil, budgetItemId: Int64? = nil, potId: Int64? = nil, tagId: Int64? = nil,
-                diversOnly: Bool = false, unreviewedOnly: Bool = false, reimburseOnly: Bool = false,
+                diversOnly: Bool = false, unreviewedOnly: Bool = false, reimburseOnly: Bool = false, unsettledOnly: Bool = false,
                 minAmount: Money? = nil, maxAmount: Money? = nil, sign: AmountSign? = nil,
                 sort: EntrySort = .dayDescending, limit: Int? = nil, offset: Int = 0) {
         self.accountId = accountId; self.year = year; self.month = month; self.from = from; self.to = to
         self.text = text; self.budgetItemId = budgetItemId; self.potId = potId; self.tagId = tagId
         self.diversOnly = diversOnly; self.unreviewedOnly = unreviewedOnly; self.reimburseOnly = reimburseOnly
+        self.unsettledOnly = unsettledOnly
         self.minAmount = minAmount; self.maxAmount = maxAmount; self.sign = sign
         self.sort = sort; self.limit = limit; self.offset = offset
     }
@@ -135,11 +140,30 @@ extension Insight {
 
     static let entrySelect = """
         SELECT e.id, e.accountId, a.name AS accountName, a.kind AS accountKind, e.day, e.amount, e.label, e.note,
-               e.budgetItemId, i.label AS itemLabel, e.potId, p.name AS potName, e.reimburse, e.temporaryLoan, e.savingsTransferId,
+               e.budgetItemId, i.label AS itemLabel, e.potId, p.name AS potName, e.reimburse, e.temporaryLoan, e.savingsTransferId, e.settlementId,
                e.counterEntryId, e.reviewed, e.confidence, e.bankTransactionId,
                b.counterpartyName AS bName, b.counterpartyIban AS bIban, b.descriptionText AS bDesc,
                b.reference AS bRef, b.transactionCode AS bCode, b.amount AS bAmount
         """
+
+    /// Voorwaarde: boeking op een betaalrekening met een verreken-tag, nog niet verrekend.
+    static let unsettledClause = """
+        (e.settlementId IS NULL AND a.kind = 'betaal' AND EXISTS (
+            SELECT 1 FROM entryTag et JOIN tag t ON t.id = et.tagId WHERE et.entryId = e.id AND t.settles = 1))
+        """
+
+    /// Boekingen met deze id's (in stukken van 500), gesorteerd op dag.
+    static func entryRows(_ db: Database, ids: [Int64], ascending: Bool = true) throws -> [EntryRow] {
+        var rows: [EntryRow] = []
+        var start = 0
+        while start < ids.count {
+            let chunk = Array(ids[start..<min(start + 500, ids.count)])
+            start += 500
+            let marks = Array(repeating: "?", count: chunk.count).joined(separator: ",")
+            rows += try entryRows(db, where: "e.id IN (\(marks))", arguments: chunk)
+        }
+        return rows.sorted { ascending ? ($0.day, $0.id) < ($1.day, $1.id) : ($0.day, $0.id) > ($1.day, $1.id) }
+    }
 
     /// Haalt boekingen op met alle koppelingen; tags komen in één extra query per 500 boekingen.
     static func entryRows(_ db: Database, where clause: String = "1", arguments: [(any DatabaseValueConvertible)?] = [],
@@ -163,7 +187,7 @@ extension Insight {
                             accountKind: r["accountKind"], day: r["day"], amount: r["amount"], label: r["label"],
                             note: r["note"], budgetItemId: r["budgetItemId"], itemLabel: r["itemLabel"],
                             potId: r["potId"], potName: r["potName"], reimburse: r["reimburse"],
-                            temporaryLoan: r["temporaryLoan"], savingsTransferId: r["savingsTransferId"], counterEntryId: r["counterEntryId"],
+                            temporaryLoan: r["temporaryLoan"], savingsTransferId: r["savingsTransferId"], settlementId: r["settlementId"], counterEntryId: r["counterEntryId"],
                             reviewed: r["reviewed"], confidence: r["confidence"], bankTransactionId: bankId,
                             bank: bank, tags: [])
         }
@@ -222,6 +246,7 @@ extension Insight {
         if filter.diversOnly { parts.append("a.kind = 'betaal' AND e.budgetItemId IS NULL") }
         if filter.unreviewedOnly { parts.append("e.reviewed = 0") }
         if filter.reimburseOnly { parts.append("e.reimburse = 1") }
+        if filter.unsettledOnly { parts.append(unsettledClause) }
         if let v = filter.minAmount { parts.append("abs(e.amount) >= ?"); args.append(v.magnitude) }
         if let v = filter.maxAmount { parts.append("abs(e.amount) <= ?"); args.append(v.magnitude) }
         switch filter.sign {

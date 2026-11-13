@@ -46,6 +46,8 @@ public struct ArchivePreview: Equatable, Sendable {
     public var newCount: Int { importableItems.compactMap(\.preview?.newCount).reduce(0, +) }
     public var duplicateCount: Int { importableItems.compactMap(\.preview?.duplicateCount).reduce(0, +) }
     public var errorCount: Int { importableItems.compactMap(\.preview?.errorCount).reduce(0, +) }
+    /// Regels van op of vóór de overgangsdag, over alle bestanden.
+    public var cutoverSkippedCount: Int { importableItems.compactMap(\.preview?.cutoverSkippedCount).reduce(0, +) }
     /// Importeren kan zonder de keuze om foute regels over te slaan.
     public var canCommit: Bool { !importableItems.isEmpty && errorCount == 0 }
 }
@@ -76,15 +78,25 @@ public extension BankImporter {
 
     /// Pakt een zip van de bank uit en maakt per bestand een onderdeel met de bijbehorende rekening en het
     /// voorbeeld. Schrijft niets in de database; de tijdelijke map wordt weer opgeruimd.
-    func previewArchive(url: URL) throws -> ArchivePreview {
+    ///
+    /// `skipThrough` is de overgangsdag voor alle rekeningen; `skipThroughByAccount` (rekening-id → dag) gaat
+    /// voor als de rekeningen een eigen overgangsdag hebben (zie `historyCutover`).
+    /// `resumeFromBalance` (rekening-id → saldo van de administratie) zoekt per rekening eerst op saldo waar het
+    /// bestand aansluit; geef alleen rekeningen mee waarvoor `needsSeam` true is.
+    func previewArchive(url: URL, skipThrough: Day? = nil, skipThroughByAccount: [Int64: Day] = [:],
+                        resumeFromBalance: [Int64: Money] = [:]) throws -> ArchivePreview {
         let files = try ZipArchive.extract(url: url)
-        return try previewArchive(files: files, fileName: url.lastPathComponent)
+        return try previewArchive(files: files, fileName: url.lastPathComponent, skipThrough: skipThrough,
+                                  skipThroughByAccount: skipThroughByAccount, resumeFromBalance: resumeFromBalance)
     }
 
     /// Als hierboven, voor een zip in het geheugen.
-    func previewArchive(data: Data, fileName: String) throws -> ArchivePreview {
+    func previewArchive(data: Data, fileName: String, skipThrough: Day? = nil,
+                        skipThroughByAccount: [Int64: Day] = [:],
+                        resumeFromBalance: [Int64: Money] = [:]) throws -> ArchivePreview {
         let files = try ZipArchive.extract(data: data)
-        return try previewArchive(files: files, fileName: fileName)
+        return try previewArchive(files: files, fileName: fileName, skipThrough: skipThrough,
+                                  skipThroughByAccount: skipThroughByAccount, resumeFromBalance: resumeFromBalance)
     }
 
     /// Importeert alle onderdelen met een rekening in één databasetransactie: alles of niets.
@@ -103,7 +115,9 @@ public extension BankImporter {
         }
     }
 
-    internal func previewArchive(files: [ZipArchive.File], fileName: String) throws -> ArchivePreview {
+    internal func previewArchive(files: [ZipArchive.File], fileName: String, skipThrough: Day?,
+                                 skipThroughByAccount: [Int64: Day],
+                                 resumeFromBalance: [Int64: Money] = [:]) throws -> ArchivePreview {
         var items: [ArchiveItem] = []
         for file in files.sorted(by: { $0.name < $1.name }) {
             var item = ArchiveItem(fileName: file.name, iban: "", account: nil, preview: nil, message: nil)
@@ -131,7 +145,9 @@ public extension BankImporter {
                 continue
             }
             do {
-                let preview = try self.preview(data: data, fileName: file.name, accountId: accountId)
+                let preview = try self.preview(data: data, fileName: file.name, accountId: accountId,
+                                               skipThrough: skipThroughByAccount[accountId] ?? skipThrough,
+                                               resumeFromBalance: resumeFromBalance[accountId])
                 item.preview = preview
                 if preview.rows.isEmpty {
                     item.message = preview.errors.isEmpty

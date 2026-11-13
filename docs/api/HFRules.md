@@ -115,3 +115,56 @@ rekenwerk (handig voor lijsten). `RuleMatcher.match(rule, transaction, ignoreEna
    de correctie de volgende keer effect heeft.
 
 `learn` telt het gebruik alleen in geval 2. Roep `recordUse` niet nog eens aan voor dezelfde boeking.
+
+## Regels voorstellen uit de Excel-historie (`HistoryRuleSeeder`)
+
+Legt een bankexport naast de geïmporteerde Excel-historie (`Entry` zonder banktransactie met
+`note == HistoryRuleSeeder.historyNote`, "Excel-historie") en stelt per tegenpartij een regel voor.
+De bankregels zijn losse `BankTransaction`-waarden (`id == nil`); ze worden **niet opgeslagen en niet geboekt**.
+`propose` schrijft niets, `apply` schrijft alleen regels.
+
+```swift
+// candidates: de regels van het bankbestand, omgezet naar BankTransaction (niet opgeslagen).
+let seed = try appDatabase.read { db in
+    try HistoryRuleSeeder.propose(db, candidates: candidates, accountId: accountId)
+}
+for p in seed.proposals {
+    // p.rule (concept, origin .geleerd), p.matchCount, p.explanation ("5 keer gekoppeld aan post Energie"),
+    // p.examples (dag, bedrag, historielabel), p.counterpartyName, p.counterpartyIban, p.id (stabiele sleutel)
+}
+// Tellingen voor de samenvatting: seed.matchedCount, ambiguousCount, noCandidateCount, mixedCount,
+// alreadyCoveredCount, skippedCount, insufficientCount; details in seed.mixed en seed.alreadyCovered (SeedNote).
+
+let rules = try appDatabase.write { db in
+    try HistoryRuleSeeder.apply(db, proposals: chosen)      // [Rule], de gemaakte regels
+}
+```
+
+| Naam | Doet |
+|---|---|
+| `HistoryRuleSeeder.propose(_ db, candidates:, accountId:) -> SeedResult` | Koppelen, groeperen, voorstellen. |
+| `HistoryRuleSeeder.apply(_ db, proposals:) -> [Rule]` | Slaat voorstellen op als geleerde regels, alles of niets. Slaat over wat intussen al een regel heeft; twee keer aanroepen maakt niets dubbel. De app mag `proposal.rule` vooraf aanpassen. |
+| `SeedResult` | `proposals` (meeste koppelingen eerst), `mixed`, `alreadyCovered` en de tellingen hierboven. |
+| `SeedProposal` | `id`, `rule`, `counterpartyName`, `counterpartyIban`, `matchCount`, `examples`, `explanation`. |
+| `SeedExample` | `day`, `amount`, `historyLabel`. |
+| `SeedNote` | `counterparty`, `matchCount`, `detail`. |
+
+**Koppelen** (zelfde rekening, zelfde bedrag, elke historieboeking hoogstens één keer), sterkste aanwijzing eerst:
+1. diverse boeking met een echte datum (dag ≠ 15) op dezelfde dag;
+2. diverse boeking met een echte datum binnen 2 dagen, of een boeking op een vaste post / zonder echte datum in
+   dezelfde kalendermaand;
+3. boeking op een vaste post / zonder echte datum in de maand ervoor of erna.
+
+Zijn er meer kandidaten, dan wordt alleen gekozen als ze onderling gelijk zijn (zelfde post, label en tags) of
+als bij precies één kandidaat alle woorden van het historielabel in de naam of omschrijving van de bank staan;
+anders telt de bankregel als dubbelzinnig.
+
+**Voorstel per tegenpartij** (IBAN, anders naam, anders een trefwoord uit een herkenbare omschrijving):
+- al een regel voor die tegenpartij (handmatig of geleerd, aan of uit; het bedrag van die regel telt niet mee)
+  → `alreadyCovered`;
+- minder dan twee derde van de koppelingen naar hetzelfde doel → `mixed`;
+- voorstel bij minstens 2 koppelingen naar hetzelfde doel, of 1 koppeling op een vaste post met een bedrag gelijk
+  aan het plan van die post; anders telt de groep bij `insufficientCount`;
+- `entryLabel`: naam van de post, of bij divers het historielabel als dat in minstens twee derde gelijk is;
+- tags die bij minstens twee derde van de koppelingen staan; bedrag alleen bij een vaste post met minstens 2
+  koppelingen die allemaal hetzelfde bedrag hebben; `reimburse` nooit.

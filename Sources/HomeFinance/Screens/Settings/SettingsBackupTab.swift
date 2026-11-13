@@ -8,6 +8,7 @@ struct SettingsBackupTab: View {
     @Environment(AppModel.self) private var model
 
     @State private var settings = BackupSettings()
+    @State private var secondFolder: URL?
     @State private var isDue = false
     @State private var backups: [BackupInfo] = []
     @State private var listing = false
@@ -80,6 +81,32 @@ struct SettingsBackupTab: View {
                     if let folder = settings.folderURL {
                         Button("Toon in Finder") { NSWorkspace.shared.activateFileViewerSelecting([folder]) }
                     }
+                }
+                Divider()
+                secondFolderRow
+            }
+        }
+    }
+
+    /// Optioneel: dezelfde back-up ook in een tweede map, bij een andere clouddienst.
+    private var secondFolderRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Tweede back-upmap (bijvoorbeeld Google Drive)")
+            if let folder = secondFolder {
+                HStack(spacing: 8) {
+                    Image(systemName: "folder.fill").foregroundStyle(Theme.info)
+                    Text(folder.path).font(.callout.monospaced()).lineLimit(2).truncationMode(.middle)
+                        .textSelection(.enabled).help(folder.path)
+                }
+            } else {
+                Text("Niet ingesteld. Met een tweede map staat elke back-up op twee plekken.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            HStack {
+                Button(secondFolder == nil ? "Kies tweede map…" : "Kies andere map…") { chooseSecondFolder() }
+                if let folder = secondFolder {
+                    Button("Toon in Finder") { NSWorkspace.shared.activateFileViewerSelecting([folder]) }
+                    Button("Gebruik geen tweede map") { setSecondFolder(nil) }
                 }
             }
         }
@@ -163,6 +190,7 @@ struct SettingsBackupTab: View {
 
     private func load() {
         settings = model.read(BackupSettings()) { try BackupSettings.load($0) }
+        secondFolder = model.read(nil) { try SecondBackupSupport.folderURL($0) }
         isDue = (try? Backup.isBackupDue(model.db, now: SettingsFormat.date(model.today))) ?? false
         refreshList()
     }
@@ -187,10 +215,7 @@ struct SettingsBackupTab: View {
     }
 
     private static var iCloudSuggestion: URL? {
-        let drive = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs", isDirectory: true)
-        guard FileManager.default.fileExists(atPath: drive.path) else { return nil }
-        return drive.appendingPathComponent("HomeFinance back-ups", isDirectory: true)
+        PublishSupport.iCloudDrive?.appendingPathComponent("HomeFinance back-ups", isDirectory: true)
     }
 
     // MARK: Schrijven
@@ -218,10 +243,40 @@ struct SettingsBackupTab: View {
     }
 
     private func backupNow() {
-        model.perform("Back-up gemaakt") {
+        let ok = model.perform {
             guard try Backup.backupUsingSettings(model.db) != nil else { throw BackupError.folderUnavailable(settings.folderPath ?? "") }
         }
+        if ok {
+            // De tweede map mag mislukken zonder dat de eerste back-up als mislukt telt.
+            do {
+                let second = try SecondBackupSupport.backup(db: model.db)
+                model.toast = second == nil ? "Back-up gemaakt" : "Back-up gemaakt in beide mappen"
+            } catch {
+                model.toast = "Back-up gemaakt"
+                model.errorMessage = "De back-up in de eerste map is gelukt. De tweede map is niet gelukt: \(error.localizedDescription)"
+            }
+        }
         load()
+    }
+
+    private func chooseSecondFolder() {
+        let panel = NSOpenPanel()
+        panel.title = "Kies de tweede map voor back-ups"
+        panel.prompt = "Kies map"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.directoryURL = secondFolder
+        if panel.runModal() == .OK, let url = panel.url { setSecondFolder(url) }
+    }
+
+    private func setSecondFolder(_ url: URL?) {
+        if let url, url.standardizedFileURL == settings.folderURL?.standardizedFileURL {
+            model.errorMessage = "Dit is al je eerste back-upmap. Kies een andere map."
+            return
+        }
+        model.perform { try model.db.write { db in try SecondBackupSupport.setFolder(db, url) } }
+        secondFolder = url
     }
 
     private func restore(_ info: BackupInfo) {

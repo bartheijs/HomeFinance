@@ -71,6 +71,9 @@ public struct ImportRow: Identifiable, Equatable, Sendable {
     public var fingerprint: String
     /// Staat al in de database en wordt bij importeren overgeslagen.
     public var isDuplicate: Bool
+    /// Gaat niet mee: staat al in de administratie (vóór de naad op saldo, of op/vóór de overgangsdag),
+    /// of is door de gebruiker uitgezet.
+    public var isBeforeCutover: Bool = false
 
     public var id: Int { lineNumber }
     /// Saldo ná deze mutatie, als het saldo vóór bekend is.
@@ -95,7 +98,9 @@ public struct ChainBreak: Equatable, Sendable {
 
 /// Waarschuwing bij een voorbeeld; houdt het importeren niet tegen.
 public struct ImportWarning: Equatable, Sendable {
-    public enum Kind: Equatable, Sendable { case ibanMismatch, chainBroken, chainNotChecked }
+    public enum Kind: Equatable, Sendable { case ibanMismatch, chainBroken, chainNotChecked, beforeCutover, seamNotFound, seamAmbiguous, alreadyProcessed,
+             manualSelection
+    }
     public var kind: Kind
     public var message: String
     /// Bij `ibanMismatch`: de rekening waar het bestand volgens het IBAN wel bij hoort, als die bestaat.
@@ -118,17 +123,29 @@ public struct ImportPreview: Equatable, Sendable {
     /// true/false als de saldoketen gecontroleerd is; nil als het bestand geen saldo levert.
     public var chainOK: Bool?
     public var chainBreaks: [ChainBreak]
-    /// Saldo vóór de eerste en ná de laatste transactie volgens het bestand.
+    /// Saldo vóór de eerste regel die meegaat (na de overgangsdag) en ná de laatste regel van het bestand.
+    /// Zonder `skipThrough` is dat het saldo vóór de eerste regel van het bestand.
     public var openingBalance: Money?
     public var closingBalance: Money?
+    /// Eerste en laatste dag van de regels die meegaan (na de overgangsdag).
     public var firstDay: Day?
     public var lastDay: Day?
     public var warnings: [ImportWarning]
+    /// Overgangsdag: regels van deze dag of eerder worden niet geïmporteerd. nil = alles gaat mee.
+    public var skipThrough: Day? = nil
+    /// Saldo vóór de allereerste regel van het bestand, ook als die wordt overgeslagen.
+    public var fileOpeningBalance: Money? = nil
+    /// De naad met de administratie; nil als er geen `resumeFromBalance` of `skipThrough` is meegegeven.
+    public var seam: ImportSeam? = nil
 
     /// Aantal regels met een transactie in het bestand (goed en fout).
     public var rowCount: Int { rows.count + errors.count }
-    public var newCount: Int { rows.count - duplicateCount }
-    public var duplicateCount: Int { rows.filter(\.isDuplicate).count }
+    /// Regels die geïmporteerd worden: niet dubbel en na de overgangsdag.
+    public var newCount: Int { rows.filter { !$0.isDuplicate && !$0.isBeforeCutover }.count }
+    /// Regels na de overgangsdag die al in de database staan.
+    public var duplicateCount: Int { rows.filter { $0.isDuplicate && !$0.isBeforeCutover }.count }
+    /// Regels van op of vóór de overgangsdag; die gaan niet mee.
+    public var cutoverSkippedCount: Int { rows.filter(\.isBeforeCutover).count }
     public var errorCount: Int { errors.count }
     /// Transacties van oud naar nieuw.
     public var rowsChronological: [ImportRow] { chronologicalIndices.map { rows[$0] } }
@@ -171,7 +188,8 @@ extension ImportPreview {
     /// Bouwt het voorbeeld uit een gelezen bestand. `existingFingerprints` zijn de vingerafdrukken die al
     /// in de database staan. Raakt de database niet aan; `BankImporter.preview` doet dat erbij.
     public static func build(file: CSVFile, fileName: String, account: Account, profile: BankProfile,
-                             existingFingerprints: Set<String> = []) throws -> ImportPreview {
+                             existingFingerprints: Set<String> = [], skipThrough: Day? = nil,
+                             resumeFromBalance: Money? = nil) throws -> ImportPreview {
         var file = file
         let wanted = CSVDialect(delimiter: profile.delimiter ?? file.dialect.delimiter,
                                 quote: profile.quote ?? file.dialect.quote)
@@ -208,12 +226,14 @@ extension ImportPreview {
                 "De saldoketen is niet gecontroleerd: niet elke regel heeft een saldo."))
         }
 
-        return ImportPreview(
+        var preview = ImportPreview(
             accountId: accountId, fileName: fileName, profile: profile, encodingName: file.encodingName,
             dialect: file.dialect, rows: rows, errors: errors, chronologicalIndices: chain.order,
             chainOK: chain.ok, chainBreaks: chain.breaks,
             openingBalance: chain.opening, closingBalance: chain.closing,
             firstDay: rows.map(\.day).min(), lastDay: rows.map(\.day).max(), warnings: warnings)
+        preview.applySeam(resumeFromBalance: resumeFromBalance, skipThrough: skipThrough)
+        return preview
     }
 }
 

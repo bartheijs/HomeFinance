@@ -126,6 +126,7 @@ public enum BookingService {
             SELECT COUNT(*) FROM entry WHERE bankTransactionId = ? AND savingsTransferId IS NOT NULL
             """, arguments: [transaction.id]) ?? 0
         guard inTransfer == 0 else { throw BudgetError.inSavingsTransfer }
+        try SettlementService.ensureFree(db, entriesWhere: "bankTransactionId = ?", arguments: [transaction.id])
         // Koppelingen (counterEntryId) naar deze boekingen vervallen vanzelf (ON DELETE SET NULL).
         try db.execute(sql: "DELETE FROM entry WHERE bankTransactionId = ?", arguments: [transaction.id])
     }
@@ -194,6 +195,7 @@ public enum EntryService {
 
     /// Werkt een boeking bij. Bij een boeking uit een banktransactie liggen bedrag, dag en rekening vast.
     /// `reimburse` (en het bedrag) wijzigen wordt geweigerd als de boeking in een spaaroverboeking zit.
+    /// Een verrekende boeking houdt zijn bedrag, zijn rekening en de tag van de verrekening.
     @discardableResult
     public static func update(_ db: Database, entryId: Int64, _ draft: EntryDraft) throws -> Entry {
         try atomic(db) {
@@ -207,6 +209,8 @@ public enum EntryService {
             if entry.savingsTransferId != nil {
                 guard draft.reimburse, draft.amount == entry.amount else { throw BudgetError.inSavingsTransfer }
             }
+            try SettlementService.ensureUnchanged(db, entry: entry, amount: draft.amount, accountId: draft.accountId,
+                                                  tagIds: draft.tagIds)
             let account = try Check.account(db, draft.accountId)
             try Check.assignment(db, account: account, day: draft.day, amount: draft.amount,
                                  budgetItemId: draft.budgetItemId, potId: draft.potId, reimburse: draft.reimburse)
@@ -255,6 +259,7 @@ public enum EntryService {
             let entry = try Check.entry(db, entryId)
             guard entry.bankTransactionId == nil else { throw BudgetError.bankEntryDelete }
             guard entry.savingsTransferId == nil else { throw BudgetError.inSavingsTransfer }
+            try SettlementService.ensureFree(db, entriesWhere: "id = ?", arguments: [entryId])
             try Check.yearOpen(db, day: entry.day)
             try db.execute(sql: "DELETE FROM entry WHERE id = ?", arguments: [entryId])
         }
@@ -291,6 +296,8 @@ public enum EntryService {
         try atomic(db) {
             let entry = try Check.entry(db, entryId)
             try Check.yearOpen(db, day: entry.day)
+            try SettlementService.ensureUnchanged(db, entry: entry, amount: entry.amount, accountId: entry.accountId,
+                                                  tagIds: tagIds)
             try Check.tagsExist(db, tagIds)
             try Check.replaceTags(db, entryId: entryId, tagIds: tagIds)
         }

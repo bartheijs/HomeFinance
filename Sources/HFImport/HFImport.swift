@@ -10,6 +10,8 @@ public struct ImportResult: Equatable, Sendable {
     public var transactions: [BankTransaction]
     /// Regels die al in de database stonden en zijn overgeslagen.
     public var duplicateCount: Int
+    /// Regels van op of vóór de overgangsdag die niet zijn geïmporteerd.
+    public var cutoverSkippedCount: Int = 0
     /// Foute regels die op verzoek zijn overgeslagen.
     public var skippedErrorCount: Int
 }
@@ -23,12 +25,17 @@ public struct BankImporter: Sendable {
     /// Leest het bestand en toont wat er geïmporteerd zou worden. Schrijft niets.
     /// Een PDF-rekeningafschrift wordt herkend aan de inhoud of de extensie; `profile` telt dan niet mee.
     /// Zonder `profile` wordt het profiel geraden; lukt dat niet, dan volgt `ImportError.noProfile`.
-    public func preview(data: Data, fileName: String, accountId: Int64, profile: BankProfile? = nil) throws -> ImportPreview {
+    /// Met `skipThrough` blijven regels van die dag of eerder buiten de import (zie `historyCutover`).
+    /// Met `resumeFromBalance` (het saldo van de administratie) wordt eerst op saldo gezocht waar het bestand
+    /// aansluit; zie `ImportPreview.seam`. Alleen nodig bij de eerste import na de Excel-historie (`needsSeam`).
+    public func preview(data: Data, fileName: String, accountId: Int64, profile: BankProfile? = nil,
+                        skipThrough: Day? = nil, resumeFromBalance: Money? = nil) throws -> ImportPreview {
         if PDFStatement.isPDF(data: data, fileName: fileName) {
             let statement = try StatementParser.parse(pages: PDFStatement.pages(of: data))
             return try database.read { db in
                 guard let account = try Account.fetchOne(db, key: accountId) else { throw ImportError.accountNotFound }
-                var preview = ImportPreview.build(statement: statement, fileName: fileName, account: account)
+                var preview = ImportPreview.build(statement: statement, fileName: fileName, account: account,
+                                                  skipThrough: skipThrough, resumeFromBalance: resumeFromBalance)
                 try Self.markDuplicates(db, &preview)
                 try Self.addSuggestion(db, &preview)
                 return preview
@@ -40,7 +47,8 @@ public struct BankImporter: Sendable {
         }
         return try database.read { db in
             guard let account = try Account.fetchOne(db, key: accountId) else { throw ImportError.accountNotFound }
-            var preview = try ImportPreview.build(file: file, fileName: fileName, account: account, profile: profile)
+            var preview = try ImportPreview.build(file: file, fileName: fileName, account: account, profile: profile,
+                                                  skipThrough: skipThrough, resumeFromBalance: resumeFromBalance)
             try Self.markDuplicates(db, &preview)
             try Self.addSuggestion(db, &preview)
             return preview
@@ -48,12 +56,36 @@ public struct BankImporter: Sendable {
     }
 
     /// Als hierboven, voor een bestand op schijf.
-    public func preview(url: URL, accountId: Int64, profile: BankProfile? = nil) throws -> ImportPreview {
-        try preview(data: Data(contentsOf: url), fileName: url.lastPathComponent, accountId: accountId, profile: profile)
+    public func preview(url: URL, accountId: Int64, profile: BankProfile? = nil,
+                        skipThrough: Day? = nil, resumeFromBalance: Money? = nil) throws -> ImportPreview {
+        try preview(data: Data(contentsOf: url), fileName: url.lastPathComponent, accountId: accountId,
+                    profile: profile, skipThrough: skipThrough, resumeFromBalance: resumeFromBalance)
+    }
+
+    /// De naad hoeft alleen gezocht te worden bij de eerste bankimport na de Excel-historie: true als de
+    /// rekening boekingen met `note == "Excel-historie"` heeft en nog geen enkele banktransactie.
+    /// Daarna herkent de vingerafdruk wat al geïmporteerd is.
+    public func needsSeam(accountId: Int64) throws -> Bool {
+        try database.read { db in
+            try Bool.fetchOne(db, sql: """
+                SELECT EXISTS (SELECT 1 FROM entry WHERE accountId = ? AND note = 'Excel-historie')
+                   AND NOT EXISTS (SELECT 1 FROM bankTransaction WHERE accountId = ?)
+                """, arguments: [accountId, accountId]) ?? false
+        }
+    }
+
+    /// De overgangsdag van een rekening: de laatste dag met een boeking uit de Excel-historie
+    /// (`Entry.note == "Excel-historie"`), of nil als die er niet zijn. Geef hem door als `skipThrough`.
+    public func historyCutover(accountId: Int64) throws -> Day? {
+        try database.read { db in
+            try Day.fetchOne(db, sql: "SELECT MAX(day) FROM entry WHERE accountId = ? AND note = 'Excel-historie'",
+                             arguments: [accountId])
+        }
     }
 
     /// Importeert een voorbeeld in één databasetransactie: een `ImportBatch` plus de nieuwe banktransacties
-    /// met status `nieuw`. Dubbelen worden overgeslagen en geteld. Bij een fout wordt niets geïmporteerd.
+    /// met status `nieuw`. Dubbelen en regels van op of vóór de overgangsdag worden overgeslagen.
+    /// Bij een fout wordt niets geïmporteerd.
     /// Bevat het voorbeeld foute regels, dan volgt `ImportError.rowErrors`, tenzij `skipFaultyRows` true is.
     @discardableResult
     public func commit(_ preview: ImportPreview, skipFaultyRows: Bool = false) throws -> ImportResult {
@@ -80,7 +112,7 @@ public struct BankImporter: Sendable {
             try batch.insert(db)
 
             var inserted: [BankTransaction] = []
-            for row in current.rowsChronological where !row.isDuplicate {
+            for row in current.rowsChronological where !row.isDuplicate && !row.isBeforeCutover {
                 var transaction = BankTransaction(
                     accountId: current.accountId, batchId: batch.id, day: row.day, amount: row.amount,
                     balanceBefore: row.balanceBefore, counterpartyName: row.counterpartyName,
@@ -91,6 +123,7 @@ public struct BankImporter: Sendable {
                 inserted.append(transaction)
             }
             return ImportResult(batch: batch, transactions: inserted, duplicateCount: current.duplicateCount,
+                                cutoverSkippedCount: current.cutoverSkippedCount,
                                 skippedErrorCount: current.errors.count)
         }
     }
@@ -98,16 +131,20 @@ public struct BankImporter: Sendable {
     /// Voorbeeld maken en meteen importeren.
     @discardableResult
     public func importFile(data: Data, fileName: String, accountId: Int64, profile: BankProfile? = nil,
+                           skipThrough: Day? = nil, resumeFromBalance: Money? = nil,
                            skipFaultyRows: Bool = false) throws -> ImportResult {
-        try commit(preview(data: data, fileName: fileName, accountId: accountId, profile: profile),
+        try commit(preview(data: data, fileName: fileName, accountId: accountId, profile: profile,
+                           skipThrough: skipThrough, resumeFromBalance: resumeFromBalance),
                    skipFaultyRows: skipFaultyRows)
     }
 
     /// Als hierboven, voor een bestand op schijf.
     @discardableResult
     public func importFile(url: URL, accountId: Int64, profile: BankProfile? = nil,
+                           skipThrough: Day? = nil, resumeFromBalance: Money? = nil,
                            skipFaultyRows: Bool = false) throws -> ImportResult {
-        try commit(preview(url: url, accountId: accountId, profile: profile), skipFaultyRows: skipFaultyRows)
+        try commit(preview(url: url, accountId: accountId, profile: profile, skipThrough: skipThrough,
+                           resumeFromBalance: resumeFromBalance), skipFaultyRows: skipFaultyRows)
     }
 
     /// Vult bij de waarschuwing "bestand is van een andere rekening" de rekening in waar het wel bij hoort.

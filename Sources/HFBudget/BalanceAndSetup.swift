@@ -422,7 +422,7 @@ public enum TagService {
         }
     }
 
-    /// Werkt naam en kleur van een tag bij.
+    /// Werkt naam en kleur van een tag bij. `settles` wijzigt alleen via `SettlementService`.
     @discardableResult
     public static func update(_ db: Database, _ tag: Tag) throws -> Tag {
         try atomic(db) {
@@ -431,6 +431,7 @@ public enum TagService {
             var tag = tag
             try validate(db, &tag)
             tag.sortOrder = existing.sortOrder
+            tag.settles = existing.settles   // alleen via SettlementService.enable/disable
             try tag.update(db)
             return tag
         }

@@ -18,6 +18,8 @@ public enum AttentionItem: Equatable, Sendable {
     case yearMissing(year: Int)
     /// Er staat nog een bedrag uit dat tijdelijk van spaar geleend is.
     case temporaryLoanOutstanding(amount: Money)
+    /// Voor een tag die verrekend wordt staat nog een bedrag open (`amount` = terug te storten, positief).
+    case openSettlement(tagId: Int64, tagName: String, amount: Money, count: Int)
 
     /// Nederlandse tekst voor de gebruiker.
     public var message: String {
@@ -37,6 +39,8 @@ public enum AttentionItem: Equatable, Sendable {
             return "Er is nog geen begroting voor \(year)."
         case .temporaryLoanOutstanding(let amount):
             return "\(amount.formatted()) tijdelijk geleend van spaar staat nog uit."
+        case .openSettlement(_, let name, let amount, let n):
+            return "\(amount.formatted()) \(name) nog terug te storten (\(n) \(n == 1 ? "boeking" : "boekingen"))."
         }
     }
 }
@@ -91,6 +95,9 @@ extension Insight {
         }
         let borrowed = try temporaryLoanOutstanding(db, on: today)
         if !borrowed.isZero { attention.append(.temporaryLoanOutstanding(amount: borrowed)) }
+        for s in try settlementOverview(db, today: today) where !s.outstanding.isZero {
+            attention.append(.openSettlement(tagId: s.id, tagName: s.name, amount: s.outstanding, count: s.openCount))
+        }
         let openingDates = Dictionary(uniqueKeysWithValues: try Row.fetchAll(db, sql: "SELECT id, openingDate FROM account")
             .map { ($0["id"] as Int64, $0["openingDate"] as Day) })
         for a in accounts {

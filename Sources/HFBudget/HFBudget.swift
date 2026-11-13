@@ -52,6 +52,13 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
     case duplicateIban(String)
     case duplicateName(String)
     case accountInUse(account: String)
+    /// De boeking zit in een verrekening (per tag) en mag daarom niet zo gewijzigd worden.
+    case inSettlement
+    /// De boeking is als terugstorting aan een verrekening gekoppeld.
+    case depositLinked
+    case tagNotSettling(tag: String)
+    case notSettleable(entry: String, tag: String)
+    case depositInvalid(String)
 
     public var errorDescription: String? {
         switch self {
@@ -125,6 +132,18 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
             return "Er bestaat al een rekening met IBAN \(iban)."
         case let .duplicateName(name):
             return "De naam '\(name)' is al in gebruik."
+        case .inSettlement:
+            return "Deze boeking is verrekend. Bedrag, rekening en de tag van de verrekening liggen vast; "
+                + "verwijder eerst de verrekening."
+        case .depositLinked:
+            return "Deze bijschrijving is als terugstorting aan een verrekening gekoppeld. Ontkoppel haar eerst."
+        case let .tagNotSettling(tag):
+            return "Voor de tag \(tag) staat verrekenen niet aan."
+        case let .notSettleable(entry, tag):
+            return "De boeking '\(entry)' staat niet open voor verrekening van \(tag): ze heeft de tag niet, "
+                + "staat niet op een betaalrekening of is al verrekend."
+        case let .depositInvalid(message):
+            return message
         case let .accountInUse(account):
             return "De rekening \(account) heeft boekingen, transacties of potten en kan niet verwijderd worden. "
                 + "Archiveer de rekening."

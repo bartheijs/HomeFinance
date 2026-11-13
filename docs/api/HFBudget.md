@@ -1,7 +1,7 @@
 # HFBudget — schrijven
 
 Alle schrijfacties van HomeFinance: boeken, splitsen, potten, overboekingen, afstemming, jaar en posten,
-rekeningen en tags. Lezen en rapporteren (grid, besteedbaar, grafieken) zit in `HFInsight`.
+rekeningen, tags en verrekenen per tag. Lezen en rapporteren (grid, besteedbaar, grafieken) zit in `HFInsight`.
 
 ## Zo werkt het
 
@@ -47,7 +47,8 @@ try appDatabase.write { db in
 | `unskip(db, bankTransactionId:)` | Terug naar `nieuw`. |
 
 `Allocation`: `amount`, `label`, `budgetItemId?`, `potId?`, `reimburse`, `tagIds`, `note`, `ruleId?`,
-`confidence?`, `reviewed` (standaard `false` = nog nakijken).
+`confidence?`, `reviewed` (standaard `false` = nog nakijken), `temporaryLoan` (tijdelijk geleend van spaar;
+alleen op een betaalrekening).
 
 Regels bij boeken (ook voor handmatige boekingen):
 
@@ -58,6 +59,8 @@ Regels bij boeken (ook voor handmatige boekingen):
 - **Spaarrekening:** geen `budgetItemId`, geen `reimburse`; de pot hoort bij die rekening.
 - Opnieuw boeken of ongedaan maken wordt geweigerd zolang een boeking in een spaaroverboeking zit.
   Een koppeling als overboeking vervalt bij opnieuw boeken.
+- Hetzelfde geldt zolang een boeking verrekend is (`BudgetError.inSettlement`) of als terugstorting aan een
+  verrekening gekoppeld is (`BudgetError.depositLinked`); zie SettlementService.
 
 ## EntryService — losse boekingen
 
@@ -72,6 +75,10 @@ Regels bij boeken (ook voor handmatige boekingen):
 | `setReviewed(db, entryIds:, Bool)` | Nagekeken aan/uit. |
 | `markAllReviewed(db, accountId:) -> Int` | Alles van een rekening nagekeken (afgesloten jaren overgeslagen); geeft het aantal. |
 | `setTags(db, entryId:, tagIds:)` / `tagIds(db, entryId:)` | Tags van een boeking. |
+
+Een verrekende boeking (met `settlementId`) houdt zijn bedrag, zijn rekening en de tag van de verrekening:
+`update`, `setTags` en `delete` weigeren dat met `BudgetError.inSettlement`. Label, notitie, post en extra
+tags wijzigen mag wel. Een gekoppelde terugstorting verwijderen wordt geweigerd met `depositLinked`.
 
 ## TransferService — overboekingen tussen eigen rekeningen
 
@@ -105,6 +112,51 @@ gebruiker ook met de hand kan koppelen.
 | `markDone(db, savingsTransferId:)` / `reopen(db, savingsTransferId:)` | Gedaan aan/uit. |
 | `delete(db, savingsTransferId:)` | Verwijdert; de boekingen staan weer open. |
 | `entries(db, savingsTransferId:) -> [Entry]` | De boekingen in de overboeking. |
+
+## SettlementService — verrekenen per tag
+
+Voor uitgaven met een tag (bv. Tanken) die de gebruiker periodiek terugstort op de betaalrekening.
+**Openstaand** = − de som van de boekingen op betaalrekeningen met die tag en zonder `settlementId`; een retour
+met dezelfde tag telt eraf, boekingen op een spaarrekening tellen niet mee. De terugstorting is een gewone
+bijschrijving zonder de tag en wordt gekoppeld via `Settlement.depositEntryId`.
+
+| Functie | Doet |
+|---|---|
+| `enable(db, tagId:, from:) -> Settlement` | Zet `Tag.settles` aan en maakt één beginstand (`isOpening`) met alle open boekingen van vóór `from` (bedrag mag 0 zijn). Opnieuw aanroepen vervangt de beginstand; echte verrekeningen blijven. |
+| `disable(db, tagId:)` | Zet `settles` uit; verrekeningen blijven staan. |
+| `open(db, tagId:) -> (entries: [Entry], amount: Money)` | Openstaande boekingen (oudste eerst) en het openstaande bedrag. |
+| `settle(db, tagId:, entryIds:, day:, depositEntryId:, note:) -> SettlementResult` | Legt een verrekening vast voor de gekozen open boekingen; bedrag = − hun som. Koppelt optioneel meteen de storting. |
+| `suggestDeposit(db, tagId:, asOf:) -> [Entry]` | Mogelijke terugstortingen: bijschrijvingen op betaalrekeningen van de laatste 45 dagen, zonder vaste post, niet gekoppeld, bedrag gelijk aan het openstaande bedrag (exact eerst, daarna binnen € 1,00), nieuwste eerst. |
+| `linkDeposit(db, settlementId:, depositEntryId:) -> SettlementResult` | Koppelt (of vervangt) de storting; `nil` ontkoppelt. |
+| `delete(db, settlementId:)` | Verwijdert de verrekening; de boekingen staan weer open. Een beginstand kan zo niet weg. |
+| `history(db, tagId:) -> [Settlement]` | Verrekeningen, nieuwste eerst (inclusief de beginstand). |
+| `entries(db, settlementId:) -> [Entry]` | De boekingen in een verrekening. |
+| `result(db, settlementId:) -> SettlementResult` | Bestaande verrekening met storting en verschil, bv. voor de historie. |
+
+`SettlementResult`: `settlement`, `deposit: Entry?` en `difference: Money?` = storting − verrekend bedrag
+(positief = te veel gestort, negatief = te weinig, `nil` zonder storting).
+
+```swift
+try appDatabase.write { db in
+    let open = try SettlementService.open(db, tagId: tankenId)             // wat staat er nog open?
+    let voorstel = try SettlementService.suggestDeposit(db, tagId: tankenId).first
+    let result = try SettlementService.settle(db, tagId: tankenId, entryIds: open.entries.map { $0.id! },
+                                              day: .today(), depositEntryId: voorstel?.id)
+    verschil = result.difference                                           // nil, € 0,00 of een afwijking
+}
+```
+
+Validatie (`BudgetError`, Nederlandse melding):
+
+- `tagNotSettling`: verrekenen staat niet aan voor de tag.
+- `notSettleable`: de boeking heeft de tag niet, staat niet op een betaalrekening of is al verrekend.
+- `depositInvalid`: de storting is geen bijschrijving op een betaalrekening, heeft zelf de tag, hoort al bij
+  een andere verrekening, of de verrekening is een beginstand.
+- Minstens één boeking; een selectie die samen een negatief bedrag oplevert wordt geweigerd (nul mag).
+
+Een afgesloten jaar blokkeert het verrekenen niet: het is een koppeling, geen wijziging van de boeking.
+Een boeking heeft één `settlementId`; heeft hij twee tags die verrekend worden, dan is hij na verrekening voor
+de ene tag ook voor de andere niet meer open.
 
 ## BalanceService — saldo en afstemming
 
@@ -147,7 +199,7 @@ handmatige boeking tegenover staat.
 | `AccountService.create / update / delete` | IBAN wordt genormaliseerd (hoofdletters, geen spaties) en is uniek. Verwijderen alleen als de rekening nergens gebruikt wordt. |
 | `AccountService.setArchived(db, accountId:, Bool)` / `reorder(db, orderedIds:)` | Archiveren en volgorde. |
 | `AccountService.normalizeIBAN(String)` | De normalisatie zelf. |
-| `TagService.create(db, name:, color:)` / `update` / `delete` / `reorder` | Naam uniek (hoofdletterongevoelig), kleur `#RRGGBB`. |
+| `TagService.create(db, name:, color:)` / `update` / `delete` / `reorder` | Naam uniek (hoofdletterongevoelig), kleur `#RRGGBB`. `update` laat `settles` ongemoeid (dat loopt via `SettlementService`). `delete` verwijdert ook de verrekeningen van de tag. |
 
 ## Aannames
 

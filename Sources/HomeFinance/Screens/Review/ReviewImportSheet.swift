@@ -139,6 +139,7 @@ private struct ReviewImportPartView: View {
                 Spacer(minLength: 0)
             }
             chain
+            if let seam = preview.seam { ReviewSeamBlock(part: part, seam: seam) }
             ForEach(Array(preview.warnings.filter { $0.kind == .ibanMismatch }.enumerated()), id: \.offset) { _, warning in
                 Label(warning.message, systemImage: "exclamationmark.triangle.fill")
                     .font(.callout).foregroundStyle(Theme.warning)
@@ -229,11 +230,15 @@ private struct ReviewImportPartView: View {
                     Text(row.day.short(withYear: true)).monospacedDigit().frame(width: 84, alignment: .leading)
                     Text(row.counterpartyName.isEmpty ? row.descriptionText : row.counterpartyName).lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if row.isDuplicate { Text("al bekend").font(.caption).foregroundStyle(.secondary) }
+                    if row.isBeforeCutover {
+                        Text("Excel-historie").font(.caption).foregroundStyle(.secondary)
+                    } else if row.isDuplicate {
+                        Text("al bekend").font(.caption).foregroundStyle(.secondary)
+                    }
                     Text(row.amount.formatted(symbol: false)).monospacedDigit().frame(width: 92, alignment: .trailing)
                 }
                 .font(.callout)
-                .opacity(row.isDuplicate ? 0.5 : 1)
+                .opacity(row.isDuplicate || row.isBeforeCutover ? 0.5 : 1)
                 .padding(.vertical, 4)
             }
             if all.count > shown.count {
@@ -286,5 +291,125 @@ struct ReviewRawFileSheet: View {
         }
         .padding(20)
         .frame(width: 760, height: 480)
+    }
+}
+
+/// Eerste import na de Excel-historie: sluit het bestand aan op de administratie?
+private struct ReviewSeamBlock: View {
+    @Environment(ReviewStore.self) private var store
+    let part: ReviewImportPart
+    let seam: ImportSeam
+    @State private var extra = 0
+
+    private var preview: ImportPreview { part.preview }
+    private var difference: Money? { store.seamDifference(preview) }
+    private var admin: String { seam.soughtBalance?.formatted() ?? "—" }
+
+    /// Zelf kiezen is nodig als het saldo niet gevonden is, er twijfel was, of de gebruiker al gekozen heeft.
+    private var showsPicker: Bool {
+        seam.method == .manual || seam.balanceNotFound || seam.isAmbiguous
+            || (seam.method != .foundByBalance && seam.method != .alreadyProcessed)
+    }
+    private var fits: Bool {
+        switch seam.method {
+        case .foundByBalance, .alreadyProcessed: true
+        default: difference?.isZero ?? false
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Aansluiting op je Excel-historie").font(.callout.weight(.semibold))
+            Label { Text(headline).fixedSize(horizontal: false, vertical: true) } icon: {
+                Image(systemName: fits ? "checkmark.seal.fill" : "xmark.seal.fill")
+            }
+            .foregroundStyle(fits ? Theme.positive : Theme.negative)
+            if seam.isAmbiguous, seam.method != .manual {
+                Text("Dit saldo komt op meer plekken in het bestand voor. Kijk hieronder of de goede regel is gekozen.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if showsPicker { picker }
+        }
+        .font(.callout)
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+        .background((fits ? Theme.positive : Theme.negative).opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+        .help("Bij de eerste import na je Excel-historie zoekt de app de regel in het bankbestand waarvan het saldo vóór de mutatie gelijk is aan het saldo van je administratie. Alles daarvoor staat al in de app.")
+    }
+
+    private var headline: String {
+        let skipped = seam.skippedCount
+        let skippedText = skipped == 0 ? "" : " \(skipped) eerdere \(skipped == 1 ? "regel" : "regels") overgeslagen (die \(skipped == 1 ? "staat" : "staan") al in je Excel)."
+        switch seam.method {
+        case .alreadyProcessed:
+            return "Alles in dit bestand staat al in je administratie."
+        case .foundByBalance:
+            return "Sluit aan: je administratie staat op \(admin); de bank gaat verder vanaf \(seam.day?.short(withYear: true) ?? "—"), regel \(seam.lineNumber.map(String.init) ?? "—").\(skippedText)"
+        case .manual where fits:
+            return preview.newCount == 0
+                ? "Sluit aan met jouw keuze: alles in dit bestand staat al in je administratie."
+                : "Sluit aan met jouw keuze: je administratie staat op \(admin); \(preview.newCount) \(preview.newCount == 1 ? "regel gaat" : "regels gaan") mee."
+        default:
+            return "Sluit niet aan: je administratie staat op \(admin), maar geen regel in dit bestand begint op dat saldo."
+        }
+    }
+
+    private var picker: some View {
+        let rows = preview.rowsChronological
+        let center = min(part.seamCenter ?? 0, rows.count)
+        let lower = max(0, center - 6 - extra), upper = min(rows.count, center + 6 + extra)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 22) {
+                fact("Beginsaldo bestand", seam.fileOpeningBalance)
+                fact("Eindsaldo bestand", seam.fileClosingBalance)
+                Spacer()
+                if let difference {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text("Verschil bij deze keuze").font(.caption).foregroundStyle(.secondary)
+                        Text(difference.formatted(alwaysSign: !difference.isZero)).font(.body.weight(.semibold)).monospacedDigit()
+                            .foregroundStyle(difference.isZero ? Theme.positive : Theme.negative)
+                    }
+                    .help("Eindsaldo van het bestand min het saldo van je administratie en de aangevinkte regels. Bij € 0,00 sluit de overgang.")
+                }
+            }
+            Text("Vink aan wat nog niet in je Excel staat. Wat uit staat, wordt niet geïmporteerd.")
+                .font(.caption).foregroundStyle(.secondary)
+            VStack(spacing: 0) {
+                if lower > 0 { more("\(lower) eerdere \(lower == 1 ? "regel" : "regels") · toon meer") }
+                ForEach(rows[lower..<upper]) { row in
+                    Toggle(isOn: Binding(get: { !row.isBeforeCutover },
+                                         set: { store.setIncluded($0, line: row.lineNumber, in: part.id) })) {
+                        HStack(spacing: 10) {
+                            Text("\(row.lineNumber)").foregroundStyle(.tertiary).frame(width: 34, alignment: .trailing)
+                            Text(row.day.short(withYear: true)).frame(width: 84, alignment: .leading)
+                            Text(row.counterpartyName.isEmpty ? row.descriptionText : row.counterpartyName).lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if row.isDuplicate { Text("al bekend").font(.caption).foregroundStyle(.secondary) }
+                            Text(row.amount.formatted(symbol: false)).frame(width: 84, alignment: .trailing)
+                            Text(row.balanceBefore?.formatted(symbol: false) ?? "").foregroundStyle(.secondary)
+                                .frame(width: 92, alignment: .trailing)
+                                .help("Saldo vóór deze regel volgens de bank")
+                        }
+                        .monospacedDigit()
+                    }
+                    .toggleStyle(.checkbox)
+                    .disabled(row.isDuplicate)
+                    .padding(.vertical, 3)
+                }
+                if upper < rows.count { more("\(rows.count - upper) latere \(rows.count - upper == 1 ? "regel" : "regels") gaan mee · toon meer") }
+            }
+            .foregroundStyle(Color.primary)
+        }
+    }
+
+    private func fact(_ title: String, _ value: Money?) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(value?.formatted() ?? "—").font(.body.weight(.medium)).monospacedDigit().foregroundStyle(Color.primary)
+        }
+    }
+
+    private func more(_ title: String) -> some View {
+        Button(title) { extra += 10 }.buttonStyle(.link).font(.caption)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 3)
     }
 }

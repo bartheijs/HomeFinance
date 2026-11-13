@@ -217,7 +217,8 @@ extension ImportPreview {
     /// Bouwt het voorbeeld uit een gelezen rekeningafschrift. Het saldo vóór elke regel wordt uitgerekend
     /// vanaf het beginsaldo; de keten sluit als beginsaldo + som van de regels gelijk is aan het eindsaldo.
     static func build(statement: BankStatement, fileName: String, account: Account,
-                      existingFingerprints: Set<String> = []) -> ImportPreview {
+                      existingFingerprints: Set<String> = [], skipThrough: Day? = nil,
+                      resumeFromBalance: Money? = nil) -> ImportPreview {
         let accountId = account.id ?? 0
         var rows = statement.lines.map { line -> ImportRow in
             let party = StatementParser.counterparty(in: line.description, ownIban: statement.ownIban)
@@ -259,11 +260,13 @@ extension ImportPreview {
                 "Het saldo is niet gecontroleerd: het begin- of eindsaldo is niet in het afschrift gevonden."))
         }
 
-        return ImportPreview(
+        var preview = ImportPreview(
             accountId: accountId, fileName: fileName, profile: .pdfStatement, encodingName: "PDF",
             dialect: CSVDialect(delimiter: " ", quote: "\""), rows: rows, errors: statement.errors,
             chronologicalIndices: order, chainOK: chainOK, chainBreaks: [],
             openingBalance: statement.openingBalance, closingBalance: statement.closingBalance,
             firstDay: rows.map(\.day).min(), lastDay: rows.map(\.day).max(), warnings: warnings)
+        preview.applySeam(resumeFromBalance: resumeFromBalance, skipThrough: skipThrough)
+        return preview
     }
 }

@@ -11,6 +11,9 @@ let package = Package(
     platforms: [.macOS("15.0")],
     products: [
         .executable(name: "HomeFinance", targets: ["HomeFinance"]),
+        // Alle modules als bibliotheek, voor losse hulpprogramma's en proefdraaien buiten de app.
+        .library(name: "HomeFinanceKit", targets: ["HFCore", "HFImport", "HFBudget", "HFRules", "HFInsight",
+                                                   "HFBackup", "HFHistory", "HFPublish"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),

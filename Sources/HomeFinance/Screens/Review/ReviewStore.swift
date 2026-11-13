@@ -105,11 +105,14 @@ struct ReviewImportPart: Identifiable {
     var fileName: String
     var accountName: String
     var preview: ImportPreview
+    /// Eerste import na de Excel-historie: positie (in tijdsvolgorde) van de eerste regel die volgens het
+    /// eerste voorstel meegaat. Daaromheen toont het venster de regels om zelf te kiezen.
+    var seamCenter: Int?
 }
 
 /// Een gekozen bestand (zip van de bank of een los afschrift) dat gelezen is en op bevestiging wacht.
 struct ReviewPendingImport: Identifiable {
-    let id = UUID()
+    var id = UUID()
     var fileName: String
     /// De zip zoals HFImport hem las; nil bij een los bestand.
     var archive: ArchivePreview?
@@ -569,29 +572,8 @@ final class ReviewStore {
             model.errorMessage = "Het bestand \"\(fileName)\" kan niet worden geopend."
             return
         }
-        let importer = BankImporter(database: model.db)
         do {
-            if fileName.lowercased().hasSuffix(".zip") || data.starts(with: [0x50, 0x4B, 0x03, 0x04]) {
-                let archive = try importer.previewArchive(data: data, fileName: fileName)
-                let parts = archive.importableItems.compactMap { item in
-                    item.preview.map {
-                        ReviewImportPart(fileName: item.fileName, accountName: item.account?.name ?? "Onbekende rekening", preview: $0)
-                    }
-                }
-                pendingImport = ReviewPendingImport(fileName: fileName, archive: archive, parts: parts,
-                                                    skipped: archive.skippedItems)
-                return
-            }
-            let match = try? importer.matchAccount(data: data, fileName: fileName)
-            guard let target = match?.account?.id ?? accountId else { return }
-            let name = match?.account?.name ?? accountName(target)
-            let preview = try importer.preview(data: data, fileName: fileName, accountId: target)
-            pendingImport = ReviewPendingImport(
-                fileName: fileName, parts: [ReviewImportPart(fileName: fileName, accountName: name, preview: preview)],
-                recognition: match?.account != nil
-                    ? "Herkend als: \(name)"
-                    : "\(match?.message ?? "De rekening is niet herkend.") Het bestand gaat naar de gekozen rekening: \(name).",
-                recognized: match?.account != nil)
+            pendingImport = try makePending(data: data, fileName: fileName, model)
         } catch ImportError.noProfile {
             if let file = try? CSVFile(data: data) {
                 rawFile = ReviewRawFile(fileName: fileName, rows: file.rawRows(limit: 12), columnCount: file.columnCount)
@@ -601,6 +583,75 @@ final class ReviewStore {
         } catch {
             model.errorMessage = error.localizedDescription
         }
+    }
+
+    /// Leest het bestand. Bij de eerste bankimport na de Excel-historie (`needsSeam`) zoekt HFImport op saldo
+    /// waar het bestand aansluit op de administratie, met de laatste historiedag als terugval.
+    private func makePending(data: Data, fileName: String, _ model: AppModel) throws -> ReviewPendingImport? {
+        let importer = BankImporter(database: model.db)
+        // Het saldo over alle boekingen: de historieposten staan niet op de echte dag.
+        let farFuture = Day(year: 9999, month: 12, day: 31) ?? model.today
+        func adminBalance(_ accountId: Int64) throws -> Money {
+            try model.db.read { try Insight.balance($0, accountId: accountId, on: farFuture) }
+        }
+        if fileName.lowercased().hasSuffix(".zip") || data.starts(with: [0x50, 0x4B, 0x03, 0x04]) {
+            var cutovers: [Int64: Day] = [:]
+            var balances: [Int64: Money] = [:]
+            for id in try model.db.read({ try Int64.fetchAll($0, sql: "SELECT id FROM account") })
+            where try importer.needsSeam(accountId: id) {
+                cutovers[id] = try importer.historyCutover(accountId: id)
+                balances[id] = try adminBalance(id)
+            }
+            let archive = try importer.previewArchive(data: data, fileName: fileName, skipThroughByAccount: cutovers,
+                                                      resumeFromBalance: balances)
+            let parts = archive.importableItems.compactMap { item in
+                item.preview.map {
+                    ReviewImportPart(fileName: item.fileName, accountName: item.account?.name ?? "Onbekende rekening",
+                                     preview: $0, seamCenter: Self.seamCenter($0))
+                }
+            }
+            return ReviewPendingImport(fileName: fileName, archive: archive, parts: parts, skipped: archive.skippedItems)
+        }
+        let match = try? importer.matchAccount(data: data, fileName: fileName)
+        guard let target = match?.account?.id ?? accountId else { return nil }
+        let name = match?.account?.name ?? accountName(target)
+        let needsSeam = try importer.needsSeam(accountId: target)
+        let preview = try importer.preview(
+            data: data, fileName: fileName, accountId: target,
+            skipThrough: needsSeam ? try importer.historyCutover(accountId: target) : nil,
+            resumeFromBalance: needsSeam ? try adminBalance(target) : nil)
+        return ReviewPendingImport(
+            fileName: fileName,
+            parts: [ReviewImportPart(fileName: fileName, accountName: name, preview: preview, seamCenter: Self.seamCenter(preview))],
+            recognition: match?.account != nil
+                ? "Herkend als: \(name)"
+                : "\(match?.message ?? "De rekening is niet herkend.") Het bestand gaat naar de gekozen rekening: \(name).",
+            recognized: match?.account != nil)
+    }
+
+    private static func seamCenter(_ preview: ImportPreview) -> Int? {
+        guard preview.seam != nil else { return nil }
+        let rows = preview.rowsChronological
+        return rows.firstIndex { !$0.isBeforeCutover } ?? rows.count
+    }
+
+    /// De gebruiker zet zelf een regel aan of uit bij de aansluiting op de Excel-historie.
+    func setIncluded(_ included: Bool, line: Int, in partId: String) {
+        guard var pending = pendingImport, let index = pending.parts.firstIndex(where: { $0.id == partId }) else { return }
+        let changed = pending.parts[index].preview.overriding(includeLineNumbers: included ? [line] : [],
+                                                              excludeLineNumbers: included ? [] : [line])
+        pending.parts[index].preview = changed
+        if let item = pending.archive?.items.firstIndex(where: { $0.fileName == partId }) {
+            pending.archive?.items[item].preview = changed
+        }
+        pendingImport = pending
+    }
+
+    /// Wat er bij de huidige keuze nog niet klopt: eindsaldo van het bestand min (saldo van de administratie
+    /// plus de regels die meegaan). Moet € 0,00 zijn. nil als het bestand geen saldo levert.
+    func seamDifference(_ preview: ImportPreview) -> Money? {
+        guard let seam = preview.seam, let sought = seam.soughtBalance, let closing = seam.fileClosingBalance else { return nil }
+        return closing - sought - preview.rows.filter { !$0.isBeforeCutover }.map(\.amount).sum()
     }
 
     func openSample(_ model: AppModel) {
@@ -630,9 +681,12 @@ final class ReviewStore {
             var parts = [n == 1 ? "1 transactie geïmporteerd" : "\(n) transacties geïmporteerd"]
             if only.result.duplicateCount > 0 { parts.append("\(only.result.duplicateCount) al bekend") }
             if only.result.skippedErrorCount > 0 { parts.append("\(only.result.skippedErrorCount) fout overgeslagen") }
+            if only.result.cutoverSkippedCount > 0 { parts.append("\(only.result.cutoverSkippedCount) overgeslagen (Excel-historie)") }
             model.toast = parts.joined(separator: " · ")
         } else {
+            let skipped = results.map(\.result.cutoverSkippedCount).reduce(0, +)
             model.toast = "Geïmporteerd · " + results.map { "\($0.name): \($0.result.transactions.count) nieuw" }.joined(separator: " · ")
+                + (skipped > 0 ? " · \(skipped) overgeslagen (Excel-historie)" : "")
         }
         pendingImport = nil
         notice = nil
