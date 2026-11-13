@@ -122,8 +122,10 @@ Wat erin zit, van 1 januari van het jaar van `today` t/m `today`:
 - 20 vaste posten (salarissen, kinderbijslag en sportvereniging per kwartaal, hypotheek, verzekeringen, energie,
   telecom, streaming, privélening met `reducesReserve`, RESERVERINGEN, drie spaarposten) en 20 RES-regels,
   elk gekoppeld aan een reserveringspot. 5 spaarpotten met doel, waarvan 4 met eigenaar.
-- Het beginsaldo van de spaarrekening is op 1 januari met handboekingen over de potten verdeeld (samen nul);
-  € 350 blijft niet toegewezen.
+- De spaarrekening heeft beginsaldo € 0,00; wat er op 1 januari staat is per pot geboekt als handboeking
+  "Beginsaldo <pot>". De eerste banktransactie heeft als saldo vóór mutatie de som van die boekingen.
+- Eén boeking op de spaarrekening heeft geen pot: de rentebijschrijving van 2 januari (€ 12,84). "Niet
+  toegewezen" is daarmee precies dat bedrag.
 - Tags Tanken, Uit eten, Cadeau, Vakantie; regels voor alle terugkerende tegenpartijen.
 - Banktransacties met sluitende saldoketen en per maand een importbatch. Geboekt t/m `today − 10`; daarna
   status `nieuw`. De laatste zes geboekte transacties op de betaalrekening staan op "nog nakijken".

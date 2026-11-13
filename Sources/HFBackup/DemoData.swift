@@ -192,20 +192,15 @@ public enum DemoData {
             ruleIds[rules[index].name] = rules[index].id
         }
 
-        // Beginsaldo van de spaarrekening over de potten verdelen (handboekingen die samen nul zijn).
+        // Wat er op 1 januari op de spaarrekening staat: één handboeking per pot. Het beginsaldo van de
+        // rekening zelf is nul, zodat er geen bedrag zonder pot overblijft.
         var entryCount = 0
-        var allocated = Money.zero
         for def in DemoPlan.pots {
             var entry = Entry(accountId: savingsId, day: plan.yearStart, amount: Money(cents: def.initial),
                               label: "Beginsaldo \(def.name)", potId: potIds[def.name], createdAt: stamp)
             try entry.insert(db)
-            allocated += entry.amount
             entryCount += 1
         }
-        var offset = Entry(accountId: savingsId, day: plan.yearStart, amount: -allocated,
-                           label: "Beginsaldo verdeeld over potten", createdAt: stamp)
-        try offset.insert(db)
-        entryCount += 1
 
         // Afgeronde spaaroverboekingen (alleen die al geboekt zijn)
         var transferIds: [Int: Int64] = [:]

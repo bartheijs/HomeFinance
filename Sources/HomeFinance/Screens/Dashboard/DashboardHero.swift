@@ -2,68 +2,65 @@ import SwiftUI
 import HFCore
 import HFInsight
 
-/// Het grote getal: besteedbaar nu, de opbouw ervan en de verwachting voor het eind van de maand.
-struct DashboardHeroCard: View {
+/// Het grote getal: besteedbaar nu, met één regel uitleg. De opbouw zit achter een uitklapper.
+struct DashboardHero: View {
     let spendable: Spendable
-    @State private var showExpected = false
+    @State private var showBreakdown = false
 
     private static let spendableHelp = """
         Besteedbaar is wat je vrij kunt uitgeven: het saldo van de betaalrekening, min het geld dat daar \
         nog voor reserveringen op staat, min de buffers die je nooit wilt aanspreken (anti-rood).
         """
 
-    private var tint: Color {
-        spendable.spendable.isNegative ? Theme.negative : (spendable.spendable.isZero ? .secondary : Theme.positive)
-    }
+    private var tint: Color { spendable.spendable.isNegative ? Theme.negative : Theme.accent }
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 20) {
-                headline.frame(minWidth: 230, maxWidth: .infinity, alignment: .leading)
-                Divider()
-                breakdown.frame(width: 250)
-                Divider()
-                endOfMonth.frame(width: 215, alignment: .leading)
-            }
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top, spacing: 20) {
-                    headline.frame(maxWidth: .infinity, alignment: .leading)
-                    Divider()
-                    breakdown.frame(width: 250)
-                }
-                Divider()
-                endOfMonth
-            }
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
-        .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(Theme.hairline.opacity(0.6)))
-    }
-
-    // MARK: Het getal
-
-    private var headline: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text("Besteedbaar").font(.headline)
-                Image(systemName: "info.circle").font(.caption).foregroundStyle(.tertiary)
-            }
-            .help(Self.spendableHelp)
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Besteedbaar").font(.title3.weight(.medium)).foregroundStyle(.secondary)
             Text(spendable.spendable.formatted())
-                .font(.system(size: 46, weight: .bold, design: .rounded))
+                .font(.system(size: 76, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(tint)
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
+                .minimumScaleFactor(0.5)
                 .help(Self.spendableHelp)
             Text(spendable.spendable.isNegative
-                 ? "Je zit onder je buffers. Peildatum \(spendable.asOf.short())."
-                 : "Vrij uit te geven op \(spendable.asOf.short()), na reserveringen en buffers.")
-                .font(.callout).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 10)
-            DashboardBalanceBar(spendable: spendable)
+                 ? "Je zit onder je buffers."
+                 : "Vrij uit te geven, na reserveringen en buffers.")
+                .font(.title3).foregroundStyle(.secondary)
+                .padding(.top, 2)
+            (Text("Eind van de maand: ").foregroundStyle(.secondary)
+                + Text(spendable.spendableEndOfMonth.formatted()).fontWeight(.semibold)
+                    .foregroundColor(spendable.spendableEndOfMonth.isNegative ? Theme.negative : .primary))
+                .font(.body).monospacedDigit()
+                .padding(.top, 14)
+                .help("Een vooruitblik: besteedbaar van nu, plus de vaste posten die deze maand nog verwacht worden en nog niet geboekt zijn.")
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { showBreakdown.toggle() }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                        .rotationEffect(.degrees(showBreakdown ? 90 : 0))
+                    Text("Hoe is dit opgebouwd?")
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Theme.accent)
+            .padding(.top, 18)
+            if showBreakdown {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 32) {
+                        breakdown.frame(width: 280)
+                        expected.frame(width: 260)
+                    }
+                    VStack(alignment: .leading, spacing: 20) {
+                        breakdown.frame(maxWidth: 320)
+                        expected.frame(maxWidth: 320)
+                    }
+                }
+                .padding(.top, 14)
+            }
         }
     }
 
@@ -71,126 +68,64 @@ struct DashboardHeroCard: View {
 
     private var breakdown: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("Zo is het opgebouwd").font(.subheadline).foregroundStyle(.secondary)
-            line("Saldo betaalrekening", spendable.balance, sign: " ", dot: nil,
+            Text("Nu").font(.subheadline).foregroundStyle(.secondary)
+            line("Saldo betaalrekening", spendable.balance, sign: " ",
                  help: "Wat er vandaag op de betaalrekening(en) staat volgens de boekingen.")
-            line("Gereserveerd", spendable.reserved, sign: "−", dot: Theme.info,
+            line("Gereserveerd", spendable.reserved, sign: "−",
                  help: "Geld op de betaalrekening dat al een bestemming heeft, zoals de jaarlijkse posten waarvoor je spaart.")
-            line("Anti-rood", spendable.antiRood, sign: "−", dot: Theme.warning,
+            line("Anti-rood", spendable.antiRood, sign: "−",
                  help: "Vaste buffer die altijd op de rekening blijft staan, zodat je niet rood komt te staan.")
-            line("Tijdelijk anti-rood", spendable.tijdelijkAntiRood, sign: "−", dot: Theme.warning.opacity(0.55),
-                 help: "Extra buffer die je tijdelijk aanhoudt, bijvoorbeeld voor een grote uitgave die eraan komt.")
+            if !spendable.tijdelijkAntiRood.isZero {
+                line("Tijdelijk anti-rood", spendable.tijdelijkAntiRood, sign: "−",
+                     help: "Extra buffer die je tijdelijk aanhoudt, bijvoorbeeld voor een grote uitgave die eraan komt.")
+            }
             Divider()
-            HStack(spacing: 6) {
-                Text("=").frame(width: 12).foregroundStyle(.secondary)
-                Text("Besteedbaar").fontWeight(.semibold)
-                Spacer(minLength: 4)
-                Text(spendable.spendable.formatted()).monospacedDigit().fontWeight(.semibold).foregroundStyle(tint)
+            total("Besteedbaar", spendable.spendable)
+        }
+        .font(.callout)
+    }
+
+    private var expected: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Nog verwacht deze maand").font(.subheadline).foregroundStyle(.secondary)
+            if spendable.expectedItems.isEmpty {
+                Text("Alle vaste posten van deze maand zijn geboekt.").foregroundStyle(.secondary)
+            } else {
+                ForEach(spendable.expectedItems) { item in
+                    HStack(spacing: 6) {
+                        Text(item.label).lineLimit(1)
+                        if item.isLate {
+                            Image(systemName: "clock").font(.caption).foregroundStyle(Theme.negative)
+                                .help("De verwachte dag is al voorbij.")
+                        }
+                        Spacer(minLength: 4)
+                        Text(item.plan.formatted(alwaysSign: true)).monospacedDigit()
+                    }
+                }
+                Divider()
+                total("Eind van de maand", spendable.spendableEndOfMonth)
             }
         }
         .font(.callout)
     }
 
-    private func line(_ title: String, _ amount: Money, sign: String, dot: Color?, help: String) -> some View {
+    private func line(_ title: String, _ amount: Money, sign: String, help: String) -> some View {
         HStack(spacing: 6) {
             Text(sign).frame(width: 12).foregroundStyle(.secondary)
             Text(title).lineLimit(1)
-            if let dot { Circle().fill(dot).frame(width: 7, height: 7) }
             Spacer(minLength: 4)
             Text(amount.formatted()).monospacedDigit()
         }
         .help(help)
     }
 
-    // MARK: Eind van de maand
-
-    private var endOfMonth: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text("Eind van de maand").font(.subheadline).foregroundStyle(.secondary)
-                Image(systemName: "info.circle").font(.caption).foregroundStyle(.tertiary)
-            }
-            .help("Een vooruitblik: besteedbaar van nu, plus de vaste posten die deze maand nog verwacht worden en nog niet geboekt zijn.")
-            MoneyText(spendable.spendableEndOfMonth, colored: true)
-                .font(.system(.title, design: .rounded).weight(.semibold))
-                .lineLimit(1).minimumScaleFactor(0.7)
-            if spendable.expectedItems.isEmpty {
-                Label("Alle vaste posten van deze maand zijn geboekt.", systemImage: "checkmark.circle")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                let count = spendable.expectedItems.count
-                Text("Na \(count) verwachte \(count == 1 ? "post" : "posten") van samen \(spendable.expectedTotal.formatted(alwaysSign: true)).")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button {
-                    withAnimation(.easeInOut(duration: 0.15)) { showExpected.toggle() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
-                            .rotationEffect(.degrees(showExpected ? 90 : 0))
-                        Text(showExpected ? "Verberg posten" : "Toon posten")
-                    }
-                    .font(.caption.weight(.medium))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.accent)
-                .padding(.top, 2)
-                if showExpected {
-                    VStack(spacing: 4) {
-                        ForEach(spendable.expectedItems) { item in
-                            HStack(spacing: 6) {
-                                if item.isLate {
-                                    Image(systemName: "clock.badge.exclamationmark").foregroundStyle(Theme.warning)
-                                        .help("De verwachte dag is al voorbij.")
-                                }
-                                Text(item.label).lineLimit(1)
-                                Spacer(minLength: 4)
-                                MoneyText(item.plan, colored: true)
-                            }
-                            .font(.caption)
-                        }
-                    }
-                    .padding(.top, 2)
-                }
-            }
-        }
-    }
-}
-
-/// Balk die laat zien hoe het saldo verdeeld is over gereserveerd, buffers en besteedbaar.
-private struct DashboardBalanceBar: View {
-    let spendable: Spendable
-
-    private var parts: [(Color, Money, String)] {
-        [(Theme.info, spendable.reserved, "Gereserveerd"),
-         (Theme.warning, spendable.antiRood, "Anti-rood"),
-         (Theme.warning.opacity(0.55), spendable.tijdelijkAntiRood, "Tijdelijk anti-rood"),
-         (Theme.positive, spendable.spendable, "Besteedbaar")]
-    }
-
-    var body: some View {
-        // Alleen zinvol als elk deel een stuk van het saldo is.
-        if !spendable.balance.isNegative, !spendable.balance.isZero, parts.allSatisfy({ !$0.1.isNegative }) {
-            VStack(alignment: .leading, spacing: 5) {
-                GeometryReader { geo in
-                    HStack(spacing: 2) {
-                        ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
-                            if !part.1.isZero {
-                                Rectangle().fill(part.0)
-                                    .frame(width: max(3, (geo.size.width - 6) * DashboardFormat.fraction(part.1, of: spendable.balance)))
-                                    .help("\(part.2): \(part.1.formatted())")
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .clipShape(Capsule())
-                }
-                .frame(height: 8)
-                Text("Verdeling van \(spendable.balance.formatted()) op de betaalrekening")
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
+    private func total(_ title: String, _ amount: Money) -> some View {
+        HStack(spacing: 6) {
+            Text("=").frame(width: 12).foregroundStyle(.secondary)
+            Text(title).fontWeight(.semibold)
+            Spacer(minLength: 4)
+            Text(amount.formatted()).monospacedDigit().fontWeight(.semibold)
+                .foregroundStyle(amount.isNegative ? Theme.negative : Color.primary)
         }
     }
 }

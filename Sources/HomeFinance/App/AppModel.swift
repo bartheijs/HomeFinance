@@ -4,7 +4,7 @@ import HFCore
 
 /// De schermen in de zijbalk.
 enum Screen: String, CaseIterable, Identifiable, Hashable {
-    case dashboard, review, grid, transactions, pots, reimbursements, reports, rules, settings
+    case transactions, review, dashboard, grid, pots, reimbursements, reports, rules, settings
     var id: String { rawValue }
 
     var title: String {
@@ -35,7 +35,7 @@ enum Screen: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    static let overview: [Screen] = [.dashboard, .review, .grid, .transactions]
+    static let overview: [Screen] = [.transactions, .review, .dashboard, .grid]
     static let savings: [Screen] = [.pots, .reimbursements]
     static let insight: [Screen] = [.reports, .rules]
 }
@@ -49,7 +49,8 @@ final class AppModel {
     private(set) var isDemo: Bool
     /// Loopt op na elke wijziging in de database.
     private(set) var revision = 0
-    var selection: Screen = .dashboard
+    /// De app opent op de transacties, net als een bank-app.
+    var selection: Screen = .transactions
     var settingsTab: String = "jaar"
     /// Het begrotingsjaar dat de schermen tonen.
     var year: Int
@@ -115,7 +116,7 @@ final class AppModel {
         self.db = db
         self.isDemo = isDemo
         self.year = today.year
-        self.selection = .dashboard
+        self.selection = .transactions
         observe()
         revision += 1
     }

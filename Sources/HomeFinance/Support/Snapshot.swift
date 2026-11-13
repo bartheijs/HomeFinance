@@ -34,7 +34,7 @@ enum Snapshot {
             model.isSnapshot = true
             let host = NSHostingView(rootView: RootView().environment(model).frame(width: size.width, height: size.height))
             let window = NSWindow(contentRect: NSRect(origin: NSPoint(x: -20000, y: -20000), size: size),
-                                  styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
+                                  styleMask: [.borderless], backing: .buffered, defer: false)
             window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
             window.contentView = host
             window.orderFrontRegardless()

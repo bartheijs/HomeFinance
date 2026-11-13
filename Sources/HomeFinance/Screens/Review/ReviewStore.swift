@@ -1,0 +1,634 @@
+import SwiftUI
+import GRDB
+import HFCore
+import HFImport
+import HFRules
+import HFBudget
+import HFInsight
+
+// Toestand en acties van het scherm "Importeren en nakijken".
+// Rekenwerk zit in de modules: voorstellen (HFRules), boeken (HFBudget), wachtrij (HFInsight), import (HFImport).
+
+/// Waar een (deel van een) transactie naartoe gaat. `none` = divers (betaal) of niet toegewezen (spaar).
+enum ReviewTarget: Hashable, Sendable {
+    case none
+    case item(Int64)
+    case pot(Int64)
+}
+
+/// Eén regel in de splitsing van een transactie.
+struct ReviewSplitLine: Identifiable, Equatable {
+    var id = UUID()
+    var amount: Money?
+    var label = ""
+    var target: ReviewTarget = .none
+
+    static func == (l: Self, r: Self) -> Bool {
+        l.amount == r.amount && l.label == r.label && l.target == r.target
+    }
+}
+
+/// Het voorstel zoals de gebruiker het kan aanpassen voordat hij boekt.
+struct ReviewDraft: Equatable {
+    var target: ReviewTarget = .none
+    var label = ""
+    var tagIds: Set<Int64> = []
+    var reimburse = false
+    var reimbursePotId: Int64?
+    var note = ""
+    var isSplit = false
+    var lines: [ReviewSplitLine] = []
+}
+
+/// Groepen in de wachtrij: twijfelgevallen eerst.
+enum ReviewGroup: Int, CaseIterable, Identifiable {
+    case doubt, probable, certain
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .doubt: "Twijfelgevallen"
+        case .probable: "Waarschijnlijk goed"
+        case .certain: "Zeker"
+        }
+    }
+    var help: String {
+        switch self {
+        case .doubt: "Geen regel gevonden, alleen een gok, of het bedrag wijkt af. Kijk deze eerst na."
+        case .probable: "Een regel herkent de tegenpartij of de omschrijving, maar niet het bedrag."
+        case .certain: "Tegenpartij en bedrag kloppen met een regel. Deze kun je in één keer boeken."
+        }
+    }
+    var icon: String {
+        switch self {
+        case .doubt: "questionmark.circle.fill"
+        case .probable: "circle.lefthalf.filled"
+        case .certain: "checkmark.circle.fill"
+        }
+    }
+    var color: Color {
+        switch self {
+        case .doubt: Theme.warning
+        case .probable: Theme.info
+        case .certain: Theme.positive
+        }
+    }
+}
+
+/// Eén transactie in de wachtrij met alles wat de modules erover zeggen.
+struct ReviewRow: Identifiable, Equatable {
+    let item: ReviewItem
+    let suggestion: Suggestion
+    let cleanLabel: String
+    let group: ReviewGroup
+    /// Voorstel om een storting over de reserveringspotten te verdelen.
+    let distribution: [Allocation]?
+    /// Deze transactie is één kant van een overboeking tussen eigen rekeningen.
+    let pair: TransferPair?
+
+    var id: Int64 { item.id }
+    var tx: BankTransaction { item.transaction }
+}
+
+/// Melding onder de wachtrij, met de mogelijkheid om de laatste actie terug te draaien.
+struct ReviewNotice: Identifiable {
+    let id = UUID()
+    var text: String
+    var undo: (@MainActor (AppModel) -> Void)?
+}
+
+/// Eén rekening binnen een import: het voorbeeld van één bestand.
+struct ReviewImportPart: Identifiable {
+    var id: String { fileName }
+    var fileName: String
+    var accountName: String
+    var preview: ImportPreview
+}
+
+/// Een gekozen bestand (zip van de bank of een los afschrift) dat gelezen is en op bevestiging wacht.
+struct ReviewPendingImport: Identifiable {
+    let id = UUID()
+    var fileName: String
+    /// De zip zoals HFImport hem las; nil bij een los bestand.
+    var archive: ArchivePreview?
+    var parts: [ReviewImportPart]
+    /// Bestanden uit de zip die niet meegaan, met de reden.
+    var skipped: [ArchiveItem] = []
+    /// Los bestand: bij welke rekening het hoort en hoe dat bepaald is.
+    var recognition: String?
+    var recognized = true
+
+    var newCount: Int { parts.map(\.preview.newCount).reduce(0, +) }
+    var errorCount: Int { parts.map(\.preview.errorCount).reduce(0, +) }
+}
+
+/// Een bestand waarvan de kolomindeling niet herkend is.
+struct ReviewRawFile: Identifiable {
+    let id = UUID()
+    var fileName: String
+    var rows: [[String]]
+    var columnCount: Int
+}
+
+@MainActor @Observable
+final class ReviewStore {
+    var accounts: [Account] = []
+    var accountId: Int64?
+    /// Aantal nog te boeken transacties per rekening.
+    var openCounts: [Int64: Int] = [:]
+    var rows: [ReviewRow] = []
+    var selection: Set<Int64> = []
+    /// De rij waar de pijltjestoetsen vanaf tellen.
+    var cursor: Int64?
+    var pots: [Pot] = []
+    var tags: [Tag] = []
+    var pairs: [TransferPair] = []
+    var lastBatch: ImportBatch?
+    var check: ImportCheck?
+    var notice: ReviewNotice?
+    var pendingImport: ReviewPendingImport?
+    var rawFile: ReviewRawFile?
+    var loaded = false
+    /// "Meer opties" in het paneel rechts staat open.
+    var showMore = false
+
+    private var itemsByYear: [Int: [BudgetItem]] = [:]
+    private var itemsById: [Int64: BudgetItem] = [:]
+    private var potsById: [Int64: Pot] = [:]
+    private var drafts: [Int64: ReviewDraft] = [:]
+    private var defaults: [Int64: ReviewDraft] = [:]
+
+    // MARK: Afgeleid
+
+    var account: Account? { accounts.first { $0.id == accountId } }
+    var kind: AccountKind { account?.kind ?? .betaal }
+    var checkingAccount: Account? { accounts.first { $0.kind == .betaal } }
+
+    var selectedRows: [ReviewRow] { rows.filter { selection.contains($0.id) } }
+    var singleRow: ReviewRow? { selection.count == 1 ? rows.first { selection.contains($0.id) } : nil }
+
+    func rows(in group: ReviewGroup) -> [ReviewRow] { rows.filter { $0.group == group } }
+
+    /// Transacties die zonder kijken geboekt kunnen worden: zekerheid hoog en het bedrag klopt.
+    var certainRows: [ReviewRow] {
+        rows.filter { $0.group == .certain && problem(for: $0) == nil }
+    }
+    /// Alles wat je zelf even moet bekijken.
+    var toCheckRows: [ReviewRow] { rows.filter { $0.group != .certain } }
+
+    func items(year: Int, direction: Direction) -> [BudgetItem] {
+        (itemsByYear[year] ?? []).filter { $0.direction == direction }
+    }
+    func yearExists(_ year: Int) -> Bool { itemsByYear[year] != nil }
+    func pots(kind: PotKind, accountId: Int64? = nil) -> [Pot] {
+        pots.filter { $0.kind == kind && (accountId == nil || $0.accountId == accountId) }
+    }
+    func accountName(_ id: Int64) -> String { accounts.first { $0.id == id }?.name ?? "andere rekening" }
+
+    func title(of target: ReviewTarget, kind: AccountKind) -> String {
+        switch target {
+        case .none: kind == .betaal ? "Divers" : "Niet toegewezen"
+        case .item(let id): itemsById[id]?.label ?? "Onbekende post"
+        case .pot(let id): potsById[id]?.name ?? "Onbekende pot"
+        }
+    }
+
+    // MARK: Laden
+
+    func load(_ model: AppModel) {
+        model.read(()) { db in
+            accounts = try Account.fetchAll(db, sql: "SELECT * FROM account WHERE archived = 0 ORDER BY sortOrder, id")
+            if accountId == nil || !accounts.contains(where: { $0.id == accountId }) { accountId = accounts.first?.id }
+            tags = try Tag.fetchAll(db, sql: "SELECT * FROM tag ORDER BY sortOrder, id")
+            pots = try Pot.fetchAll(db, sql: "SELECT * FROM pot WHERE archived = 0 ORDER BY sortOrder, id")
+            potsById = Dictionary(uniqueKeysWithValues: pots.compactMap { p in p.id.map { ($0, p) } })
+
+            let years = try BudgetYear.fetchAll(db)
+            let yearById = Dictionary(uniqueKeysWithValues: years.compactMap { y in y.id.map { ($0, y.year) } })
+            // RES-regels krijgen geen boekingen; de regel RESERVERINGEN (UIT) wel.
+            let items = try BudgetItem.fetchAll(db, sql: "SELECT * FROM budgetItem WHERE direction <> 'RES' ORDER BY sortOrder, id")
+            itemsById = Dictionary(uniqueKeysWithValues: items.compactMap { i in i.id.map { ($0, i) } })
+            var byYear: [Int: [BudgetItem]] = Dictionary(uniqueKeysWithValues: years.map { ($0.year, []) })
+            for item in items { if let year = yearById[item.yearId] { byYear[year, default: []].append(item) } }
+            itemsByYear = byYear
+
+            let queue = try Insight.reviewQueue(db)
+            openCounts = Dictionary(grouping: queue, by: \.transaction.accountId).mapValues(\.count)
+            guard let accountId, let account else {
+                rows = []; pairs = []; lastBatch = nil; check = nil
+                return
+            }
+            let suggestions = try RuleEngine.suggestAll(db, accountId: accountId)
+            pairs = try TransferService.findTransferPairs(db).filter {
+                ($0.from.accountId == accountId || $0.to.accountId == accountId)
+                    && ($0.from.status == .nieuw || $0.to.status == .nieuw)
+            }
+            rows = try queue.filter { $0.transaction.accountId == accountId }.map { item in
+                let tx = item.transaction
+                let suggestion = suggestions[item.id] ?? Suggestion(bankTransactionId: item.id)
+                let distribution = account.kind == .spaar && !tx.amount.isNegative
+                    ? try PotService.distribution(db, for: tx.amount, accountId: accountId) : nil
+                let pair = pairs.first { $0.from.id == tx.id || $0.to.id == tx.id }
+                return ReviewRow(
+                    item: item, suggestion: suggestion,
+                    cleanLabel: LabelCleaner.cleanLabel(counterparty: tx.counterpartyName, description: tx.descriptionText),
+                    group: Self.group(suggestion, hasProposal: distribution != nil || pair != nil),
+                    distribution: distribution, pair: pair)
+            }
+            .sorted { ($0.group.rawValue, $0.tx.day, $0.id) < ($1.group.rawValue, $1.tx.day, $1.id) }
+
+            lastBatch = try ImportBatch.fetchOne(db, sql: """
+                SELECT * FROM importBatch WHERE accountId = ? ORDER BY importedAt DESC, id DESC LIMIT 1
+                """, arguments: [accountId])
+            check = try lastBatch?.id.map { try BalanceService.importCheck(db, batchId: $0) }
+        }
+        loaded = true
+
+        let ids = Set(rows.map(\.id))
+        drafts = drafts.filter { ids.contains($0.key) }
+        defaults = defaults.filter { ids.contains($0.key) }
+        for row in rows {
+            let fresh = makeDefault(row)
+            if defaults[row.id] != fresh { defaults[row.id] = fresh }
+        }
+        selection = selection.intersection(ids)
+        if selection.isEmpty, let first = rows.first { selection = [first.id] }
+        if cursor == nil || !selection.contains(cursor!) { cursor = rows.first { selection.contains($0.id) }?.id }
+    }
+
+    private static func group(_ s: Suggestion, hasProposal: Bool) -> ReviewGroup {
+        if s.amountDiffers || !s.warnings.isEmpty { return .doubt }
+        switch s.confidence {
+        case .hoog: return .certain
+        case .midden: return .probable
+        case .laag, .geen: return hasProposal ? .probable : .doubt
+        }
+    }
+
+    // MARK: Voorstel en concept
+
+    private func makeDefault(_ row: ReviewRow) -> ReviewDraft {
+        let s = row.suggestion
+        var draft = ReviewDraft(label: s.label.isEmpty || s.label == "Onbekend" ? row.cleanLabel : s.label,
+                                tagIds: Set(s.tagIds))
+        if draft.label.isEmpty { draft.label = "Onbekend" }
+        switch kind {
+        case .betaal:
+            if let id = s.budgetItemId, itemsById[id] != nil { draft.target = .item(id) }
+            draft.reimburse = s.reimburse && row.tx.amount.isNegative
+            draft.reimbursePotId = draft.reimburse ? s.potId : nil
+        case .spaar:
+            if let id = s.potId, potsById[id]?.accountId == row.tx.accountId { draft.target = .pot(id) }
+            if draft.target == .none, let distribution = row.distribution {
+                draft.isSplit = true
+                draft.lines = distribution.map { a in
+                    ReviewSplitLine(amount: a.amount, label: a.label, target: a.potId.map { .pot($0) } ?? .none)
+                }
+            }
+        }
+        return draft
+    }
+
+    func draft(for row: ReviewRow) -> ReviewDraft { drafts[row.id] ?? defaults[row.id] ?? makeDefault(row) }
+    func isEdited(_ row: ReviewRow) -> Bool { drafts[row.id] != nil }
+
+    func setDraft(_ draft: ReviewDraft, for row: ReviewRow) {
+        if draft == defaults[row.id] { drafts[row.id] = nil } else { drafts[row.id] = draft }
+    }
+    func resetDraft(for row: ReviewRow) { drafts[row.id] = nil }
+
+    /// Wat er nog niet verdeeld is in een splitsing.
+    func remaining(_ draft: ReviewDraft, for row: ReviewRow) -> Money {
+        row.tx.amount - draft.lines.compactMap(\.amount).sum()
+    }
+
+    /// Waarom er nog niet geboekt kan worden, of nil als het kan.
+    func problem(for row: ReviewRow) -> String? {
+        let draft = draft(for: row)
+        guard draft.isSplit else { return nil }
+        if draft.lines.isEmpty { return "Voeg minstens één regel toe." }
+        if draft.lines.contains(where: { $0.amount == nil }) { return "Vul bij elke regel een geldig bedrag in." }
+        let rest = remaining(draft, for: row)
+        return rest.isZero ? nil : "Nog te verdelen: \(rest.formatted())."
+    }
+
+    private func allocations(for row: ReviewRow, reviewed: Bool) -> [Allocation] {
+        let draft = draft(for: row)
+        let s = row.suggestion
+        let note = draft.note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tagIds = draft.tagIds.sorted()
+        func ids(_ target: ReviewTarget) -> (item: Int64?, pot: Int64?) {
+            switch target {
+            case .none: (nil, nil)
+            case .item(let id): (id, nil)
+            case .pot(let id): (nil, id)
+            }
+        }
+        if draft.isSplit {
+            return draft.lines.map { line in
+                let t = ids(line.target)
+                let label = line.label.trimmingCharacters(in: .whitespaces)
+                return Allocation(amount: line.amount ?? .zero, label: label.isEmpty ? draft.label : label,
+                                  budgetItemId: t.item, potId: t.pot, tagIds: tagIds, note: note, reviewed: reviewed)
+            }
+        }
+        let t = ids(draft.target)
+        let reimburse = kind == .betaal && row.tx.amount.isNegative && draft.reimburse
+        let sameTarget = s.ruleId != nil && draft.target == defaults[row.id]?.target
+        let label = draft.label.trimmingCharacters(in: .whitespaces)
+        return [Allocation(amount: row.tx.amount, label: label.isEmpty ? row.cleanLabel : label,
+                           budgetItemId: t.item, potId: kind == .betaal ? (reimburse ? draft.reimbursePotId : nil) : t.pot,
+                           reimburse: reimburse, tagIds: tagIds, note: note,
+                           ruleId: sameTarget ? s.ruleId : nil, confidence: sameTarget ? s.confidence : nil,
+                           reviewed: reviewed)]
+    }
+
+    private func correction(for row: ReviewRow) -> Correction {
+        let draft = draft(for: row)
+        var itemLabel: String?
+        var potId: Int64?
+        switch draft.target {
+        case .none: break
+        case .item(let id): itemLabel = itemsById[id]?.label
+        case .pot(let id): potId = id
+        }
+        let reimburse = kind == .betaal && row.tx.amount.isNegative && draft.reimburse
+        if reimburse { potId = draft.reimbursePotId }
+        let label = draft.label.trimmingCharacters(in: .whitespaces)
+        return Correction(bankTransaction: row.tx, itemLabel: itemLabel, potId: potId,
+                          entryLabel: label.isEmpty || label == row.cleanLabel ? nil : label,
+                          tagIds: draft.tagIds.sorted(), reimburse: reimburse)
+    }
+
+    // MARK: Selectie
+
+    func select(_ id: Int64, command: Bool = false, shift: Bool = false) {
+        if shift, let from = cursor, let a = rows.firstIndex(where: { $0.id == from }),
+           let b = rows.firstIndex(where: { $0.id == id }) {
+            selection = Set(rows[min(a, b)...max(a, b)].map(\.id))
+        } else if command {
+            if selection.contains(id) { if selection.count > 1 { selection.remove(id) } } else { selection.insert(id) }
+            cursor = id
+        } else {
+            selection = [id]
+            cursor = id
+        }
+    }
+
+    /// Pijltjestoetsen: één rij omhoog of omlaag; met shift groeit de selectie.
+    func move(_ delta: Int, extend: Bool) {
+        guard !rows.isEmpty else { return }
+        let current = rows.firstIndex { $0.id == cursor } ?? (delta > 0 ? -1 : rows.count)
+        let next = rows[min(max(current + delta, 0), rows.count - 1)].id
+        if extend { selection.insert(next) } else { selection = [next] }
+        cursor = next
+    }
+
+    func selectAll() { selection = Set(rows.map(\.id)) }
+
+    /// De rij die na het boeken van `ids` geselecteerd wordt, zodat ⏎ blijft doorwerken.
+    private func successor(of ids: Set<Int64>) -> Int64? {
+        guard let last = rows.lastIndex(where: { ids.contains($0.id) }) else { return nil }
+        return rows[(last + 1)...].first { !ids.contains($0.id) }?.id
+            ?? rows[..<last].last { !ids.contains($0.id) }?.id
+    }
+
+    private func finish(_ model: AppModel, handled ids: Set<Int64>) {
+        let next = successor(of: ids)
+        for id in ids { drafts[id] = nil }
+        selection = next.map { [$0] } ?? []
+        cursor = next
+        load(model)
+    }
+
+    // MARK: Boeken en overslaan
+
+    /// Boekt de geselecteerde transactie met het voorstel zoals het er staat, en leert van de keuze.
+    func bookCurrent(_ model: AppModel) {
+        guard let row = singleRow else { return }
+        if let problem = problem(for: row) { model.errorMessage = problem; return }
+        let draft = draft(for: row)
+        let allocations = allocations(for: row, reviewed: true)
+        var learned: LearnResult?
+        let ok = model.perform {
+            try model.db.write { db in
+                _ = try BookingService.book(db, bankTransactionId: row.id, allocations: allocations)
+                if !draft.isSplit { learned = try RuleEngine.learn(from: correction(for: row), db) }
+            }
+        }
+        guard ok else { return }
+        var text = "Geboekt: \(allocations.count == 1 ? allocations[0].label : "\(row.cleanLabel) in \(allocations.count) regels")"
+        let changedRules = learned.flatMap { $0.outcome == .unchanged ? nil : $0 }
+        if let changedRules { text += " · \(changedRules.message)" }
+        announce(model, text, unbook: [row.id], learned: changedRules)
+        finish(model, handled: [row.id])
+    }
+
+    /// Boekt alle zekere transacties in één keer. Ze blijven "na te kijken" in Transacties.
+    func bookAllCertain(_ model: AppModel) {
+        book(certainRows, model, reviewedIfEdited: false)
+    }
+
+    /// Boekt de selectie met het voorstel per transactie.
+    func bookSelection(_ model: AppModel) {
+        let chosen = selectedRows
+        let blocked = chosen.filter { problem(for: $0) != nil }
+        guard blocked.isEmpty else {
+            model.errorMessage = blocked.count == 1
+                ? "\"\(blocked[0].cleanLabel)\" is gesplitst maar de regels tellen niet op tot het bankbedrag."
+                : "\(blocked.count) gesplitste transacties tellen niet op tot het bankbedrag."
+            return
+        }
+        book(chosen, model, reviewedIfEdited: true)
+    }
+
+    private func book(_ chosen: [ReviewRow], _ model: AppModel, reviewedIfEdited: Bool) {
+        guard !chosen.isEmpty else { return }
+        let requests = chosen.map { row in
+            BookingRequest(bankTransactionId: row.id,
+                           allocations: allocations(for: row, reviewed: reviewedIfEdited && isEdited(row)))
+        }
+        let ruleIds = requests.compactMap { $0.allocations.count == 1 ? $0.allocations[0].ruleId : nil }
+        let ok = model.perform {
+            try model.db.write { db in
+                _ = try BookingService.bookAll(db, requests)
+                for ruleId in ruleIds { try RuleEngine.recordUse(ruleId: ruleId, db) }
+            }
+        }
+        guard ok else { return }
+        let ids = Set(chosen.map(\.id))
+        let text = ids.count == 1 ? "1 transactie geboekt" : "\(ids.count) transacties geboekt"
+        announce(model, text + (reviewedIfEdited ? "" : " · nog na te kijken in Transacties"), unbook: Array(ids), learned: nil)
+        finish(model, handled: ids)
+    }
+
+    func skipSelection(_ model: AppModel) {
+        let ids = selection
+        guard !ids.isEmpty else { return }
+        let ok = model.perform {
+            try model.db.write { db in
+                for id in ids { try BookingService.skip(db, bankTransactionId: id) }
+            }
+        }
+        guard ok else { return }
+        let text = ids.count == 1 ? "1 transactie overgeslagen" : "\(ids.count) transacties overgeslagen"
+        model.toast = text
+        notice = ReviewNotice(text: text) { [weak self] model in
+            let done = model.perform("Terug in de wachtrij") {
+                try model.db.write { db in
+                    for id in ids { try BookingService.unskip(db, bankTransactionId: id) }
+                }
+            }
+            if done { self?.selection = ids; self?.cursor = ids.first; self?.load(model) }
+        }
+        finish(model, handled: ids)
+    }
+
+    private func announce(_ model: AppModel, _ text: String, unbook ids: [Int64], learned: LearnResult?) {
+        model.toast = text
+        notice = ReviewNotice(text: text) { [weak self] model in
+            let done = model.perform("Ongedaan gemaakt") {
+                try model.db.write { db in
+                    for id in ids { try BookingService.unbook(db, bankTransactionId: id) }
+                    if let learned { try RuleEngine.undoLearning(learned, db) }
+                }
+            }
+            if done { self?.selection = Set(ids); self?.cursor = ids.first; self?.load(model) }
+        }
+    }
+
+    func undo(_ model: AppModel) {
+        guard let undo = notice?.undo else { return }
+        notice = nil
+        undo(model)
+    }
+
+    // MARK: Overboekingen tussen eigen rekeningen
+
+    /// Koppelt de gevonden paren. Een kant die nog niet geboekt is, krijgt eerst het voorstel van de regels
+    /// (of de verdeling over de reserveringspotten), zodat de post of pot niet verloren gaat.
+    func linkPairs(_ model: AppModel, only pair: TransferPair? = nil) {
+        let chosen = pair.map { [$0] } ?? pairs
+        guard !chosen.isEmpty else { return }
+        let kinds = Dictionary(uniqueKeysWithValues: accounts.compactMap { a in a.id.map { ($0, a.kind) } })
+        let ok = model.perform {
+            try model.db.write { db in
+                for pair in chosen {
+                    for side in [pair.from, pair.to] where side.status == .nieuw {
+                        guard let id = side.id, let kind = kinds[side.accountId] else { continue }
+                        if kind == .spaar, !side.amount.isNegative,
+                           let split = try PotService.distribution(db, for: side.amount, accountId: side.accountId) {
+                            _ = try BookingService.book(db, bankTransactionId: id, allocations: split)
+                            continue
+                        }
+                        let s = try RuleEngine.suggest(for: side, db)
+                        guard let ruleId = s.ruleId, !s.amountDiffers, s.warnings.isEmpty else { continue }
+                        let reimburse = kind == .betaal && side.amount.isNegative && s.reimburse
+                        let allocation = Allocation(
+                            amount: side.amount, label: s.label,
+                            budgetItemId: kind == .betaal ? s.budgetItemId : nil,
+                            potId: kind == .spaar || reimburse ? s.potId : nil,
+                            reimburse: reimburse, tagIds: s.tagIds, ruleId: ruleId, confidence: s.confidence)
+                        _ = try BookingService.book(db, bankTransactionId: id, allocations: [allocation])
+                        try RuleEngine.recordUse(ruleId: ruleId, db)
+                    }
+                    try TransferService.linkTransfer(db, fromBankTransactionId: pair.from.id!,
+                                                     toBankTransactionId: pair.to.id!)
+                }
+            }
+        }
+        guard ok else { return }
+        model.toast = chosen.count == 1 ? "Overboeking gekoppeld" : "\(chosen.count) overboekingen gekoppeld"
+        notice = nil
+        let ids = Set(chosen.flatMap { [$0.from.id, $0.to.id].compactMap { $0 } })
+        finish(model, handled: ids.intersection(rows.map(\.id)))
+    }
+
+    // MARK: Importeren
+
+    /// Leest een bestand en toont het voorbeeld. Schrijft nog niets.
+    /// Een zip van de bank geeft één blok per rekening; bij een los bestand bepaalt het IBAN de rekening.
+    func open(_ url: URL, _ model: AppModel) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        let fileName = url.lastPathComponent
+        let data: Data
+        do { data = try Data(contentsOf: url) } catch {
+            model.errorMessage = "Het bestand \"\(fileName)\" kan niet worden geopend."
+            return
+        }
+        let importer = BankImporter(database: model.db)
+        do {
+            if fileName.lowercased().hasSuffix(".zip") || data.starts(with: [0x50, 0x4B, 0x03, 0x04]) {
+                let archive = try importer.previewArchive(data: data, fileName: fileName)
+                let parts = archive.importableItems.compactMap { item in
+                    item.preview.map {
+                        ReviewImportPart(fileName: item.fileName, accountName: item.account?.name ?? "Onbekende rekening", preview: $0)
+                    }
+                }
+                pendingImport = ReviewPendingImport(fileName: fileName, archive: archive, parts: parts,
+                                                    skipped: archive.skippedItems)
+                return
+            }
+            let match = try? importer.matchAccount(data: data, fileName: fileName)
+            guard let target = match?.account?.id ?? accountId else { return }
+            let name = match?.account?.name ?? accountName(target)
+            let preview = try importer.preview(data: data, fileName: fileName, accountId: target)
+            pendingImport = ReviewPendingImport(
+                fileName: fileName, parts: [ReviewImportPart(fileName: fileName, accountName: name, preview: preview)],
+                recognition: match?.account != nil
+                    ? "Herkend als: \(name)"
+                    : "\(match?.message ?? "De rekening is niet herkend.") Het bestand gaat naar de gekozen rekening: \(name).",
+                recognized: match?.account != nil)
+        } catch ImportError.noProfile {
+            if let file = try? CSVFile(data: data) {
+                rawFile = ReviewRawFile(fileName: fileName, rows: file.rawRows(limit: 12), columnCount: file.columnCount)
+            } else {
+                model.errorMessage = ImportError.noProfile.localizedDescription
+            }
+        } catch {
+            model.errorMessage = error.localizedDescription
+        }
+    }
+
+    func openSample(_ model: AppModel) {
+        model.perform {
+            let url = try DemoSupport.writeSampleCSV(today: model.today)
+            open(url, model)
+        }
+    }
+
+    func commit(_ pending: ReviewPendingImport, skipFaultyRows: Bool, _ model: AppModel) {
+        // Per rekening: naam, id en wat er geïmporteerd is.
+        var results: [(name: String, accountId: Int64, result: ImportResult)] = []
+        let ok = model.perform {
+            let importer = BankImporter(database: model.db)
+            if let archive = pending.archive {
+                results = try importer.commitArchive(archive, skipFaultyRows: skipFaultyRows).compactMap { r in
+                    r.account.id.map { (r.account.name, $0, r.result) }
+                }
+            } else if let part = pending.parts.first {
+                let result = try importer.commit(part.preview, skipFaultyRows: skipFaultyRows)
+                results = [(part.accountName, part.preview.accountId, result)]
+            }
+        }
+        guard ok, !results.isEmpty else { return }
+        if results.count == 1, let only = results.first {
+            let n = only.result.transactions.count
+            var parts = [n == 1 ? "1 transactie geïmporteerd" : "\(n) transacties geïmporteerd"]
+            if only.result.duplicateCount > 0 { parts.append("\(only.result.duplicateCount) al bekend") }
+            if only.result.skippedErrorCount > 0 { parts.append("\(only.result.skippedErrorCount) fout overgeslagen") }
+            model.toast = parts.joined(separator: " · ")
+        } else {
+            model.toast = "Geïmporteerd · " + results.map { "\($0.name): \($0.result.transactions.count) nieuw" }.joined(separator: " · ")
+        }
+        pendingImport = nil
+        notice = nil
+        // Blijf op de rekening met de meeste nieuwe transacties.
+        if let busiest = results.max(by: { $0.result.transactions.count < $1.result.transactions.count }) {
+            accountId = busiest.accountId
+        }
+        selection = []
+        load(model)
+    }
+}

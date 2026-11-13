@@ -11,115 +11,122 @@ struct PotsPanel<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) { content }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: Theme.cardRadius))
             .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius))
-            .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(Theme.hairline.opacity(0.6)))
     }
 }
 
 // MARK: - Kop per spaarrekening
 
-/// Saldo − potten = niet toegewezen, met de verdeling over de potten eronder.
+/// Drie getallen: saldo, in potten en niet toegewezen. De verdeling zit achter "Toon verdeling".
 struct PotsAccountStrip: View {
     let account: SavingsAccountPots
     let series: [BalancePoint]
     let asOf: Day
-    let selectedPotId: Int64?
+    /// Toon de naam van de rekening (bij meer dan één spaarrekening).
+    let showName: Bool
     var onSelectPot: (Int64) -> Void
+    @State private var showDistribution = false
 
     private var activeCount: Int { account.pots.filter { !$0.archived }.count }
 
     var body: some View {
-        PotsPanel {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 0) {
-                    figure("Saldo \(account.name)", amount: account.balance,
-                           caption: "volgens je boekingen, t/m \(asOf.short())",
-                           help: "Het saldo van de spaarrekening: het beginsaldo plus alle boekingen tot en met vandaag.")
-                    operatorSign("minus")
-                    figure("In potten", amount: account.potTotal,
-                           caption: activeCount == 1 ? "1 pot" : "\(activeCount) potten",
-                           help: "De som van alle potten op deze rekening.")
-                    operatorSign("equal")
-                    unallocated
-                    Spacer(minLength: 12)
-                    if series.count > 1 { sparkline }
-                }
-                PotsDistributionBar(slices: PotsSlice.slices(for: account), selectedPotId: selectedPotId,
-                                    onSelectPot: onSelectPot)
+        VStack(alignment: .leading, spacing: 18) {
+            if showName { Text(account.name).font(.headline) }
+            HStack(alignment: .top, spacing: 48) {
+                figure("Op de spaarrekening", amount: account.balance, caption: "t/m \(asOf.short())",
+                       help: "Het saldo van de spaarrekening: het beginsaldo plus alle boekingen tot en met vandaag.")
+                figure("In potten", amount: account.potTotal,
+                       caption: activeCount == 1 ? "1 pot" : "\(activeCount) potten",
+                       help: "De som van alle potten op deze rekening.")
+                unallocated
+                Spacer(minLength: 0)
             }
-            .padding(16)
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { showDistribution.toggle() }
+            } label: {
+                Label(showDistribution ? "Verberg verdeling" : "Toon verdeling",
+                      systemImage: showDistribution ? "chevron.up" : "chart.bar.xaxis")
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.accent)
+            .help("Laat zien hoe het spaarsaldo over de potten verdeeld is en hoe het saldo dit jaar verliep.")
+
+            if showDistribution {
+                VStack(alignment: .leading, spacing: 16) {
+                    PotsDistributionBar(slices: PotsSlice.slices(for: account), onSelectPot: onSelectPot)
+                    if series.count > 1 { balanceChart }
+                }
+                .padding(18)
+                .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+            }
         }
     }
 
     private func figure(_ title: String, amount: Money, caption: String, help: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.body).foregroundStyle(.secondary).lineLimit(1)
             Text(amount.formatted())
-                .font(.system(.title2, design: .rounded).weight(.semibold)).monospacedDigit()
+                .font(.system(size: 28, weight: .semibold, design: .rounded)).monospacedDigit()
                 .foregroundStyle(amount.isNegative ? Theme.negative : Color.primary)
                 .lineLimit(1).minimumScaleFactor(0.7)
-            Text(caption).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Text(caption).font(.callout).foregroundStyle(.tertiary).lineLimit(1)
         }
         .help(help)
     }
 
-    private func operatorSign(_ name: String) -> some View {
-        Image(systemName: name)
-            .font(.title3.weight(.medium)).foregroundStyle(.tertiary)
-            .frame(width: 44).padding(.top, 24)
-            .accessibilityHidden(true)
-    }
-
     private var unallocated: some View {
         let isZero = account.unallocated.isZero
-        let tint = isZero ? Theme.positive : Theme.warning
-        return VStack(alignment: .leading, spacing: 3) {
-            Text("Niet toegewezen").font(.subheadline).foregroundStyle(.secondary)
-            HStack(spacing: 6) {
+        return VStack(alignment: .leading, spacing: 4) {
+            Text("Niet toegewezen").font(.body).foregroundStyle(.secondary)
+            HStack(spacing: 8) {
                 Text(account.unallocated.formatted())
-                    .font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
-                    .foregroundStyle(tint)
+                    .font(.system(size: 28, weight: .semibold, design: .rounded)).monospacedDigit()
+                    .foregroundStyle(isZero ? Color.primary : Theme.warning)
                     .lineLimit(1).minimumScaleFactor(0.7)
-                Image(systemName: isZero ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .foregroundStyle(tint)
+                if !isZero {
+                    Image(systemName: "exclamationmark.triangle.fill").font(.title3).foregroundStyle(Theme.warning)
+                }
             }
             Text(isZero ? "elke euro heeft een pot"
                  : (account.unallocated.isNegative ? "de potten zijn samen meer dan het saldo" : "dit geld heeft nog geen pot"))
-                .font(.caption).foregroundStyle(isZero ? Color.secondary : tint).lineLimit(1)
+                .font(.callout).foregroundStyle(isZero ? AnyShapeStyle(.tertiary) : AnyShapeStyle(Theme.warning)).lineLimit(1)
         }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(tint.opacity(isZero ? 0.08 : 0.14), in: RoundedRectangle(cornerRadius: 10))
-        .padding(.top, -8)
-        .help("Niet toegewezen = saldo van de spaarrekening − de som van de potten. Dit hoort € 0,00 te zijn: dan heeft elke euro op de spaarrekening een pot. Is het positief, wijs dan de boekingen hieronder aan een pot toe. Is het negatief, dan zit er in de potten meer dan er op de rekening staat.")
+        .help("Niet toegewezen = saldo van de spaarrekening − de som van de potten. Dit hoort € 0,00 te zijn: dan heeft elke euro op de spaarrekening een pot. Is het positief, wijs dan de boekingen zonder pot aan een pot toe. Is het negatief, dan zit er in de potten meer dan er op de rekening staat.")
     }
 
-    private var sparkline: some View {
-        VStack(alignment: .trailing, spacing: 3) {
-            Text("Saldo in \(String(asOf.year))").font(.caption).foregroundStyle(.secondary)
+    private var balanceChart: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Saldo van de spaarrekening in \(String(asOf.year))").font(.callout).foregroundStyle(.secondary)
             Chart(series) { point in
-                AreaMark(x: .value("Dag", point.day.date), y: .value("Saldo", point.balance.doubleValue))
-                    .foregroundStyle(LinearGradient(colors: [Theme.accent.opacity(0.25), Theme.accent.opacity(0.02)],
-                                                    startPoint: .top, endPoint: .bottom))
-                    .interpolationMethod(.monotone)
                 LineMark(x: .value("Dag", point.day.date), y: .value("Saldo", point.balance.doubleValue))
                     .foregroundStyle(Theme.accent)
-                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+                    .lineStyle(StrokeStyle(lineWidth: 2))
                     .interpolationMethod(.monotone)
             }
-            .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
             .chartYScale(domain: .automatic(includesZero: false))
-            .frame(width: 170, height: 44)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                    AxisGridLine().foregroundStyle(Theme.hairline.opacity(0.4))
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) { Text(PotsFormat.wholeEuros(v)).monospacedDigit() }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                    AxisValueLabel {
+                        if let date = value.as(Date.self) { Text(Day.monthNamesShort[Day(date: date).month - 1]) }
+                    }
+                }
+            }
+            .frame(height: 110)
         }
-        .help("Het saldo van de spaarrekening aan het eind van elke maand dit jaar.")
     }
 }
 
 /// Liggende balk: hoe het spaarsaldo over de potten verdeeld is.
 struct PotsDistributionBar: View {
     let slices: [PotsSlice]
-    let selectedPotId: Int64?
     var onSelectPot: (Int64) -> Void
 
     var body: some View {
@@ -134,7 +141,6 @@ struct PotsDistributionBar: View {
                         ForEach(slices) { slice in
                             Rectangle()
                                 .fill(slice.color)
-                                .opacity(selectedPotId == nil || slice.potId == nil || slice.potId == selectedPotId ? 1 : 0.45)
                                 .frame(width: max(2, usable * slice.share))
                                 .help("\(slice.name): \(slice.amount.formatted()) (\(PotsFormat.percent(slice.share)))")
                                 .onTapGesture { if let id = slice.potId { onSelectPot(id) } }
@@ -142,17 +148,17 @@ struct PotsDistributionBar: View {
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 5))
                 }
-                .frame(height: 12)
+                .frame(height: 10)
                 .accessibilityLabel("Verdeling van het spaarsaldo over de potten")
 
-                PotsFlowLayout(spacing: 14, lineSpacing: 4) {
+                PotsFlowLayout(spacing: 16, lineSpacing: 6) {
                     ForEach(slices) { slice in
                         HStack(spacing: 5) {
                             Circle().fill(slice.color).frame(width: 8, height: 8)
                             Text(slice.name).foregroundStyle(.secondary)
                             Text(PotsFormat.percent(slice.share)).monospacedDigit()
                         }
-                        .font(.caption)
+                        .font(.callout)
                         .lineLimit(1)
                         .help(slice.amount.formatted())
                     }
@@ -197,254 +203,168 @@ struct PotsFlowLayout: Layout {
     }
 }
 
-// MARK: - Tabel met potten
+// MARK: - Lijst met potten
 
-/// Kolombreedtes van de pottentabel; in een smal venster vallen de jaarkolommen weg.
-struct PotsColumns: Equatable {
-    var compact: Bool
-    var showTarget: Bool
-    var year: Int
-
-    static let balance: CGFloat = 108
-    static let monthly: CGFloat = 86
-    static let flow: CGFloat = 100
-    static let last: CGFloat = 64
-    var target: CGFloat { compact ? 110 : 170 }
-}
-
-struct PotsTableHeader: View {
-    let columns: PotsColumns
+/// Kop van een inklapbare groep: naam, aantal en het totaal.
+struct PotsGroupHeader: View {
+    let title: String
+    let explanation: String
+    let pots: [PotSummary]
+    let expanded: Bool
+    var toggle: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text("Pot").frame(maxWidth: .infinity, alignment: .leading)
-            if columns.showTarget {
-                Text("Doel").frame(width: columns.target, alignment: .leading)
-                    .help("Hoe ver de pot is ten opzichte van het doelbedrag.")
+        Button(action: toggle) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Image(systemName: "chevron.right")
+                    .font(.callout.weight(.semibold)).foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+                    .frame(width: 14)
+                Text(title).font(.title3.weight(.semibold))
+                Text(pots.count == 1 ? "1 pot" : "\(pots.count) potten").font(.callout).foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+                Text(pots.map(\.balance).sum().formatted())
+                    .font(.title3.weight(.semibold)).monospacedDigit()
             }
-            Text("Saldo").frame(width: PotsColumns.balance, alignment: .trailing)
-                .help("Wat er nu in de pot zit: alle stortingen min alle opnames.")
-            Text("Per maand").frame(width: PotsColumns.monthly, alignment: .trailing)
-                .help("Het bedrag dat elke maand in deze pot gestort hoort te worden.")
-            if !columns.compact {
-                Text("Gestort \(String(columns.year))").frame(width: PotsColumns.flow, alignment: .trailing)
-                    .help("Alles wat dit jaar in de pot is gestort.")
-                Text("Opgenomen").frame(width: PotsColumns.flow, alignment: .trailing)
-                    .help("Alles wat dit jaar uit de pot is gehaald.")
-            }
-            Text("Laatste").frame(width: PotsColumns.last, alignment: .trailing)
-                .help("De datum van de laatste boeking in deze pot.")
+            .padding(.horizontal, 18).padding(.vertical, 14)
+            .contentShape(Rectangle())
         }
-        .font(.caption.weight(.medium))
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 14).padding(.vertical, 6)
-        .background(Color.primary.opacity(0.03))
+        .buttonStyle(.plain)
+        .help("\(explanation) Klik om de groep in of uit te klappen.")
     }
 }
 
+/// Tussenkopje met de eigenaar van een groepje spaarpotten.
+struct PotsOwnerLabel: View {
+    let owner: String?
+    var body: some View {
+        Text(owner ?? "Gezamenlijk")
+            .font(.callout.weight(.medium)).foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 2)
+    }
+}
+
+/// Eén pot: naam en saldo, met een dunne balk als de pot een doel heeft.
 struct PotsRowView: View {
     let pot: PotSummary
-    let columns: PotsColumns
     let selected: Bool
     var action: () -> Void
     @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                HStack(spacing: 6) {
-                    Text(pot.name).lineLimit(1).truncationMode(.tail)
-                    if pot.archived { Pill("Archief") }
-                    if pot.balance.isNegative {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.caption).foregroundStyle(Theme.negative)
-                            .help("Deze pot staat negatief: er is meer uitgehaald dan erin zat. Vul hem aan vanuit een andere pot.")
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 8) {
+                        Text(pot.name).lineLimit(1).truncationMode(.tail)
+                        if pot.archived { Text("gearchiveerd").font(.callout).foregroundStyle(.tertiary) }
+                    }
+                    if pot.progress != nil {
+                        PotsTargetBar(pot: pot, showTarget: true).frame(maxWidth: 320, alignment: .leading)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-                if columns.showTarget {
-                    PotsTargetBar(pot: pot).frame(width: columns.target, alignment: .leading)
+                if pot.balance.isNegative {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.negative)
+                        .help("Deze pot staat negatief: er is meer uitgehaald dan erin zat. Vul hem aan vanuit een andere pot.")
                 }
                 Text(pot.balance.formatted())
-                    .fontWeight(.semibold).monospacedDigit()
+                    .monospacedDigit()
                     .foregroundStyle(pot.balance.isNegative ? Theme.negative : Color.primary)
-                    .frame(width: PotsColumns.balance, alignment: .trailing)
-                amount(pot.monthlyAmount, sign: false).frame(width: PotsColumns.monthly, alignment: .trailing)
-                if !columns.compact {
-                    amount(pot.depositsThisYear, sign: true, tint: Theme.positive)
-                        .frame(width: PotsColumns.flow, alignment: .trailing)
-                    amount(pot.withdrawalsThisYear, sign: false, tint: Theme.negative)
-                        .frame(width: PotsColumns.flow, alignment: .trailing)
-                }
-                Text(pot.lastMovement?.short() ?? "–")
-                    .monospacedDigit().foregroundStyle(.secondary)
-                    .frame(width: PotsColumns.last, alignment: .trailing)
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.quaternary)
             }
-            .font(.callout)
-            .padding(.horizontal, 14).padding(.vertical, 5)
+            .font(.body)
+            .padding(.horizontal, 18).padding(.vertical, 9)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(background)
-        .overlay(alignment: .leading) {
-            if selected { Rectangle().fill(Theme.accent).frame(width: 3) }
-        }
+        .background(selected ? Theme.accent.opacity(0.12) : (hovering ? Color.primary.opacity(0.04) : .clear))
         .onHover { hovering = $0 }
         .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    private var background: Color {
-        if selected { return Theme.accent.opacity(0.14) }
-        if hovering { return Color.primary.opacity(0.05) }
-        if pot.balance.isNegative { return Theme.negative.opacity(0.07) }
-        return .clear
-    }
-
-    @ViewBuilder private func amount(_ value: Money, sign: Bool, tint: Color = .primary) -> some View {
-        if value.isZero {
-            Text("–").foregroundStyle(.tertiary)
-        } else {
-            Text(value.formatted(alwaysSign: sign)).monospacedDigit().foregroundStyle(tint)
-        }
+        .help("Klik voor het verloop, de mutaties en de acties van deze pot.")
     }
 }
 
 /// Voortgang naar het doelbedrag van een pot.
 struct PotsTargetBar: View {
     let pot: PotSummary
+    /// Toont ook het doelbedrag als tekst.
+    var showTarget = false
 
     var body: some View {
         if let progress = pot.progress, let target = pot.targetAmount {
             HStack(spacing: 8) {
-                ProgressView(value: min(1, max(0, progress)))
-                    .progressViewStyle(.linear)
-                    .tint(progress >= 1 ? Theme.positive : Theme.accent)
-                Text(PotsFormat.percent(progress))
-                    .font(.caption).monospacedDigit().foregroundStyle(.secondary)
-                    .frame(width: 36, alignment: .trailing)
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.primary.opacity(0.08))
+                        Capsule().fill(progress >= 1 ? Theme.positive : Theme.accent.opacity(0.75))
+                            .frame(width: max(4, geo.size.width * min(1, max(0, progress))))
+                    }
+                }
+                .frame(height: 4)
+                Text(showTarget ? "\(PotsFormat.percent(progress)) van \(PotsFormat.wholeEuros(target.doubleValue))"
+                     : PotsFormat.percent(progress))
+                    .font(.callout).monospacedDigit().foregroundStyle(.secondary)
+                    .fixedSize()
             }
             .help(progress >= 1
                   ? "Doel van \(target.formatted()) gehaald."
                   : "Doel \(target.formatted()); nog \((pot.remainingToTarget ?? .zero).formatted()) te gaan.")
-        } else {
-            Text("geen doel").font(.caption).foregroundStyle(.tertiary)
         }
-    }
-}
-
-/// Totaalregel of tussentotaal onder een groep potten.
-struct PotsTotalRow: View {
-    let title: String
-    let pots: [PotSummary]
-    let columns: PotsColumns
-    var strong = true
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Text(title).frame(maxWidth: .infinity, alignment: .leading)
-            if columns.showTarget { Color.clear.frame(width: columns.target, height: 1) }
-            Text(pots.map(\.balance).sum().formatted())
-                .frame(width: PotsColumns.balance, alignment: .trailing)
-            Text(pots.map(\.monthlyAmount).sum().formatted())
-                .frame(width: PotsColumns.monthly, alignment: .trailing)
-            if !columns.compact {
-                Text(pots.map(\.depositsThisYear).sum().formatted(alwaysSign: true))
-                    .frame(width: PotsColumns.flow, alignment: .trailing)
-                Text(pots.map(\.withdrawalsThisYear).sum().formatted())
-                    .frame(width: PotsColumns.flow, alignment: .trailing)
-            }
-            Color.clear.frame(width: PotsColumns.last, height: 1)
-        }
-        .font(.callout.weight(strong ? .semibold : .medium))
-        .monospacedDigit()
-        .foregroundStyle(strong ? Color.primary : Color.secondary)
-        .padding(.horizontal, 14).padding(.vertical, strong ? 8 : 5)
-        .background(Color.primary.opacity(strong ? 0.04 : 0.0))
-    }
-}
-
-/// Titelregel boven een tabel.
-struct PotsSectionTitle: View {
-    let title: String
-    let count: Int
-    let explanation: String
-    let icon: String
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Label {
-                Text(title).font(.headline)
-            } icon: {
-                Image(systemName: icon).foregroundStyle(Theme.accent)
-            }
-            Text("\(count)").font(.caption.weight(.medium)).monospacedDigit()
-                .padding(.horizontal, 6).padding(.vertical, 1)
-                .background(.quaternary, in: Capsule())
-            Text(explanation).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 10)
     }
 }
 
 // MARK: - Boekingen zonder pot
 
+/// Compacte melding; de lijst komt pas na "Wijs toe…".
 struct PotsUnallocatedCard: View {
     let entries: [EntryRow]
     let distributable: Set<Int64>
     let pots: [PotSummary]
     var assign: (EntryRow, Int64) -> Void
     var distribute: (EntryRow) -> Void
-    @State private var showAll = false
-
-    private var visible: [EntryRow] { showAll ? entries : Array(entries.prefix(4)) }
+    @State private var expanded = false
 
     var body: some View {
         PotsPanel {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Label {
-                    Text("Niet toegewezen boekingen").font(.headline)
-                } icon: {
-                    Image(systemName: "tray.full").foregroundStyle(Theme.warning)
+            HStack(spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
+                Text(entries.count == 1 ? "1 boeking op de spaarrekening heeft nog geen pot"
+                     : "\(entries.count) boekingen op de spaarrekening hebben nog geen pot")
+                    .font(.body)
+                Spacer(minLength: 12)
+                Button(expanded ? "Sluit" : "Wijs toe…") {
+                    withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
                 }
-                Text("\(entries.count)").font(.caption.weight(.medium)).monospacedDigit()
-                    .padding(.horizontal, 6).padding(.vertical, 1)
-                    .background(Theme.warning.opacity(0.2), in: Capsule())
-                Text("Kies per boeking de pot waar het geld bij hoort.")
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                Spacer(minLength: 0)
-                if entries.count > 4 {
-                    Button(showAll ? "Toon minder" : "Toon alle \(entries.count)") { showAll.toggle() }
-                        .buttonStyle(.link).font(.caption)
-                }
+                .help("Kies per boeking de pot waar het geld bij hoort.")
             }
-            .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 8)
+            .padding(.horizontal, 18).padding(.vertical, 12)
 
-            ForEach(visible) { entry in
-                Divider().padding(.leading, 14)
-                row(entry)
+            if expanded {
+                ForEach(entries) { entry in
+                    Divider().padding(.leading, 18)
+                    row(entry)
+                }
             }
         }
     }
 
     private func row(_ entry: EntryRow) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             Text(entry.day.short(withYear: true))
                 .monospacedDigit().foregroundStyle(.secondary)
-                .frame(width: 92, alignment: .leading)
+                .frame(width: 100, alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {
                 Text(entry.label.isEmpty ? "Zonder omschrijving" : entry.label).lineLimit(1)
                 if let name = entry.bank?.counterpartyName, !name.isEmpty, name != entry.label {
-                    Text(name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(name).font(.callout).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            MoneyText(entry.amount, colored: true, alwaysSign: true)
-                .frame(width: 104, alignment: .trailing)
+            MoneyText(entry.amount, alwaysSign: true)
             if distributable.contains(entry.id) {
                 Button("Verdeel") { distribute(entry) }
-                    .controlSize(.small)
                     .help("Dit bedrag is precies de som van de maandbedragen van de reserveringspotten. Verdeel het in één keer: elke pot krijgt zijn maandbedrag.")
             }
             Menu {
@@ -462,11 +382,10 @@ struct PotsUnallocatedCard: View {
             } label: {
                 Text("Kies pot…")
             }
-            .controlSize(.small)
             .fixedSize()
             .help("Wijs deze boeking toe aan een pot.")
         }
-        .font(.callout)
-        .padding(.horizontal, 14).padding(.vertical, 6)
+        .font(.body)
+        .padding(.horizontal, 18).padding(.vertical, 9)
     }
 }

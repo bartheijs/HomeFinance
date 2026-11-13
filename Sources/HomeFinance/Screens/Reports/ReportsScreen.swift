@@ -4,12 +4,13 @@ import HFInsight
 
 /// De rapporten in het scherm Rapporten.
 enum ReportsTab: String, CaseIterable, Identifiable {
-    case overview, tags, budget, divers, years
+    case overview, spendable, tags, budget, divers, years
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .overview: "Overzicht"
+        case .spendable: "Besteedbaar"
         case .tags: "Categorieën"
         case .budget: "Budget tegen werkelijk"
         case .divers: "Diverse uitgaven"
@@ -20,6 +21,7 @@ enum ReportsTab: String, CaseIterable, Identifiable {
     var help: String {
         switch self {
         case .overview: "Inkomsten, uitgaven en besteedbaar per maand"
+        case .spendable: "Wat je vrij kunt uitgeven, door het jaar heen"
         case .tags: "Wat je per maand uitgeeft aan een categorie (tag), zoals tanken of uit eten"
         case .budget: "Per vaste post: wat was gepland en wat is het echt geworden"
         case .divers: "Waar de uitgaven zonder vaste post naartoe gingen"
@@ -41,7 +43,7 @@ struct ReportsData {
     var tags: [TagYearRow] = []
     var tagEntries: [EntryRow] = []
     var budget: [BudgetVsActualRow] = []
-    var divers = DiversBreakdown(buckets: [], total: .zero)
+    var divers: DiversBreakdown?
     var topDivers: [EntryRow] = []
     var years: [YearTotals] = []
 
@@ -58,7 +60,7 @@ struct ReportsScreen: View {
     @State private var tagId: Int64?
     @State private var tagMonth: Int?
     @State private var diversMonth: Int?
-    @State private var budgetSort = ReportsBudgetSort.overshoot
+    @State private var showAllBudget = false
 
     private struct LoadKey: Hashable {
         let revision: Int, year: Int, today: Day, tagId: Int64?, tagMonth: Int?, diversMonth: Int?
@@ -85,10 +87,11 @@ struct ReportsScreen: View {
             content
         }
         .background(Theme.background)
-        .onChange(of: model.year, initial: true) {
-            tagMonth = model.year == model.today.year ? model.today.month : nil
+        .onChange(of: model.year) {
+            tagMonth = nil
             diversMonth = nil
         }
+        .onChange(of: tagId) { tagMonth = nil }
         .task(id: LoadKey(revision: model.revision, year: model.year, today: model.today, tagId: tagId,
                           tagMonth: tagMonth, diversMonth: diversMonth)) { load() }
     }
@@ -103,20 +106,15 @@ struct ReportsScreen: View {
         switch tab {
         case .divers:
             ReportsMonthPicker(month: $diversMonth)
-        case .tags:
-            ReportsMonthPicker(month: $tagMonth)
         case .budget:
-            Picker("Sorteer op", selection: $budgetSort) {
-                ForEach(ReportsBudgetSort.allCases) { Text($0.title).tag($0) }
-            }
-            .frame(width: 260).controlSize(.small)
-            .help("De volgorde van de posten in de tabel")
+            Toggle("Toon alle posten", isOn: $showAllBudget).toggleStyle(.switch).controlSize(.small)
+                .help("Standaard zie je alleen de posten die afwijken van het plan")
         default:
             EmptyView()
         }
     }
 
-    /// ⌘1 t/m ⌘5 kiezen een rapport.
+    /// ⌘1 t/m ⌘6 kiezen een rapport.
     private var tabShortcuts: some View {
         ForEach(Array(ReportsTab.allCases.enumerated()), id: \.element) { index, item in
             Button(item.title) { tab = item }
@@ -138,6 +136,14 @@ struct ReportsScreen: View {
             switch tab {
             case .overview:
                 scroll { ReportsOverviewTab(data: data, year: model.year) }
+            case .spendable:
+                if let summary = data.summary, !data.spendable.isEmpty {
+                    scroll { ReportsSpendableTab(summary: summary, points: data.spendable) }
+                } else {
+                    EmptyState(title: "Geen begroting voor \(String(model.year))",
+                               message: "Besteedbaar is het saldo min wat gereserveerd is en min de buffers. Daarvoor is een begroting voor dit jaar nodig.",
+                               icon: "wallet.bifold", actionTitle: "Naar Instellingen") { model.selection = .settings }
+                }
             case .tags:
                 if data.tags.isEmpty {
                     EmptyState(title: "Nog geen tags",
@@ -152,7 +158,7 @@ struct ReportsScreen: View {
                                message: "Dit rapport vergelijkt de vaste posten met wat er echt is geboekt. Maak eerst een begroting voor dit jaar.",
                                icon: "list.bullet.clipboard", actionTitle: "Naar Instellingen") { model.selection = .settings }
                 } else {
-                    scroll { ReportsBudgetTab(rows: data.budget, sort: budgetSort, asOf: data.summary?.asOf) }
+                    scroll { ReportsBudgetTab(rows: data.budget, showAll: $showAllBudget, asOf: data.summary?.asOf) }
                 }
             case .divers:
                 scroll { ReportsDiversTab(data: data, year: model.year, month: $diversMonth) }
@@ -164,7 +170,7 @@ struct ReportsScreen: View {
 
     private func scroll<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         ScrollView {
-            content().padding(.horizontal, 24).padding(.vertical, 16)
+            content().padding(.horizontal, 32).padding(.top, 24).padding(.bottom, 32)
         }
     }
 
@@ -185,7 +191,7 @@ struct ReportsScreen: View {
             if chosen == nil || !result.tags.contains(where: { $0.id == chosen }) {
                 chosen = (result.tags.first { $0.entryCount > 0 } ?? result.tags.first)?.id
             }
-            if let chosen {
+            if let chosen, tagMonth != nil {
                 result.tagEntries = try Insight.tagEntries(db, tagId: chosen, year: year, month: tagMonth)
             }
             result.divers = try Insight.diversByTag(db, year: year, month: diversMonth)
@@ -204,7 +210,7 @@ struct ReportsScreen: View {
 
     private func copyTable() {
         let text = data.table(for: tab, year: model.year, tagId: tagId, tagMonth: tagMonth,
-                              diversMonth: diversMonth, budgetSort: budgetSort)
+                              diversMonth: diversMonth)
         ReportsFormat.copyToClipboard(text)
         model.toast = "Tabel gekopieerd. Plak hem in Excel met ⌘V."
     }

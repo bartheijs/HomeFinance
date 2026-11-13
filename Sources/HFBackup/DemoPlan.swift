@@ -77,7 +77,7 @@ struct DemoPot {
     var owner: String? = nil
     var monthly: Int64
     var target: Int64? = nil
-    /// Deel van het beginsaldo van de spaarrekening dat op 1 januari in deze pot zit.
+    /// Bedrag dat op 1 januari in deze pot zit (handboeking "Beginsaldo <pot>").
     var initial: Int64
 }
 
@@ -85,8 +85,9 @@ struct DemoPlan {
     static let checkingIban = "NL00TEST0000000001"
     static let savingsIban = "NL00TEST0000000002"
     static let checkingOpening = Money(euros: 6_850)
-    /// Deel van het beginsaldo van de spaarrekening dat niet over potten verdeeld is.
-    static let savingsUnassigned = Money(euros: 350)
+    /// Rente over het vorige jaar, op 2 januari bijgeschreven op de spaarrekening. De enige boeking zonder pot.
+    static let savingsInterest = Money(cents: 12_84)
+    static let savingsInterestDay = 2
     static let tags: [(name: String, color: String)] = [
         ("Tanken", "#E67E22"), ("Uit eten", "#C0392B"), ("Cadeau", "#8E44AD"), ("Vakantie", "#2980B9"),
     ]
@@ -126,7 +127,10 @@ struct DemoPlan {
 
     static var pots: [DemoPot] { reservePots + savingsPots }
     static var reserveTotal: Money { Money(cents: reservePots.map(\.monthly).reduce(0, +)) }
-    static var savingsOpening: Money { Money(cents: pots.map(\.initial).reduce(0, +)) + savingsUnassigned }
+    /// Beginsaldo van de spaarrekening in de app: nul. Wat er op 1 januari staat is per pot geboekt.
+    static let savingsOpening = Money.zero
+    /// Saldo van de spaarrekening bij de bank op 1 januari = som van de beginsaldi van de potten.
+    static var savingsStartBalance: Money { Money(cents: pots.map(\.initial).reduce(0, +)) }
 
     // MARK: Vaste posten
 
@@ -399,6 +403,11 @@ struct DemoPlan {
                               description: "\(pot) \(year)", code: "INC", lines: [line]))
         }
 
+        // 8. Rente over het vorige jaar: de enige boeking op de spaarrekening zonder pot.
+        all.append(DemoTx(onSavings: true, day: day(1, Self.savingsInterestDay), amount: Self.savingsInterest,
+                          name: "Spaarbank Demo", iban: "NL00TEST0000000247", description: "Rente \(year - 1)",
+                          code: "OVB", lines: [DemoLine(amount: Self.savingsInterest, label: "Rente spaarrekening \(year - 1)")]))
+
         // Alleen t/m vandaag, op dag gesorteerd (bij gelijke dag de volgorde van aanmaken).
         var kept = all.enumerated()
             .filter { $0.element.day <= today }
@@ -423,6 +432,6 @@ struct DemoPlan {
             }
         }
         checking = chain(kept.filter { !$0.onSavings }, opening: Self.checkingOpening)
-        savings = chain(kept.filter(\.onSavings), opening: Self.savingsOpening)
+        savings = chain(kept.filter(\.onSavings), opening: Self.savingsStartBalance)
     }
 }

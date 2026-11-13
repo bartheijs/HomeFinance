@@ -99,7 +99,7 @@ public struct BankProfile: Codable, Equatable, Sendable, Identifiable {
     // MARK: Ingebouwde profielen
 
     /// ASN Bank: geen kopregel, 19 kolommen, saldo vóór mutatie in kolom 8, bedrag met teken in kolom 10.
-    /// Aanname: er is nog geen echt voorbeeldbestand gezien.
+    /// Bevestigd met echte exports van de bank.
     public static let asn = BankProfile(
         id: "asn", name: "ASN Bank", hasHeader: false,
         day: .index(0), dateFormats: ["dd-MM-yyyy", "yyyy-MM-dd"], amount: .index(10),

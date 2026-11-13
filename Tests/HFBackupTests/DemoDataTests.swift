@@ -51,7 +51,11 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
             for account in try Account.fetchAll(database) {
                 let rows = try BankTransaction.fetchAll(database, sql:
                     "SELECT * FROM bankTransaction WHERE accountId = ? ORDER BY id", arguments: [account.id])
-                var expected = account.openingBalance
+                // De keten begint bij het beginsaldo plus de handboekingen van de begindatum (beginsaldi per pot).
+                let manual = try Money.fetchOne(database, sql:
+                    "SELECT COALESCE(SUM(amount), 0) FROM entry WHERE accountId = ? AND bankTransactionId IS NULL",
+                    arguments: [account.id])!
+                var expected = account.openingBalance + manual
                 var previousDay = account.openingDate
                 for row in rows {
                     #expect(row.balanceBefore == expected)
@@ -73,8 +77,10 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
                 let processed = try Money.fetchOne(database, sql:
                     "SELECT COALESCE(SUM(amount), 0) FROM bankTransaction WHERE accountId = ? AND status = 'verwerkt'",
                     arguments: [account.id])!
-                // Handboekingen zijn samen nul, dus het saldo volgt de bank.
-                #expect(entries == processed)
+                let booked = try Money.fetchOne(database, sql:
+                    "SELECT COALESCE(SUM(amount), 0) FROM entry WHERE accountId = ? AND bankTransactionId IS NOT NULL",
+                    arguments: [account.id])!
+                #expect(booked == processed)
                 let firstNew = try BankTransaction.fetchOne(database, sql:
                     "SELECT * FROM bankTransaction WHERE accountId = ? AND status = 'nieuw' ORDER BY id LIMIT 1",
                     arguments: [account.id])
@@ -108,7 +114,20 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
                 """)
             let potSum = pots.map { $0["balance"] as Money }.sum()
             #expect(potSum <= balance)
-            #expect(balance - potSum == DemoPlan.savingsUnassigned)
+            // Niet toegewezen is precies de rentebijschrijving (zodra die geboekt is); verder heeft alles een pot.
+            #expect(account.openingBalance == .zero)
+            let unassigned = try Entry.fetchAll(database, sql:
+                "SELECT * FROM entry WHERE accountId = ? AND potId IS NULL", arguments: [account.id])
+            let interestBooked = Day(year: today.year, month: 1, day: DemoPlan.savingsInterestDay)! <= today.adding(days: -10)
+            #expect(unassigned.count == (interestBooked ? 1 : 0))
+            #expect(unassigned.allSatisfy { $0.amount == DemoPlan.savingsInterest && $0.bankTransactionId != nil })
+            #expect(balance - potSum == (interestBooked ? DemoPlan.savingsInterest : .zero))
+            // Elke pot heeft één beginsaldo-boeking op 1 januari, zonder banktransactie.
+            let openings = try Entry.fetchAll(database, sql:
+                "SELECT * FROM entry WHERE accountId = ? AND bankTransactionId IS NULL", arguments: [account.id])
+            #expect(openings.count == pots.count)
+            #expect(openings.allSatisfy { $0.potId != nil && $0.amount > .zero && $0.day == account.openingDate })
+            #expect(Set(openings.compactMap(\.potId)).count == pots.count)
             for pot in pots {
                 #expect((pot["balance"] as Money) >= .zero, "pot \(pot["name"] as String) staat negatief")
             }

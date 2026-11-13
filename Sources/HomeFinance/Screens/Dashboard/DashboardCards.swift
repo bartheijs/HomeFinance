@@ -12,12 +12,12 @@ struct DashboardAttentionCard: View {
 
     var body: some View {
         DashboardCard("Aandacht", icon: "bell.badge") {
-            if !items.isEmpty { Pill("\(items.count)", color: Theme.warning) }
+            if !items.isEmpty { Text("\(items.count)").font(.callout).foregroundStyle(.secondary).monospacedDigit() }
         } content: {
             if items.isEmpty {
                 DashboardQuietState(icon: "checkmark.circle.fill", title: "Alles is bijgewerkt",
                                     message: "Er staat niets open. Importeer een nieuw bankbestand als er weer transacties zijn.",
-                                    tint: Theme.positive)
+                                    tint: Theme.accent)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(items.enumerated()), id: \.offset) { index, item in
@@ -36,16 +36,16 @@ struct DashboardAttentionCard: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(look.tint)
                 .frame(width: 28, height: 28)
-                .background(look.tint.opacity(0.14), in: Circle())
+                .background(look.tint.opacity(0.12), in: Circle())
             Text(item.message)
-                .font(.callout)
+                .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button(look.action) { go(look) }
                 .controlSize(.small)
                 .help(look.help)
         }
-        .padding(.vertical, 7)
+        .padding(.vertical, 9)
     }
 
     private func go(_ look: DashboardAttentionLook) {
@@ -66,24 +66,24 @@ private struct DashboardAttentionLook {
     init(_ item: AttentionItem) {
         switch item {
         case .newBankTransactions:
-            icon = "tray.full"; tint = Theme.info; action = "Boeken"; target = .review
+            icon = "tray.full"; tint = .secondary; action = "Boeken"; target = .review
             help = "Ga naar Importeren en nakijken om deze banktransacties een post of pot te geven."
         case .unreviewedEntries:
-            icon = "eye"; tint = Theme.info; action = "Nakijken"; target = .transactions
+            icon = "eye"; tint = .secondary; action = "Nakijken"; target = .transactions
             help = "Ga naar Transacties om de automatisch geboekte regels te controleren."
         case .openReimbursements:
-            icon = "arrow.left.arrow.right"; tint = Theme.accent; action = "Overboeken"; target = .reimbursements
+            icon = "arrow.left.arrow.right"; tint = .secondary; action = "Overboeken"; target = .reimbursements
             help = "Uitgaven die je van de betaalrekening hebt betaald maar die uit een spaarpot horen te komen."
         case .reconciliationDiffers:
             icon = "exclamationmark.triangle.fill"; tint = Theme.negative; action = "Afstemmen"; target = .settings
             settingsTab = "rekeningen"
             help = "Afstemmen is het berekende saldo vergelijken met het saldo bij de bank. Het verschil hoort € 0,00 te zijn."
         case .reconciliationOld:
-            icon = "clock.arrow.circlepath"; tint = Theme.warning; action = "Afstemmen"; target = .settings
+            icon = "clock.arrow.circlepath"; tint = .secondary; action = "Afstemmen"; target = .settings
             settingsTab = "rekeningen"
             help = "Afstemmen is het berekende saldo vergelijken met het saldo bij de bank. Doe dit ongeveer elke maand."
         case .yearMissing:
-            icon = "calendar.badge.plus"; tint = Theme.warning; action = "Aanmaken"; target = .settings
+            icon = "calendar.badge.plus"; tint = .secondary; action = "Aanmaken"; target = .settings
             settingsTab = "jaar"
             help = "Maak het begrotingsjaar aan in Instellingen."
         }
@@ -96,10 +96,13 @@ private struct DashboardAttentionLook {
 struct DashboardFixedItemsCard: View {
     @Environment(AppModel.self) private var model
     let overview: FixedItemsOverview
+    /// Toon alle posten, ook de voldane (detailweergave).
+    var showAll = false
 
-    private let maxRows = 6
+    private var maxRows: Int { showAll ? Int.max : 4 }
     private var pending: [FixedItemStatus] {
         overview.items.filter { $0.state == .teLaat } + overview.items.filter { $0.state == .open }
+            + (showAll ? overview.items.filter { $0.state == .voldaan } : [])
     }
     private var total: Int { overview.paidCount + overview.openCount + overview.lateCount }
 
@@ -163,6 +166,11 @@ struct DashboardFixedItemsCard: View {
         .help(help)
     }
 
+    private func caption(_ item: FixedItemStatus) -> String {
+        if item.state == .voldaan { return item.day.map { "geboekt op \($0.short())" } ?? "geboekt" }
+        return item.expectedDay.map { "verwacht rond de \($0)e" } ?? "deze maand verwacht"
+    }
+
     private var list: some View {
         VStack(spacing: 0) {
             ForEach(Array(pending.prefix(maxRows).enumerated()), id: \.element.id) { index, item in
@@ -170,12 +178,14 @@ struct DashboardFixedItemsCard: View {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(item.label).font(.callout).lineLimit(1)
-                        Text(item.expectedDay.map { "verwacht rond de \($0)e" } ?? "deze maand verwacht")
-                            .font(.caption).foregroundStyle(.secondary)
+                        Text(caption(item)).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 4)
                     if item.state == .teLaat { Pill("te laat", color: Theme.negative, icon: "clock") }
-                    MoneyText(item.plan).font(.callout)
+                    if item.state == .voldaan {
+                        Image(systemName: "checkmark").font(.caption).foregroundStyle(.secondary)
+                    }
+                    MoneyText(item.state == .voldaan ? item.actual : item.plan).font(.callout)
                 }
                 .padding(.vertical, 5)
             }
@@ -300,19 +310,24 @@ struct DashboardAccountsCard: View {
     }
 
     private func row(_ account: AccountOverview) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Image(systemName: account.kind == .betaal ? "creditcard" : "banknote")
                 .foregroundStyle(account.kind == .betaal ? Theme.accent : Theme.info)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
                 Text(account.name).font(.callout.weight(.medium)).lineLimit(1)
                 reconciliation(account)
+                if let last = account.lastImport {
+                    Text("Import \(Day(date: last.importedAt).short())" + (last.lastDay.map { ", t/m \($0.short())" } ?? ""))
+                        .font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                        .help("Laatste geïmporteerde bankbestand: \(last.fileName)")
+                }
             }
             .layoutPriority(1)
             Spacer(minLength: 6)
             DashboardSparkline(points: sparklines[account.id] ?? [],
                                color: account.kind == .betaal ? Theme.accent : Theme.info)
-                .frame(width: 64, height: 26)
+                .frame(width: 52, height: 26)
                 .help("Verloop van het saldo dit jaar")
             MoneyText(account.balance, colored: account.balance.isNegative)
                 .font(.callout.weight(.semibold))
@@ -325,7 +340,7 @@ struct DashboardAccountsCard: View {
         Group {
             if let last = account.lastReconciliation {
                 if last.difference.isZero {
-                    Label("Klopt met de bank op \(last.day.short())", systemImage: "checkmark.seal.fill")
+                    Label("Afgestemd \(last.day.short())", systemImage: "checkmark.seal.fill")
                         .foregroundStyle(.secondary)
                         .help("Laatste afstemming: het berekende saldo was gelijk aan het saldo bij de bank.")
                 } else {
@@ -479,7 +494,7 @@ private struct DashboardRecentRow: View {
                 ForEach(entry.tags.prefix(showAccount ? 2 : 1)) { tag in
                     Pill(tag.name, color: Color(hex: tag.color))
                 }
-                Text(category).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(category == entry.label ? "Vaste post" : category).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     .frame(width: showAccount ? 150 : 100, alignment: .leading)
                 if showAccount {
                     Text(entry.accountName).font(.caption).foregroundStyle(.secondary).lineLimit(1)

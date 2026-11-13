@@ -66,6 +66,25 @@ enum RulesText {
         return parts.isEmpty ? "nog geen voorwaarden" : parts.joined(separator: " en ")
     }
 
+    /// Waaraan de regel een transactie herkent, in een paar woorden.
+    static func subject(_ r: Rule) -> String {
+        if let v = filled(r.counterpartyContains) { return v }
+        if let v = filled(r.name) { return v }
+        if let v = filled(r.descriptionContains) { return "‘\(v)’ in de omschrijving" }
+        if let a = r.amount { return "Bedrag \(amount(a))" }
+        return "Naamloze regel"
+    }
+
+    /// Waar de regel op boekt, in een paar woorden.
+    static func target(_ r: Rule, _ data: RulesData) -> String {
+        var text: String
+        if let label = filled(r.targetItemLabel) { text = label }
+        else if let pot = data.potName(r.targetPotId), !r.reimburse { text = "pot \(pot)" }
+        else { text = "Divers" }
+        if r.reimburse { text += ", vergoeden uit spaar" }
+        return text
+    }
+
     static func hasConditions(_ r: Rule) -> Bool {
         filled(r.counterpartyContains) != nil || filled(r.counterpartyIban) != nil
             || filled(r.descriptionContains) != nil || r.amount != nil

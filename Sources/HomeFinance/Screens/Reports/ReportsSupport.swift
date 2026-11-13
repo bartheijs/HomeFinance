@@ -50,14 +50,88 @@ enum ReportsFormat {
     }
 }
 
-/// Vaste kleuren van de reeksen in de rapporten.
+/// Kleuren van de rapporten: één accent, grijs voor de tweede reeks, rood alleen voor een overschrijding.
 enum ReportsColor {
-    static let income = Theme.series[0]
-    static let expenses = Theme.series[6]
-    static let result = Theme.series[1]
-    static let spendable = Theme.series[0]
-    static let balance = Theme.series[7]
-    static let untagged = Theme.series[7]
+    static let accent = Theme.accent
+    static let neutral = Theme.series[7]
+    static let over = Theme.negative
+}
+
+/// Of de uitklapbare delen open beginnen (`HF_REPORTS_OPEN`, voor een snapshot).
+enum ReportsDebug {
+    static var startsOpen: Bool { ProcessInfo.processInfo.environment["HF_REPORTS_OPEN"] != nil }
+}
+
+/// De vraag die een rapport beantwoordt, als gewone zin boven de grafiek.
+struct ReportsQuestion: View {
+    let text: String
+    var detail: String?
+
+    init(_ text: String, detail: String? = nil) { self.text = text; self.detail = detail }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(text).font(.system(.title2, design: .rounded).weight(.semibold))
+            if let detail { Text(detail).font(.body).foregroundStyle(.secondary) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Groot kerngetal zonder kader.
+struct ReportsKeyNumber: View {
+    let title: String
+    let value: String
+    var tint: Color = .primary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.callout).foregroundStyle(.secondary)
+            Text(value).font(.system(size: 28, weight: .semibold, design: .rounded)).monospacedDigit()
+                .foregroundStyle(tint).lineLimit(1).minimumScaleFactor(0.7)
+        }
+    }
+}
+
+/// Uitklapbaar deel onder een grafiek, bv. "Toon cijfers".
+struct ReportsDisclosure<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+    @State private var isOpen = ReportsDebug.startsOpen
+
+    init(_ title: String, @ViewBuilder content: () -> Content) { self.title = title; self.content = content() }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { isOpen.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                    Text(isOpen ? title.replacingOccurrences(of: "Toon", with: "Verberg") : title)
+                }
+                .font(.body.weight(.medium)).foregroundStyle(Theme.accent).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(isOpen ? "Klap dit deel weer in" : "Klap uit om de cijfers achter de grafiek te zien")
+            if isOpen { content }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Bedrag in gewone tekstkleur; rood alleen als `redIfNegative` en het bedrag negatief is.
+struct ReportsAmount: View {
+    let amount: Money
+    var redIfNegative = false
+    var alwaysSign = false
+    var symbol = true
+
+    var body: some View {
+        Text(amount.formatted(symbol: symbol, alwaysSign: alwaysSign)).monospacedDigit()
+            .foregroundStyle(redIfNegative && amount.isNegative ? ReportsColor.over : Color.primary)
+    }
 }
 
 /// Maandkiezer: "Heel jaar" of één maand, met pijltjes.
@@ -143,28 +217,8 @@ struct ReportsLegendItem: View {
             } else {
                 RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 9, height: 9)
             }
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(title).font(.callout).foregroundStyle(.secondary)
         }
-    }
-}
-
-/// Kerngetal zonder kader, voor binnen een kaart.
-struct ReportsInlineStat: View {
-    let title: String
-    let value: String
-    var note: String?
-    var tint: Color = .primary
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.system(.title3, design: .rounded).weight(.semibold)).monospacedDigit()
-                .foregroundStyle(tint).lineLimit(1).minimumScaleFactor(0.7)
-            if let note {
-                Text(note).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -173,6 +227,7 @@ struct ReportsEntryList: View {
     let entries: [EntryRow]
     var ranked = false
     var withYear = false
+    var showTags = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -189,12 +244,12 @@ struct ReportsEntryList: View {
                         Text(subtitle(entry)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer(minLength: 8)
-                    ForEach(entry.tags.prefix(2)) { tag in
-                        Pill(tag.name, color: Color(hex: tag.color))
+                    if showTags {
+                        Text(entry.tags.map(\.name).joined(separator: ", ")).font(.callout).foregroundStyle(.secondary).lineLimit(1)
                     }
-                    MoneyText(entry.amount, colored: true).frame(width: 96, alignment: .trailing)
+                    ReportsAmount(amount: entry.amount).frame(width: 110, alignment: .trailing)
                 }
-                .padding(.vertical, 5)
+                .padding(.vertical, 7)
                 if index < entries.count - 1 { Divider() }
             }
         }
@@ -218,7 +273,7 @@ struct ReportsColumnTitle: View {
     }
 
     var body: some View {
-        Text(title).font(.caption.weight(.medium)).foregroundStyle(.secondary)
+        Text(title).font(.callout).foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: alignment)
             .help(help ?? title)
     }
@@ -229,13 +284,20 @@ extension View {
     func reportsEuroAxis() -> some View {
         chartYAxis {
             AxisMarks(position: .leading) { value in
-                AxisGridLine()
+                AxisGridLine().foregroundStyle(Theme.hairline.opacity(0.5))
                 AxisValueLabel {
                     if let v = value.as(Double.self) {
-                        Text(ReportsFormat.euros(v)).monospacedDigit()
+                        Text(ReportsFormat.euros(v)).font(.callout).monospacedDigit()
                     }
                 }
             }
+        }
+    }
+
+    /// X-as met categorieën (maanden, jaren): alleen labels, geen lijnen.
+    func reportsCategoryAxis() -> some View {
+        chartXAxis {
+            AxisMarks { _ in AxisValueLabel().font(.callout) }
         }
     }
 

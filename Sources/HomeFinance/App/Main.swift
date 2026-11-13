@@ -31,6 +31,8 @@ struct HomeFinanceApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandMenu("Administratie") {
+                Button("Transacties") { model.selection = .transactions }
+                    .keyboardShortcut("t", modifiers: .command)
                 Button("Importeren en nakijken") { model.selection = .review }
                     .keyboardShortcut("i", modifiers: .command)
                 Button("Maandgrid") { model.selection = .grid }

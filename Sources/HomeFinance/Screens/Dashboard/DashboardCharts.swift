@@ -8,10 +8,9 @@ struct DashboardSpendableChartCard: View {
     let year: Int
     let points: [SpendablePoint]
 
-    private var domain: ClosedRange<Date> {
-        let start = Day(year: year, month: 1, day: 1)?.date ?? Date()
-        let end = Day(year: year, month: 12, day: 31)?.date ?? Date()
-        return start...end
+    /// Plek op de x-as: 0 = 1 januari, 12 = eind december.
+    private func position(_ day: Day) -> Double {
+        Double(day.month - 1) + Double(day.day) / Double(DashboardFormat.daysInMonth(day))
     }
 
     var body: some View {
@@ -38,33 +37,30 @@ struct DashboardSpendableChartCard: View {
                 .foregroundStyle(Color.secondary.opacity(0.4))
                 .lineStyle(StrokeStyle(lineWidth: 1))
             ForEach(points) { point in
-                AreaMark(x: .value("Datum", point.day.date), y: .value("Besteedbaar", point.spendable.doubleValue))
+                AreaMark(x: .value("Maand", position(point.day)), y: .value("Besteedbaar", point.spendable.doubleValue))
                     .interpolationMethod(.monotone)
                     .foregroundStyle(LinearGradient(colors: [Theme.accent.opacity(0.28), Theme.accent.opacity(0.02)],
                                                     startPoint: .top, endPoint: .bottom))
-                LineMark(x: .value("Datum", point.day.date), y: .value("Bedrag", point.balance.doubleValue),
+                LineMark(x: .value("Maand", position(point.day)), y: .value("Bedrag", point.balance.doubleValue),
                          series: .value("Reeks", "Saldo"))
                     .interpolationMethod(.monotone)
                     .foregroundStyle(Color.secondary.opacity(0.7))
                     .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-                LineMark(x: .value("Datum", point.day.date), y: .value("Bedrag", point.spendable.doubleValue),
+                LineMark(x: .value("Maand", position(point.day)), y: .value("Bedrag", point.spendable.doubleValue),
                          series: .value("Reeks", "Besteedbaar"))
                     .interpolationMethod(.monotone)
                     .foregroundStyle(Theme.accent)
                     .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                PointMark(x: .value("Datum", point.day.date), y: .value("Bedrag", point.spendable.doubleValue))
+                PointMark(x: .value("Maand", position(point.day)), y: .value("Bedrag", point.spendable.doubleValue))
                     .foregroundStyle(Theme.accent)
                     .symbolSize(point.id == points.last?.id ? 70 : 22)
             }
         }
-        .chartXScale(domain: domain)
+        .chartXScale(domain: 0.0...12.0)
         .chartXAxis {
-            AxisMarks(values: .stride(by: .month)) { value in
-                AxisGridLine().foregroundStyle(Theme.hairline.opacity(0.4))
+            AxisMarks(values: (0..<12).map { Double($0) + 0.5 }) { value in
                 AxisValueLabel {
-                    if let date = value.as(Date.self) {
-                        Text(Day.monthNamesShort[Day(date: date).month - 1])
-                    }
+                    if let x = value.as(Double.self) { Text(Day.monthNamesShort[min(max(Int(x), 0), 11)]) }
                 }
             }
         }

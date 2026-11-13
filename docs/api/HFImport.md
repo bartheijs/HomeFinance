@@ -36,11 +36,49 @@ try importer.importFile(url: fileURL, accountId: account.id!)
 
 Fouten zijn `ImportError` (`LocalizedError`, Nederlandse `errorDescription`):
 `unreadable`, `emptyFile`, `noProfile`, `accountNotFound`, `columnNotFound(naam)`, `rowErrors(aantal)`,
-en voor PDF `pdfUnreadable`, `pdfWithoutText`, `noTransactionTable`.
+voor PDF `pdfUnreadable`, `pdfWithoutText`, `noTransactionTable`, en voor zip `archiveUnreadable`,
+`archiveUnsafePath(naam)`, `nothingToImport`.
 
 Een PDF gaat via dezelfde aanroepen: `preview(url:…)` en `preview(data:fileName:…)` herkennen een PDF aan
 de inhoud (`%PDF`) of de extensie, en geven een gewone `ImportPreview`. `profile` telt dan niet mee.
 `PDFStatement.isPDF(data:fileName:)` vertelt een scherm vooraf of het kolommen kiezen kan overslaan.
+
+### Zip van de bank (hoofdroute)
+
+De bank levert één zip met één CSV per rekening; de bestandsnaam begint met het IBAN
+(`NL00TEST0000000001-13-11-2026T13_33_15.csv`).
+
+```swift
+let archive = try importer.previewArchive(url: zipURL)      // of previewArchive(data:fileName:)
+
+for item in archive.items {
+    item.fileName   // pad binnen de zip
+    item.iban       // uit de regels, anders uit de bestandsnaam
+    item.account    // de rekening met dat IBAN, of nil
+    item.preview    // ImportPreview als er een rekening is
+    item.message    // waarom het bestand niet meegaat, bv. "Geen rekening met IBAN … gevonden."
+}
+archive.importableItems; archive.skippedItems
+archive.newCount; archive.duplicateCount; archive.errorCount; archive.canCommit
+
+// Alles in één databasetransactie: alles of niets.
+let results = try importer.commitArchive(archive)            // [ArchiveImportResult]
+let results2 = try importer.commitArchive(archive, skipFaultyRows: true)
+results[0].account; results[0].fileName; results[0].result   // result is een ImportResult
+```
+
+### Los bestand: bij welke rekening hoort het?
+
+```swift
+let match = try importer.matchAccount(data: data, fileName: name)   // vóór de gebruiker een rekening kiest
+match.account    // voorstel, of nil
+match.message    // "Geen rekening met IBAN … gevonden." of "… geen IBAN; kies zelf de rekening."
+
+try importer.matchAccount(forFileNamed: name, rows: preview.rows)   // als er al een voorbeeld is
+
+// Koos de gebruiker de verkeerde rekening, dan zegt de waarschuwing welke het wel is:
+preview.warnings.first { $0.kind == .ibanMismatch }?.suggestedAccount
+```
 
 ### Kolommen met de hand kiezen
 
@@ -67,12 +105,16 @@ let json = String(decoding: try JSONEncoder().encode(profile), as: UTF8.self)
 
 | Type | Wat |
 |---|---|
-| `BankImporter` | `init(database:)`, `preview(data:fileName:accountId:profile:)`, `preview(url:accountId:profile:)`, `commit(_:skipFaultyRows:)`, `importFile(data:…)`, `importFile(url:…)` |
+| `BankImporter` | `init(database:)`, `preview(data:fileName:accountId:profile:)`, `preview(url:accountId:profile:)`, `commit(_:skipFaultyRows:)`, `importFile(data:…)`, `importFile(url:…)`, `previewArchive(url:)`, `previewArchive(data:fileName:)`, `commitArchive(_:skipFaultyRows:)`, `matchAccount(forFileNamed:rows:)`, `matchAccount(data:fileName:)` |
+| `ArchivePreview` | `fileName`, `items`, `importableItems`, `skippedItems`, `newCount`, `duplicateCount`, `errorCount`, `canCommit` |
+| `ArchiveItem` | `fileName`, `iban`, `account`, `preview`, `message`, `isImportable` |
+| `ArchiveImportResult` | `fileName`, `account`, `result` |
+| `AccountMatch` | `iban`, `account`, `message` |
 | `ImportPreview` | `rows`, `errors`, `warnings`, `rowsChronological`, `chainOK`, `chainBreaks`, `openingBalance`, `closingBalance`, `firstDay`, `lastDay`, `rowCount`, `newCount`, `duplicateCount`, `errorCount`, `canCommit`, `profile`, `encodingName`, `dialect`; `ImportPreview.build(file:fileName:account:profile:existingFingerprints:)` zonder database |
 | `ImportRow` | `lineNumber`, `day`, `amount`, `balanceBefore`, `balanceAfter`, `counterpartyName`, `counterpartyIban`, `descriptionText`, `reference`, `transactionCode`, `sequence`, `statementNumber`, `ownIban`, `fingerprint`, `isDuplicate` |
 | `ImportRowError` | `lineNumber`, `message`, `fields`, `description` ("Regel 12: …") |
 | `ChainBreak` | `lineNumber`, `previousLineNumber`, `expected`, `found`, `message` |
-| `ImportWarning` | `kind` (`ibanMismatch`, `chainBroken`, `chainNotChecked`), `message` |
+| `ImportWarning` | `kind` (`ibanMismatch`, `chainBroken`, `chainNotChecked`), `message`, `suggestedAccount` (bij `ibanMismatch`) |
 | `ImportResult` | `batch`, `transactions`, `duplicateCount`, `skippedErrorCount` |
 | `ImportError` | zie hierboven |
 | `BankProfile` | Codable. `BankProfile.asn`, `BankProfile.generic(headers:)`, `BankProfile.detect(for:)`, `BankProfile.parseDay(_:formats:)` |
@@ -96,7 +138,8 @@ regels (ook regels met alleen scheidingstekens) tellen niet mee. Regelnummers be
 de regel in het bestand, kopregel meegeteld.
 
 **Profielen.**
-- `asn`: geen kopregel, 19 kolommen: 0 datum (dd-mm-jjjj), 1 eigen IBAN, 2 tegenrekening, 3 naam, 8 saldo
+- `asn`: bevestigd met echte exports van de bank (profiel herkend, geen fouten, saldoketen sluit, opnieuw
+  importeren geeft niets nieuws). Geen kopregel, 19 kolommen: 0 datum (dd-mm-jjjj), 1 eigen IBAN, 2 tegenrekening, 3 naam, 8 saldo
   vóór mutatie, 10 bedrag met teken, 14 globale transactiecode, 15 volgnummer, 16 betalingskenmerk,
   17 omschrijving, 18 afschriftnummer. Alleen datum en bedrag zijn verplicht; ontbrekende kolommen
   daarna geven een lege waarde.
@@ -132,7 +175,26 @@ naar nieuw. Dubbelen worden binnen de transactie opnieuw bepaald. Bij een fout w
 Ook als alle regels dubbel zijn komt er een `ImportBatch` (met `newCount == 0`), zodat de poging en het
 eindsaldo vastliggen. `ImportBatch.rowCount` telt goede en foute regels samen.
 
+## Zip van de bank
+
+- **Uitpakken:** met `/usr/bin/unzip` naar een eigen tijdelijke map, die na het lezen weer wordt verwijderd.
+  Bevat de zip een pad dat buiten de map uitkomt (`..`, absoluut pad), dan wordt het hele archief geweigerd
+  met `archiveUnsafePath`. Snelkoppelingen worden niet gelezen maar wel gemeld. Geen geldige zip:
+  `archiveUnreadable`.
+- **Per bestand een `ArchiveItem`**, op naam gesorteerd. CSV (`.csv`, `.txt`) en PDF worden gelezen; een
+  ander bestandstype, een leeg bestand, een bestand zonder IBAN, een onbekend IBAN of een onleesbaar bestand
+  krijgt een `message` en gaat niet mee. Alleen `__MACOSX/` en `.DS_Store` worden zonder melding genegeerd.
+- **Rekening:** het meest voorkomende eigen IBAN in de regels (ASN: kolom 1; PDF: de kop), anders het IBAN
+  in de bestandsnaam. Vergelijken gaat zonder spaties en hoofdletterongevoelig, ook met gearchiveerde
+  rekeningen.
+- **`commitArchive`:** importeert alle `importableItems` in één `write`; bij een fout in één bestand wordt
+  niets van de hele zip geïmporteerd. Foute regels in een van de bestanden geven `rowErrors` (totaal), tenzij
+  `skipFaultyRows`. Geen enkel importeerbaar bestand: `nothingToImport`. Per bestand komt er een eigen
+  `ImportBatch`. Twee bestanden voor dezelfde rekening in één zip mogen overlappen.
+
 ## PDF-rekeningafschrift
+
+CSV is de hoofdroute; de PDF is de terugvaloptie.
 
 De tekstlaag wordt met PDFKit gelezen en op patronen doorzocht, niet op regelnummers (de kopregels staan in
 de tekstlaag soms door elkaar). `ImportRow.lineNumber` is de regel in de tekstlaag, doorgeteld over de
@@ -176,7 +238,7 @@ pagina's.
 - Dezelfde transactie uit een CSV en uit een PDF heeft een andere vingerafdruk (andere omschrijving, geen
   volgnummer). Gebruik per rekening één van beide bronnen, anders komen regels dubbel binnen.
 
-- De ASN-indeling is niet met een echt bestand gecontroleerd.
+- De zip is getest met in de test gemaakte bestanden, niet met een echte export van de bank.
 - `BankTransaction` heeft geen veld voor het afschriftnummer; het zit wel in de vingerafdruk en in
   `ImportRow.statementNumber`, maar wordt niet bewaard.
 - Van de twee ASN-transactiecodes wordt de globale (kolom 14) bewaard in `transactionCode`.
