@@ -54,16 +54,22 @@ private struct ReviewDetail: View {
         Binding(get: { store.draft(for: row) }, set: { store.setDraft($0, for: row) })
     }
     private var isExpense: Bool { row.tx.amount.isNegative }
+    /// Eigen keuze van de gebruiker voor deze transactie; nil = volg de algemene stand.
+    @State private var moreOpen: Bool?
+
+    private var moreBinding: Binding<Bool> {
+        Binding(get: { moreOpen ?? (store.showMore || store.looksLikeLoanReturn(row)) },
+                set: { moreOpen = $0; store.showMore = $0 })
+    }
 
     var body: some View {
-        @Bindable var store = store
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     head
                     warning
                     target
-                    DisclosureGroup(isExpanded: $store.showMore) {
+                    DisclosureGroup(isExpanded: moreBinding) {
                         more.padding(.top, 14)
                     } label: {
                         Text("Meer opties").font(.callout).foregroundStyle(.secondary)
@@ -125,7 +131,7 @@ private struct ReviewDetail: View {
                      ? "Deze storting is gelijk aan de maandbedragen van de reserveringspotten en wordt daarover verdeeld."
                      : "Deze transactie is gesplitst.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button("Aanpassen…") { store.showMore = true }.buttonStyle(.link)
+                Button("Aanpassen…") { moreBinding.wrappedValue = true }.buttonStyle(.link)
             } else {
                 ReviewTargetPicker(year: row.tx.day.year, selection: draft.target).controlSize(.large)
                 Text(hint).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -175,6 +181,16 @@ private struct ReviewDetail: View {
                     }
                 }
             }
+            if store.kind == .betaal, !draft.wrappedValue.isSplit {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Tijdelijk geleend van spaar", isOn: draft.temporaryLoan)
+                        .help("Geld dat je even van spaar haalt en later terugboekt. Het telt niet mee als besteedbaar zolang het uitstaat. Markeer ook de terugboeking.")
+                    if store.looksLikeLoanReturn(row) {
+                        Text("Er staat \(store.loanOutstanding.formatted()) uit; dit lijkt de terugboeking.")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                }
+            }
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Splitsen over meer posten", isOn: splitBinding)
                     .help("Verdeel deze transactie over meer posten of potten, bijvoorbeeld boodschappen en een cadeau op één bon.")
@@ -214,6 +230,7 @@ private struct ReviewDetail: View {
                 d.lines = [ReviewSplitLine(amount: row.tx.amount, label: d.label, target: d.target),
                            ReviewSplitLine(amount: nil, label: "", target: .none)]
                 d.reimburse = false
+                d.temporaryLoan = false
             }
             if !on { d.lines = [] }
             draft.wrappedValue = d

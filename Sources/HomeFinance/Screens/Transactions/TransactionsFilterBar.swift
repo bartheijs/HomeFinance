@@ -92,6 +92,9 @@ struct TransactionsFilterBar: View {
         if c.diversOnly {
             TransactionsFilterChip(text: "Divers", icon: "square.dashed") { store.criteria.diversOnly = false }
         }
+        if c.loanOnly {
+            TransactionsFilterChip(text: "Tijdelijk geleend", icon: "hourglass") { store.criteria.loanOnly = false }
+        }
         if c.reimburseOnly {
             TransactionsFilterChip(text: "Vergoeden", icon: "arrow.uturn.backward") { store.criteria.reimburseOnly = false }
         }
@@ -145,6 +148,8 @@ private struct TransactionsFilterPopover: View {
                     .help("Losse uitgaven en ontvangsten zonder vaste post")
                 Toggle("Alleen vergoeden uit spaar", isOn: $store.criteria.reimburseOnly)
                     .help("Uitgaven die je terughaalt van de spaarrekening")
+                Toggle("Alleen tijdelijk geleend van spaar", isOn: $store.criteria.loanOnly)
+                    .help(TransactionsFormat.loanHelp)
             }
             HStack {
                 Spacer()

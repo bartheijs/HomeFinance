@@ -79,12 +79,14 @@ struct TransactionsCriteria: Equatable {
     var status = TransactionsStatusFilter.all
     var diversOnly = false
     var reimburseOnly = false
+    /// Alleen boekingen die als tijdelijk geleend van spaar gemarkeerd zijn.
+    var loanOnly = false
 
     var trimmedText: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     /// Aantal actieve filters achter de knop Filters.
     var filterCount: Int {
-        [month != nil, itemId != nil, potId != nil, tagId != nil, status != .all, diversOnly, reimburseOnly]
+        [month != nil, itemId != nil, potId != nil, tagId != nil, status != .all, diversOnly, reimburseOnly, loanOnly]
             .filter { $0 }.count
     }
     var hasFilters: Bool { filterCount > 0 || !trimmedText.isEmpty }
@@ -103,6 +105,7 @@ struct TransactionsCriteria: Equatable {
     /// Past een nieuwe transactie bij de filters? (Nieuwe transacties hebben alleen een voorstel.)
     func matches(_ p: TransactionsPending, year: Int) -> Bool {
         let t = p.transaction
+        if loanOnly { return false }
         if let month, t.day.year != year || t.day.month != month { return false }
         if let itemId, p.suggestion.budgetItemId != itemId { return false }
         if let potId, p.suggestion.potId != potId { return false }
@@ -179,6 +182,8 @@ struct TransactionsDraft: Equatable {
     var reimburse = false
     var tagIds: Set<Int64> = []
     var note = ""
+    /// Tijdelijk geleend van spaar (alleen betaalrekening).
+    var temporaryLoan = false
 
     init() {}
 
@@ -187,6 +192,7 @@ struct TransactionsDraft: Equatable {
         isIncome = !row.amount.isNegative; magnitude = row.amount.magnitude
         itemId = row.budgetItemId; potId = row.potId; reimburse = row.reimburse
         tagIds = Set(row.tags.map(\.id)); note = row.note
+        temporaryLoan = row.temporaryLoan
     }
 
     init(pending p: TransactionsPending, kind: AccountKind) {
@@ -222,7 +228,8 @@ struct TransactionsDraft: Equatable {
                           budgetItemId: kind == .betaal ? itemId : nil,
                           potId: kind == .spaar ? potId : (wantsReimburse ? potId : nil),
                           reimburse: wantsReimburse, tagIds: tagIds.sorted(), note: note,
-                          ruleId: ruleId, confidence: confidence, reviewed: true)
+                          ruleId: ruleId, confidence: confidence, reviewed: true,
+                          temporaryLoan: kind == .betaal && temporaryLoan)
     }
 }
 
@@ -288,6 +295,8 @@ final class TransactionsStore {
     private(set) var hasLoaded = false
     /// Samenvatting bij een filter op tag, post of pot (over het begrotingsjaar).
     private(set) var summary: TransactionsSummary?
+    /// Wat er nu tijdelijk van spaar geleend is en nog niet is teruggeboekt.
+    private(set) var loanOutstanding = Money.zero
 
     var selection = Set<TransactionsItemID>()
     var showDetail = false
@@ -313,7 +322,7 @@ final class TransactionsStore {
 
     var account: AccountOverview? { lookups.account(accountId) }
     var kind: AccountKind { account?.kind ?? .betaal }
-    var hasMore: Bool { criteria.status != .newOnly && entries.count < totalEntryCount }
+    var hasMore: Bool { criteria.status != .newOnly && !criteria.loanOnly && entries.count < totalEntryCount }
     var selectedItems: [TransactionsFeedItem] { items.filter { selection.contains($0.id) } }
     var single: TransactionsFeedItem? { selection.count == 1 ? items.first { selection.contains($0.id) } : nil }
     var certainPending: [TransactionsPending] { pendingAll.filter(\.isCertain) }
@@ -346,7 +355,12 @@ final class TransactionsStore {
             }
             return list
         }
-        if criteria.status == .newOnly {
+        loanOutstanding = model.read(Money.zero) { try Insight.temporaryLoanOutstanding($0, on: model.today) }
+        if criteria.loanOnly {
+            // EntryFilter kent dit filter niet; HFInsight levert de gemarkeerde boekingen in één keer.
+            entries = model.read([]) { try Insight.temporaryLoanEntries($0).filter { $0.accountId == accountId } }
+            totalEntryCount = entries.count
+        } else if criteria.status == .newOnly {
             entries = []; totalEntryCount = 0
         } else {
             let filter = criteria.entryFilter(accountId: accountId, year: model.year, limit: limit)
@@ -396,7 +410,7 @@ final class TransactionsStore {
     }
 
     private func loadSummary(_ model: AppModel, accountId: Int64) {
-        guard criteria.hasSubject, criteria.status != .newOnly else { summary = nil; return }
+        guard criteria.hasSubject, criteria.status != .newOnly, !criteria.loanOnly else { summary = nil; return }
         var filter = criteria.entryFilter(accountId: accountId, year: model.year, limit: 0)
         filter.year = model.year
         guard let result = model.read(nil as EntrySearchResult?, { try Insight.searchEntries($0, filter: filter) }) else {
@@ -419,6 +433,7 @@ final class TransactionsStore {
         selection = []
         // Post en pot horen bij de soort rekening.
         criteria.itemId = nil; criteria.potId = nil; criteria.diversOnly = false; criteria.reimburseOnly = false
+        criteria.loanOnly = false
     }
 
     // MARK: Detailpaneel
@@ -558,7 +573,11 @@ final class TransactionsStore {
         if kind == .spaar { remember(potId: draft.potId) }
         if selection.contains(.bank(p.id)) { reselectBankId = p.id }
         let name = targetName(draft)
-        run(model, { learned.flatMap { $0.outcome == .unchanged ? nil : $0.message } ?? "Geboekt op ‘\(name)’" }) { db in
+        let loan = allocation.temporaryLoan
+        run(model, {
+            if loan { return "Geboekt en gemarkeerd als tijdelijk geleend. Uitstaand: \(self.loanOutstanding.formatted())" }
+            return learned.flatMap { $0.outcome == .unchanged ? nil : $0.message } ?? "Geboekt op ‘\(name)’"
+        }) { db in
             try BookingService.book(db, bankTransactionId: p.id, allocations: [allocation])
             learned = try RuleEngine.learn(from: correction, db)
         }
@@ -698,6 +717,23 @@ final class TransactionsStore {
         }
     }
 
+    /// Tijdelijk geleend van spaar aan of uit (uit als het bij alle gekozen boekingen al aan staat).
+    func toggleTemporaryLoan(_ model: AppModel, ids: [TransactionsItemID]) {
+        let rows = entries(in: ids).filter { $0.accountKind == .betaal }
+        guard !rows.isEmpty else {
+            model.toast = pendings(in: ids).isEmpty ? "Tijdelijk geleend kan alleen bij een boeking op de betaalrekening"
+                                                    : "Open de transactie en zet ‘Tijdelijk geleend van spaar’ aan onder Meer; het gaat mee bij het boeken"
+            return
+        }
+        let on = !rows.allSatisfy(\.temporaryLoan)
+        run(model, {
+            (on ? "Gemarkeerd als tijdelijk geleend." : "Markering tijdelijk geleend weggehaald.")
+                + " Uitstaand: \(self.loanOutstanding.formatted())"
+        }) { db in
+            for row in rows { try EntryService.setTemporaryLoan(db, entryId: row.id, on) }
+        }
+    }
+
     func setReviewed(_ model: AppModel, ids: [TransactionsItemID], _ reviewed: Bool) {
         let rows = entries(in: ids)
         guard !rows.isEmpty else { return }
@@ -771,7 +807,8 @@ final class TransactionsStore {
             label: d.label.trimmingCharacters(in: .whitespaces),
             budgetItemId: kind == .betaal ? d.itemId : nil,
             potId: kind == .spaar ? d.potId : (reimburse ? d.potId : nil),
-            reimburse: reimburse, tagIds: d.tagIds.sorted(), note: d.note)
+            reimburse: reimburse, tagIds: d.tagIds.sorted(), note: d.note,
+            temporaryLoan: kind == .betaal && d.temporaryLoan)
         var created: Int64?
         let ok = run(model, { "Boeking toegevoegd" }) { created = try EntryService.create($0, entryDraft).id }
         if ok, let created, items.contains(where: { $0.id == .entry(created) }) { selection = [.entry(created)] }
@@ -797,7 +834,7 @@ final class TransactionsStore {
                     d.label = entry.label; d.day = entry.day
                     d.isIncome = !entry.amount.isNegative; d.magnitude = entry.amount.magnitude
                     d.itemId = entry.budgetItemId; d.potId = entry.potId; d.reimburse = entry.reimburse
-                    d.note = entry.note
+                    d.note = entry.note; d.temporaryLoan = entry.temporaryLoan
                     d.tagIds = Set(try EntryService.tagIds(db, entryId: entry.id ?? 0))
                     parts.append(TransactionsSplitPart(draft: d))
                 }
@@ -838,6 +875,8 @@ final class TransactionsStore {
 enum TransactionsFormat {
     private static let dutch = Locale(identifier: "nl_NL")
     private static let weekdays = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"]
+
+    static let loanHelp = "Geld dat je even van spaar haalt en later terugboekt. Het telt niet mee als besteedbaar zolang het uitstaat. Markeer ook de terugboeking."
 
     static func number(_ n: Int) -> String { n.formatted(.number.locale(dutch)) }
 

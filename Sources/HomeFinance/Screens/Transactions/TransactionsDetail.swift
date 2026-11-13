@@ -136,6 +136,11 @@ private struct TransactionsSingleDetail: View {
                         store.toggleReimburse(model, ids: ids)
                     }
                 }
+                if row.accountKind == .betaal {
+                    action("hourglass", (row.temporaryLoan ? "Tijdelijk geleend van spaar staat aan. " : "Tijdelijk geleend van spaar. ") + TransactionsFormat.loanHelp, active: row.temporaryLoan) {
+                        store.toggleTemporaryLoan(model, ids: ids)
+                    }
+                }
                 if row.bankTransactionId != nil {
                     action("square.split.2x1", "Splitsen…", disabled: inTransfer) { store.startSplit(model, item) }
                 }
@@ -213,6 +218,11 @@ private struct TransactionsSingleDetail: View {
         return Binding(get: { row?.reimburse ?? false }, set: { _ in store.toggleReimburse(model, ids: ids) })
     }
 
+    private var loanBinding: Binding<Bool> {
+        if pending != nil { return $store.draft.temporaryLoan }
+        return Binding(get: { row?.temporaryLoan ?? false }, set: { _ in store.toggleTemporaryLoan(model, ids: ids) })
+    }
+
     private var reimbursePotBinding: Binding<Int64?> {
         if pending != nil { return $store.draft.potId }
         return Binding(get: { row?.potId }, set: { store.setReimbursePot(model, ids: ids, potId: $0) })
@@ -224,6 +234,7 @@ private struct TransactionsSingleDetail: View {
         if tagCount > 0 { parts.append(tagCount == 1 ? "1 tag" : "\(tagCount) tags") }
         if !(row?.note ?? store.draft.note).isEmpty { parts.append("notitie") }
         if row?.reimburse ?? store.draft.reimburse { parts.append("vergoeden") }
+        if row?.temporaryLoan ?? store.draft.temporaryLoan { parts.append("tijdelijk geleend") }
         if store.extra.parts.count > 1 { parts.append("gesplitst") }
         return parts.joined(separator: " · ")
     }
@@ -268,6 +279,10 @@ private struct TransactionsSingleDetail: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
+                }
+                if store.kind == .betaal {
+                    Toggle("Tijdelijk geleend van spaar", isOn: loanBinding)
+                        .help(TransactionsFormat.loanHelp)
                 }
                 if item.bankTransactionId != nil {
                     Button("Splitsen…", systemImage: "square.split.2x1") { store.startSplit(model, item) }
@@ -481,6 +496,12 @@ private struct TransactionsMultiDetail: View {
                             Label("Vergoeden uit spaar aan/uit", systemImage: "arrow.uturn.backward").frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .help("Zet vergoeden uit spaar aan voor alle gekozen uitgaven; staat het overal al aan, dan gaat het uit (V)")
+                    }
+                    if rows.contains(where: { $0.accountKind == .betaal }) {
+                        Button { store.toggleTemporaryLoan(model, ids: ids) } label: {
+                            Label("Tijdelijk geleend van spaar aan/uit", systemImage: "hourglass").frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .help(TransactionsFormat.loanHelp)
                     }
                     if rows.contains(where: { !$0.reviewed }) {
                         Button { store.setReviewed(model, ids: ids, true) } label: {

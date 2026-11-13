@@ -137,6 +137,7 @@ private struct TransactionsFeedRow: View {
         }
         parts.append(contentsOf: row.tags.map(\.name))
         if row.reimburse { parts.append(row.savingsTransferId == nil ? "vergoeden uit spaar" : "vergoed uit spaar") }
+        if row.temporaryLoan { parts.append(row.amount.isNegative ? "terug naar spaar" : "tijdelijk geleend") }
         if let bank = row.bank, bank.amount != row.amount { parts.append("gesplitst") }
         if row.bankTransactionId == nil { parts.append("handinvoer") }
         if !row.reviewed { parts.append("nog nakijken") }
@@ -236,6 +237,12 @@ private struct TransactionsFeedRow: View {
                         Button("Splitsen…", systemImage: "square.split.2x1") { store.startSplit(model, item) }
                     }
                     Button("Notitie…", systemImage: "note.text") { store.startNote(model, ids: [item.id]) }
+                    if row.accountKind == .betaal {
+                        Button(row.temporaryLoan ? "Niet meer tijdelijk geleend" : "Tijdelijk geleend van spaar", systemImage: "hourglass") {
+                            store.toggleTemporaryLoan(model, ids: [item.id])
+                        }
+                        .help(TransactionsFormat.loanHelp)
+                    }
                     Button(row.reviewed ? "Zet terug op nakijken" : "Nagekeken", systemImage: row.reviewed ? "circle.dotted" : "checkmark.circle") {
                         store.setReviewed(model, ids: [item.id], !row.reviewed)
                     }
@@ -370,6 +377,13 @@ struct TransactionsContextMenu: View {
                         }
                     }
                 }
+            }
+            if rows.contains(where: { $0.accountKind == .betaal }) {
+                Button(rows.filter { $0.accountKind == .betaal }.allSatisfy(\.temporaryLoan) ? "Niet meer tijdelijk geleend" : "Tijdelijk geleend van spaar",
+                       systemImage: "hourglass") {
+                    store.toggleTemporaryLoan(model, ids: ids)
+                }
+                .help(TransactionsFormat.loanHelp)
             }
             if chosen.count == 1, let item = chosen.first {
                 Divider()

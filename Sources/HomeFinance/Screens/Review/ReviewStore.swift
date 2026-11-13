@@ -36,6 +36,8 @@ struct ReviewDraft: Equatable {
     var reimburse = false
     var reimbursePotId: Int64?
     var note = ""
+    /// Geld dat even van spaar is gehaald (of de terugboeking daarvan); telt niet mee als besteedbaar.
+    var temporaryLoan = false
     var isSplit = false
     var lines: [ReviewSplitLine] = []
 }
@@ -151,6 +153,8 @@ final class ReviewStore {
     var loaded = false
     /// "Meer opties" in het paneel rechts staat open.
     var showMore = false
+    /// Wat er nu uitstaat aan tijdelijk van spaar geleend geld.
+    var loanOutstanding: Money = .zero
 
     private var itemsByYear: [Int: [BudgetItem]] = [:]
     private var itemsById: [Int64: BudgetItem] = [:]
@@ -212,6 +216,7 @@ final class ReviewStore {
             for item in items { if let year = yearById[item.yearId] { byYear[year, default: []].append(item) } }
             itemsByYear = byYear
 
+            loanOutstanding = try Insight.temporaryLoanOutstanding(db, on: model.today)
             let queue = try Insight.reviewQueue(db)
             openCounts = Dictionary(grouping: queue, by: \.transaction.accountId).mapValues(\.count)
             guard let accountId, let account else {
@@ -277,6 +282,7 @@ final class ReviewStore {
             if let id = s.budgetItemId, itemsById[id] != nil { draft.target = .item(id) }
             draft.reimburse = s.reimburse && row.tx.amount.isNegative
             draft.reimbursePotId = draft.reimburse ? s.potId : nil
+            draft.temporaryLoan = looksLikeLoanReturn(row)
         case .spaar:
             if let id = s.potId, potsById[id]?.accountId == row.tx.accountId { draft.target = .pot(id) }
             if draft.target == .none, let distribution = row.distribution {
@@ -287,6 +293,12 @@ final class ReviewStore {
             }
         }
         return draft
+    }
+
+    /// De betaalkant van een overboeking naar een eigen rekening, terwijl er nog geleend geld uitstaat:
+    /// dit lijkt de terugboeking van wat tijdelijk van spaar is gehaald.
+    func looksLikeLoanReturn(_ row: ReviewRow) -> Bool {
+        kind == .betaal && row.pair != nil && row.tx.amount.isNegative && loanOutstanding > .zero
     }
 
     func draft(for row: ReviewRow) -> ReviewDraft { drafts[row.id] ?? defaults[row.id] ?? makeDefault(row) }
@@ -340,7 +352,7 @@ final class ReviewStore {
                            budgetItemId: t.item, potId: kind == .betaal ? (reimburse ? draft.reimbursePotId : nil) : t.pot,
                            reimburse: reimburse, tagIds: tagIds, note: note,
                            ruleId: sameTarget ? s.ruleId : nil, confidence: sameTarget ? s.confidence : nil,
-                           reviewed: reviewed)]
+                           reviewed: reviewed, temporaryLoan: kind == .betaal && draft.temporaryLoan)]
     }
 
     private func correction(for row: ReviewRow) -> Correction {

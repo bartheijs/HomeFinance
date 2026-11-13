@@ -38,6 +38,7 @@ struct TransactionsScreen: View {
                         TransactionsSummaryLine(store: store, summary: summary)
                     }
                     if !store.pendingAll.isEmpty { newBanner }
+                    if store.kind == .betaal, store.loanOutstanding > .zero { loanBanner }
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 8)
@@ -144,6 +145,24 @@ struct TransactionsScreen: View {
         .font(.callout)
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(Theme.info.opacity(0.09), in: RoundedRectangle(cornerRadius: 9))
+    }
+
+    /// Eén rustige regel zolang er geld van spaar geleend is dat nog niet is teruggeboekt.
+    private var loanBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "hourglass").foregroundStyle(.secondary)
+            Text("\(store.loanOutstanding.formatted()) tijdelijk geleend van spaar staat nog uit")
+            if !store.criteria.loanOnly {
+                Button("Toon deze boekingen") { store.criteria.loanOnly = true }
+                    .buttonStyle(.link)
+                    .help("Filtert de lijst op de boekingen die als tijdelijk geleend gemarkeerd zijn")
+            }
+            Spacer(minLength: 0)
+        }
+        .font(.callout)
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 9))
+        .help(TransactionsFormat.loanHelp)
     }
 
     // MARK: Inhoud
