@@ -40,6 +40,7 @@ struct RootView: View {
         } message: {
             Text(model.errorMessage ?? "")
         }
+        .sheet(isPresented: $model.showHistoryImport) { HistoryImportSheet().environment(model) }
         .overlay(alignment: .bottom) { ToastView() }
         .tint(Theme.accent)
     }

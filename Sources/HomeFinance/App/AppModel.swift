@@ -58,6 +58,8 @@ final class AppModel {
     var fixedToday: Day?
     /// De app tekent schermen naar PNG (zie Snapshot).
     var isSnapshot = false
+    /// Toont het venster om de Excel-historie te importeren.
+    var showHistoryImport = false
     var errorMessage: String?
     /// Korte bevestiging onderin (bv. "12 transacties geboekt").
     var toast: String?
@@ -124,7 +126,11 @@ final class AppModel {
     private func observe() {
         let observation = DatabaseRegionObservation(tracking: .fullDatabase)
         observer = observation.start(in: db.writer, onError: { _ in }, onChange: { [weak self] _ in
-            Task { @MainActor in self?.revision += 1 }
+            Task { @MainActor in
+                guard let self else { return }
+                self.revision += 1
+                PublishSupport.schedule(self)
+            }
         })
     }
 
@@ -159,5 +165,6 @@ final class AppModel {
     func onQuit() {
         guard !isDemo else { return }
         BackupSupport.backupOnQuitIfWanted(db: db)
+        PublishSupport.publishNow(self)
     }
 }

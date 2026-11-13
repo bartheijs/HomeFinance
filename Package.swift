@@ -22,9 +22,14 @@ let package = Package(
         .target(name: "HFRules", dependencies: ["HFCore", grdb]),
         .target(name: "HFInsight", dependencies: ["HFCore", grdb]),
         .target(name: "HFBackup", dependencies: ["HFCore", grdb]),
+        // Eenmalige import van de Excel-historie.
+        .target(name: "HFHistory", dependencies: ["HFCore", grdb]),
+        // Het dashboard voor de telefoon als los bestand. Leest via HFInsight (bewuste uitzondering op
+        // "modules kennen elkaar niet": dit is een weergave van dezelfde cijfers).
+        .target(name: "HFPublish", dependencies: ["HFCore", "HFInsight", grdb]),
         .executableTarget(
             name: "HomeFinance",
-            dependencies: ["HFCore", "HFImport", "HFBudget", "HFRules", "HFInsight", "HFBackup", grdb]
+            dependencies: ["HFCore", "HFImport", "HFBudget", "HFRules", "HFInsight", "HFBackup", "HFHistory", "HFPublish", grdb]
         ),
         .testTarget(name: "HFCoreTests", dependencies: ["HFCore", grdb]),
         .testTarget(name: "HFImportTests", dependencies: ["HFImport", "HFCore", grdb]),
@@ -32,6 +37,8 @@ let package = Package(
         .testTarget(name: "HFRulesTests", dependencies: ["HFRules", "HFCore", grdb]),
         .testTarget(name: "HFInsightTests", dependencies: ["HFInsight", "HFCore", grdb]),
         .testTarget(name: "HFBackupTests", dependencies: ["HFBackup", "HFCore", grdb]),
+        .testTarget(name: "HFHistoryTests", dependencies: ["HFHistory", "HFCore", grdb]),
+        .testTarget(name: "HFPublishTests", dependencies: ["HFPublish", "HFInsight", "HFCore", grdb]),
         .testTarget(name: "IntegrationTests",
                     dependencies: ["HFCore", "HFImport", "HFBudget", "HFRules", "HFInsight", "HFBackup", grdb]),
     ],

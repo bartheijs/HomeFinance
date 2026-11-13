@@ -40,6 +40,8 @@ struct HomeFinanceApp: App {
                 Button("Dashboard") { model.selection = .dashboard }
                     .keyboardShortcut("d", modifiers: .command)
                 Divider()
+                Button("Excel-historie importeren…") { model.showHistoryImport = true }
+                    .disabled(model.isDemo)
                 Button("Back-up maken…") { model.selection = .settings; model.settingsTab = "backup" }
                     .keyboardShortcut("b", modifiers: [.command, .shift])
             }
