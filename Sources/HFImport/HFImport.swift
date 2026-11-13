@@ -1,0 +1,131 @@
+// Module HFImport — bank-CSV lezen, voorbeeld tonen en importeren. Zie docs/api/HFImport.md.
+import Foundation
+import GRDB
+import HFCore
+
+/// Wat er bij een import in de database is gezet.
+public struct ImportResult: Equatable, Sendable {
+    public var batch: ImportBatch
+    /// De nieuwe banktransacties (status `nieuw`), van oud naar nieuw.
+    public var transactions: [BankTransaction]
+    /// Regels die al in de database stonden en zijn overgeslagen.
+    public var duplicateCount: Int
+    /// Foute regels die op verzoek zijn overgeslagen.
+    public var skippedErrorCount: Int
+}
+
+/// Leest een bank-CSV voor één rekening en importeert hem als banktransacties.
+public struct BankImporter: Sendable {
+    public let database: AppDatabase
+
+    public init(database: AppDatabase) { self.database = database }
+
+    /// Leest het bestand en toont wat er geïmporteerd zou worden. Schrijft niets.
+    /// Een PDF-rekeningafschrift wordt herkend aan de inhoud of de extensie; `profile` telt dan niet mee.
+    /// Zonder `profile` wordt het profiel geraden; lukt dat niet, dan volgt `ImportError.noProfile`.
+    public func preview(data: Data, fileName: String, accountId: Int64, profile: BankProfile? = nil) throws -> ImportPreview {
+        if PDFStatement.isPDF(data: data, fileName: fileName) {
+            let statement = try StatementParser.parse(pages: PDFStatement.pages(of: data))
+            return try database.read { db in
+                guard let account = try Account.fetchOne(db, key: accountId) else { throw ImportError.accountNotFound }
+                var preview = ImportPreview.build(statement: statement, fileName: fileName, account: account)
+                try Self.markDuplicates(db, &preview)
+                try Self.addSuggestion(db, &preview)
+                return preview
+            }
+        }
+        let file = try CSVFile(data: data)
+        guard let profile = profile ?? BankProfile.detect(for: file) else {
+            throw file.records.isEmpty ? ImportError.emptyFile : ImportError.noProfile
+        }
+        return try database.read { db in
+            guard let account = try Account.fetchOne(db, key: accountId) else { throw ImportError.accountNotFound }
+            var preview = try ImportPreview.build(file: file, fileName: fileName, account: account, profile: profile)
+            try Self.markDuplicates(db, &preview)
+            try Self.addSuggestion(db, &preview)
+            return preview
+        }
+    }
+
+    /// Als hierboven, voor een bestand op schijf.
+    public func preview(url: URL, accountId: Int64, profile: BankProfile? = nil) throws -> ImportPreview {
+        try preview(data: Data(contentsOf: url), fileName: url.lastPathComponent, accountId: accountId, profile: profile)
+    }
+
+    /// Importeert een voorbeeld in één databasetransactie: een `ImportBatch` plus de nieuwe banktransacties
+    /// met status `nieuw`. Dubbelen worden overgeslagen en geteld. Bij een fout wordt niets geïmporteerd.
+    /// Bevat het voorbeeld foute regels, dan volgt `ImportError.rowErrors`, tenzij `skipFaultyRows` true is.
+    @discardableResult
+    public func commit(_ preview: ImportPreview, skipFaultyRows: Bool = false) throws -> ImportResult {
+        if !preview.errors.isEmpty, !skipFaultyRows { throw ImportError.rowErrors(preview.errors.count) }
+        guard !preview.rows.isEmpty else { throw ImportError.emptyFile }
+
+        return try database.write { db in try Self.insert(db, preview) }
+    }
+
+    /// Zet één voorbeeld in de database; de aanroeper zorgt voor de transactie.
+    static func insert(_ db: Database, _ preview: ImportPreview) throws -> ImportResult {
+        do {
+            guard try Account.exists(db, key: preview.accountId) else { throw ImportError.accountNotFound }
+            // Opnieuw op dubbelen controleren: de database kan sinds het voorbeeld veranderd zijn.
+            var current = preview
+            try Self.markDuplicates(db, &current)
+
+            var batch = ImportBatch(
+                accountId: current.accountId, fileName: current.fileName, importedAt: Date(),
+                rowCount: current.rowCount, newCount: current.newCount, duplicateCount: current.duplicateCount,
+                firstDay: current.firstDay, lastDay: current.lastDay,
+                openingBalance: current.openingBalance, closingBalance: current.closingBalance,
+                chainOK: current.chainOK ?? true)
+            try batch.insert(db)
+
+            var inserted: [BankTransaction] = []
+            for row in current.rowsChronological where !row.isDuplicate {
+                var transaction = BankTransaction(
+                    accountId: current.accountId, batchId: batch.id, day: row.day, amount: row.amount,
+                    balanceBefore: row.balanceBefore, counterpartyName: row.counterpartyName,
+                    counterpartyIban: row.counterpartyIban, descriptionText: row.descriptionText,
+                    reference: row.reference, transactionCode: row.transactionCode, sequence: row.sequence,
+                    fingerprint: row.fingerprint, status: .nieuw)
+                try transaction.insert(db)
+                inserted.append(transaction)
+            }
+            return ImportResult(batch: batch, transactions: inserted, duplicateCount: current.duplicateCount,
+                                skippedErrorCount: current.errors.count)
+        }
+    }
+
+    /// Voorbeeld maken en meteen importeren.
+    @discardableResult
+    public func importFile(data: Data, fileName: String, accountId: Int64, profile: BankProfile? = nil,
+                           skipFaultyRows: Bool = false) throws -> ImportResult {
+        try commit(preview(data: data, fileName: fileName, accountId: accountId, profile: profile),
+                   skipFaultyRows: skipFaultyRows)
+    }
+
+    /// Als hierboven, voor een bestand op schijf.
+    @discardableResult
+    public func importFile(url: URL, accountId: Int64, profile: BankProfile? = nil,
+                           skipFaultyRows: Bool = false) throws -> ImportResult {
+        try commit(preview(url: url, accountId: accountId, profile: profile), skipFaultyRows: skipFaultyRows)
+    }
+
+    /// Vult bij de waarschuwing "bestand is van een andere rekening" de rekening in waar het wel bij hoort.
+    static func addSuggestion(_ db: Database, _ preview: inout ImportPreview) throws {
+        guard let i = preview.warnings.firstIndex(where: { $0.kind == .ibanMismatch }) else { return }
+        let match = try Self.match(db, fileName: preview.fileName, rows: preview.rows)
+        guard let account = match.account, account.id != preview.accountId else { return }
+        preview.warnings[i].suggestedAccount = account
+        preview.warnings[i].message += " Het hoort bij rekening \(account.name)."
+    }
+
+    static func markDuplicates(_ db: Database, _ preview: inout ImportPreview) throws {
+        guard let first = preview.firstDay, let last = preview.lastDay else { return }
+        let existing = try Set(String.fetchAll(db, sql: """
+            SELECT fingerprint FROM bankTransaction WHERE accountId = ? AND day BETWEEN ? AND ?
+            """, arguments: [preview.accountId, first, last]))
+        for i in preview.rows.indices {
+            preview.rows[i].isDuplicate = existing.contains(preview.rows[i].fingerprint)
+        }
+    }
+}

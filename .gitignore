@@ -1,0 +1,13 @@
+.build*/
+.swiftpm/
+*.xcodeproj
+DerivedData/
+dist/
+.DS_Store
+# Nooit echte gegevens in de repo
+*.sqlite
+*.sqlite-*
+*.xlsx
+*.csv
+!Tests/**/Fixtures/*.csv
+.env

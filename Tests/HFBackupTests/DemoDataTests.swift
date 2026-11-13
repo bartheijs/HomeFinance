@@ -1,0 +1,318 @@
+import Foundation
+import GRDB
+import HFCore
+import Testing
+@testable import HFBackup
+
+/// Dagen waarop de voorbeelddata moet kloppen: begin, midden en eind van het jaar, ook een schrikkeljaar.
+let demoDays: [Day] = [
+    Day(year: 2027, month: 1, day: 1)!, Day(year: 2027, month: 1, day: 9)!, Day(year: 2027, month: 3, day: 3)!,
+    testToday, Day(year: 2027, month: 11, day: 13)!, Day(year: 2027, month: 12, day: 31)!,
+    Day(year: 2028, month: 2, day: 29)!, Day(year: 2026, month: 11, day: 13)!,
+]
+
+func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppDatabase, DemoSummary) {
+    let db = try AppDatabase.inMemory()
+    let summary = try DemoData.seed(into: db, today: today, leaveRecentForImport: leaveRecentForImport)
+    return (db, summary)
+}
+
+@Suite struct DemoDataTests {
+    @Test(arguments: demoDays)
+    func processedTransactionsAreFullyBooked(today: Day) throws {
+        let (db, _) = try seeded(today)
+        try db.read { database in
+            let wrong = try Int.fetchOne(database, sql: """
+                SELECT COUNT(*) FROM bankTransaction t
+                WHERE t.status = 'verwerkt'
+                  AND t.amount <> (SELECT COALESCE(SUM(e.amount), 0) FROM entry e WHERE e.bankTransactionId = t.id)
+                """)
+            #expect(wrong == 0)
+            // Nieuwe transacties hebben geen boekingen en liggen in de laatste 10 dagen.
+            let newWithEntries = try Int.fetchOne(database, sql: """
+                SELECT COUNT(*) FROM entry e JOIN bankTransaction t ON t.id = e.bankTransactionId WHERE t.status = 'nieuw'
+                """)
+            #expect(newWithEntries == 0)
+            let cutoff = today.adding(days: -10)
+            #expect(try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM bankTransaction WHERE status = 'nieuw' AND day <= ?",
+                                     arguments: [cutoff]) == 0)
+            #expect(try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM bankTransaction WHERE status <> 'nieuw' AND day > ?",
+                                     arguments: [cutoff]) == 0)
+            #expect(try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM bankTransaction WHERE day > ? OR day < ?",
+                                     arguments: [today, Day(year: today.year, month: 1, day: 1)!]) == 0)
+            #expect(try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM bankTransaction WHERE status = 'nieuw'")! > 0)
+        }
+    }
+
+    @Test(arguments: demoDays)
+    func balanceChainIsConsistent(today: Day) throws {
+        let (db, _) = try seeded(today)
+        try db.read { database in
+            for account in try Account.fetchAll(database) {
+                let rows = try BankTransaction.fetchAll(database, sql:
+                    "SELECT * FROM bankTransaction WHERE accountId = ? ORDER BY id", arguments: [account.id])
+                var expected = account.openingBalance
+                var previousDay = account.openingDate
+                for row in rows {
+                    #expect(row.balanceBefore == expected)
+                    #expect(row.day >= previousDay)
+                    expected += row.amount
+                    previousDay = row.day
+                }
+            }
+        }
+    }
+
+    @Test(arguments: demoDays)
+    func accountBalanceEqualsOpeningPlusEntries(today: Day) throws {
+        let (db, summary) = try seeded(today)
+        try db.read { database in
+            for account in try Account.fetchAll(database) {
+                let entries = try Money.fetchOne(database, sql:
+                    "SELECT COALESCE(SUM(amount), 0) FROM entry WHERE accountId = ?", arguments: [account.id])!
+                let processed = try Money.fetchOne(database, sql:
+                    "SELECT COALESCE(SUM(amount), 0) FROM bankTransaction WHERE accountId = ? AND status = 'verwerkt'",
+                    arguments: [account.id])!
+                // Handboekingen zijn samen nul, dus het saldo volgt de bank.
+                #expect(entries == processed)
+                let firstNew = try BankTransaction.fetchOne(database, sql:
+                    "SELECT * FROM bankTransaction WHERE accountId = ? AND status = 'nieuw' ORDER BY id LIMIT 1",
+                    arguments: [account.id])
+                if let firstNew { #expect(firstNew.balanceBefore == account.openingBalance + entries) }
+                if account.id == summary.checkingAccountId {
+                    #expect(summary.checkingBalance == account.openingBalance + entries)
+                }
+            }
+            let reconciliation = try Reconciliation.fetchAll(database)
+            #expect(reconciliation.count == 1)
+            #expect(reconciliation[0].difference == .zero)
+            #expect(reconciliation[0].accountId == summary.checkingAccountId)
+            #expect(reconciliation[0].calculatedBalance == summary.checkingBalance)
+            let through = try Money.fetchOne(database, sql:
+                "SELECT COALESCE(SUM(amount), 0) FROM entry WHERE accountId = ? AND day <= ?",
+                arguments: [summary.checkingAccountId, reconciliation[0].day])!
+            #expect(reconciliation[0].calculatedBalance == DemoPlan.checkingOpening + through)
+        }
+    }
+
+    @Test(arguments: demoDays)
+    func potsFitInTheSavingsBalance(today: Day) throws {
+        let (db, summary) = try seeded(today)
+        try db.read { database in
+            let account = try Account.fetchOne(database, key: summary.savingsAccountId)!
+            let balance = account.openingBalance + (try Money.fetchOne(database, sql:
+                "SELECT COALESCE(SUM(amount), 0) FROM entry WHERE accountId = ?", arguments: [account.id])!)
+            let pots = try Row.fetchAll(database, sql: """
+                SELECT p.name, COALESCE(SUM(e.amount), 0) AS balance FROM pot p
+                LEFT JOIN entry e ON e.potId = p.id AND e.accountId = p.accountId GROUP BY p.id
+                """)
+            let potSum = pots.map { $0["balance"] as Money }.sum()
+            #expect(potSum <= balance)
+            #expect(balance - potSum == DemoPlan.savingsUnassigned)
+            for pot in pots {
+                #expect((pot["balance"] as Money) >= .zero, "pot \(pot["name"] as String) staat negatief")
+            }
+            // Boekingen met een pot op de spaarrekening horen bij een pot van die rekening.
+            #expect(try Int.fetchOne(database, sql: """
+                SELECT COUNT(*) FROM entry e JOIN pot p ON p.id = e.potId
+                WHERE e.accountId = ? AND p.accountId <> e.accountId
+                """, arguments: [account.id]) == 0)
+        }
+    }
+
+    @Test func seedingTwiceRefuses() throws {
+        let (db, _) = try seeded(testToday)
+        let before = try dump(db)
+        #expect(throws: DemoDataError.databaseNotEmpty) { try DemoData.seed(into: db, today: testToday) }
+        #expect(try dump(db) == before)
+        #expect(DemoDataError.databaseNotEmpty.localizedDescription.contains("lege database"))
+    }
+
+    @Test func sameTodayGivesIdenticalData() throws {
+        let (first, firstSummary) = try seeded(testToday)
+        let (second, secondSummary) = try seeded(testToday)
+        #expect(firstSummary == secondSummary)
+        #expect(try dump(first) == dump(second))
+        #expect(DemoData.sampleCSV(today: testToday) == DemoData.sampleCSV(today: testToday))
+        // Een latere dag verandert het verleden niet: de oude banktransacties blijven gelijk.
+        let (later, _) = try seeded(testToday.adding(days: 30))
+        let cutoff = testToday.adding(days: -10)
+        func history(_ db: AppDatabase) throws -> [String] {
+            try db.read { database in
+                try Row.fetchAll(database, sql: """
+                    SELECT accountId, day, amount, balanceBefore, counterpartyName, sequence FROM bankTransaction
+                    WHERE day <= ? AND NOT (counterpartyName = 'Waterbedrijf Voorbeeld') ORDER BY id
+                    """, arguments: [cutoff]).map(\.description)
+            }
+        }
+        #expect(try history(first).count > 100)
+        #expect(try history(first).count == history(later).count)
+    }
+
+    @Test func contentsMatchTheBrief() throws {
+        let (db, summary) = try seeded(testToday)
+        try db.read { database in
+            let accounts = try Account.fetchAll(database)
+            #expect(accounts.map(\.kind) == [.betaal, .spaar])
+            #expect(accounts.allSatisfy { $0.iban?.hasPrefix("NL00TEST") == true })
+            #expect(accounts.allSatisfy { $0.openingDate == Day(year: 2027, month: 1, day: 1) })
+
+            let year = try BudgetYear.fetchOne(database)!
+            #expect(year.year == 2027)
+            #expect(year.antiRood == Money(euros: 4_500))
+            #expect(year.reserveBase == Money(euros: 2_250))
+
+            let items = try BudgetItem.fetchAll(database)
+            #expect(items.count == summary.budgetItemCount)
+            let res = items.filter { $0.direction == .RES }
+            #expect(res.count == 20)
+            #expect(res.allSatisfy { $0.potId != nil && $0.planAmount.isNegative })
+            let total = items.filter(\.isReserveTotal)
+            #expect(total.count == 1)
+            #expect(total[0].planAmount == res.map(\.planAmount).sum())
+            #expect(items.filter { $0.direction != .RES }.count >= 15)
+            #expect(items.contains { $0.frequency == .kwartaal && $0.expectedMonths == "1,4,7,10" })
+            #expect(items.filter(\.reducesReserve).count == 1)
+            #expect(items.filter { $0.direction == .IN }.allSatisfy { !$0.planAmount.isNegative })
+            #expect(items.filter { $0.direction == .UIT }.allSatisfy { $0.planAmount.isNegative })
+
+            let pots = try Pot.fetchAll(database)
+            #expect(pots.filter { $0.kind == .reservering }.count == 20)
+            #expect(pots.filter { $0.kind == .reservering }.map(\.monthlyAmount).sum() == -total[0].planAmount)
+            #expect(Set(pots.filter { $0.kind == .spaar }.compactMap(\.owner)) == ["Kind 1", "Kind 2", "Ouder 1", "Ouder 2"])
+            #expect(pots.filter { $0.kind == .spaar }.allSatisfy { $0.targetAmount != nil })
+
+            #expect(try Tag.fetchAll(database).map(\.name) == ["Tanken", "Uit eten", "Cadeau", "Vakantie"])
+            #expect(try Rule.fetchCount(database) > 30)
+            #expect(try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM rule WHERE hitCount > 0")! > 20)
+
+            // Tags op tanken en uit eten.
+            for tag in ["Tanken", "Uit eten"] {
+                #expect(try Int.fetchOne(database, sql: """
+                    SELECT COUNT(*) FROM entryTag et JOIN tag t ON t.id = et.tagId WHERE t.name = ?
+                    """, arguments: [tag])! >= 3)
+            }
+            // Vergoedingen: deels in een afgeronde spaaroverboeking, deels open.
+            let transfers = try SavingsTransfer.fetchAll(database)
+            #expect(!transfers.isEmpty)
+            #expect(transfers.allSatisfy { $0.done })
+            for transfer in transfers {
+                let covered = try Money.fetchOne(database, sql:
+                    "SELECT COALESCE(SUM(amount), 0) FROM entry WHERE savingsTransferId = ?", arguments: [transfer.id])!
+                #expect(-covered == transfer.amount)
+            }
+            #expect(try Int.fetchOne(database, sql:
+                "SELECT COUNT(*) FROM entry WHERE reimburse AND savingsTransferId IS NULL")! >= 1)
+            #expect(try Int.fetchOne(database, sql:
+                "SELECT COUNT(*) FROM entry WHERE reimburse AND (amount >= 0 OR potId IS NULL)") == 0)
+
+            // Maandelijkse reservering: verdeeld over de potten en gekoppeld aan de betaalkant.
+            let reserveEntries = try Entry.fetchAll(database, sql:
+                "SELECT * FROM entry WHERE budgetItemId = ? ORDER BY day", arguments: [total[0].id])
+            #expect(reserveEntries.count == 5)
+            for entry in reserveEntries {
+                let counter = try Entry.fetchAll(database, sql:
+                    "SELECT * FROM entry WHERE counterEntryId = ?", arguments: [entry.id])
+                #expect(counter.count == 20)
+                #expect(counter.map(\.amount).sum() == -entry.amount)
+                #expect(counter.allSatisfy { $0.accountId == summary.savingsAccountId && $0.potId != nil })
+                #expect(counter.contains { $0.id == entry.counterEntryId })
+            }
+            // RES-regels krijgen geen boekingen op de betaalrekening.
+            #expect(try Int.fetchOne(database, sql: """
+                SELECT COUNT(*) FROM entry e JOIN budgetItem i ON i.id = e.budgetItemId WHERE i.direction = 'RES'
+                """) == 0)
+            // Tekens kloppen met de richting van de post.
+            #expect(try Int.fetchOne(database, sql: """
+                SELECT COUNT(*) FROM entry e JOIN budgetItem i ON i.id = e.budgetItemId
+                WHERE (i.direction = 'IN' AND e.amount < 0) OR (i.direction = 'UIT' AND e.amount > 0)
+                """) == 0)
+
+            // Afwijking van het plan en één ontbrekende betaling ("te laat").
+            #expect(try Int.fetchOne(database, sql: """
+                SELECT COUNT(*) FROM entry e JOIN budgetItem i ON i.id = e.budgetItemId
+                WHERE i.label = 'Energie' AND e.amount <> i.planAmount
+                """) == 1)
+            let waterMonths = try Int.fetchAll(database, sql: """
+                SELECT CAST(substr(e.day, 6, 2) AS INTEGER) FROM entry e JOIN budgetItem i ON i.id = e.budgetItemId
+                WHERE i.label = 'Water' ORDER BY e.day
+                """)
+            #expect(waterMonths == [1, 2, 3, 4])
+            #expect(try Int.fetchOne(database, sql:
+                "SELECT COUNT(*) FROM bankTransaction WHERE counterpartyName = 'Waterbedrijf Voorbeeld' AND day LIKE '2027-05%'") == 0)
+
+            // Werk voor de review: nieuwe transacties en geboekte boekingen die nog nagekeken moeten worden.
+            #expect(summary.newTransactionCount >= 3)
+            let unreviewed = try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM entry WHERE NOT reviewed")!
+            #expect((3...12).contains(unreviewed))
+            #expect(summary.bankTransactionCount == (try BankTransaction.fetchCount(database)))
+            #expect(summary.entryCount == (try Entry.fetchCount(database)))
+            #expect(summary.bookedThrough == Day(year: 2027, month: 6, day: 8))
+
+            // Elke batch klopt met zijn transacties.
+            for batch in try ImportBatch.fetchAll(database) {
+                #expect(try BankTransaction.filter(Column("batchId") == batch.id).fetchCount(database) == batch.rowCount)
+            }
+            #expect(try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM bankTransaction WHERE batchId IS NULL") == 0)
+            // Alles verzonnen: alleen test-IBAN's.
+            #expect(try Int.fetchOne(database, sql:
+                "SELECT COUNT(*) FROM bankTransaction WHERE counterpartyIban NOT LIKE 'NL00TEST%'") == 0)
+        }
+    }
+
+    @Test(arguments: demoDays)
+    func sampleCSVContinuesTheSeededBalance(today: Day) throws {
+        let (db, summary) = try seeded(today, leaveRecentForImport: true)
+        let csv = DemoData.sampleCSV(today: today)
+        let rows = csv.split(separator: "\n").map { $0.split(separator: ",", omittingEmptySubsequences: false).map(String.init) }
+        #expect(!rows.isEmpty)
+        #expect(csv.hasSuffix("\n"))
+
+        // De betaalrekening heeft geen nieuwe transacties; die komen uit het bestand.
+        let pendingOnChecking = try db.read { database in
+            try Int.fetchOne(database, sql:
+                "SELECT COUNT(*) FROM bankTransaction WHERE accountId = ? AND status = 'nieuw'",
+                arguments: [summary.checkingAccountId])
+        }
+        #expect(pendingOnChecking == 0)
+        var balance = summary.checkingBalance
+        let cutoff = today.adding(days: -10)
+        var sequences = Set<String>()
+        for row in rows {
+            #expect(row.count == 19)
+            let day = try #require(Day(dutch: row[0]))
+            #expect(day > cutoff && day <= today)
+            #expect(row[1] == DemoData.checkingIban)
+            #expect(row[2].hasPrefix("NL00TEST"))
+            #expect(!row[3].isEmpty)
+            #expect(row[7] == "EUR" && row[9] == "EUR")
+            #expect(Money(parsing: row[8]) == balance)
+            let amount = try #require(Money(parsing: row[10]))
+            #expect(!amount.isZero)
+            balance += amount
+            #expect(row[11] == row[0] && row[12] == row[0])
+            #expect(sequences.insert(row[15]).inserted)
+            #expect(!row[17].isEmpty)
+        }
+
+        // Zonder de optie staan precies dezelfde regels als `nieuw` in de database.
+        let (full, fullSummary) = try seeded(today)
+        try full.read { database in
+            let pending = try BankTransaction.fetchAll(database, sql:
+                "SELECT * FROM bankTransaction WHERE accountId = ? AND status = 'nieuw' ORDER BY id",
+                arguments: [fullSummary.checkingAccountId])
+            #expect(pending.map(\.sequence) == rows.map { $0[15] })
+            #expect(pending.map(\.amount) == rows.map { Money(parsing: $0[10])! })
+            #expect(pending.first?.balanceBefore == summary.checkingBalance)
+        }
+        #expect(fullSummary.checkingBalance == summary.checkingBalance)
+    }
+
+    @Test func generatorIsDeterministic() {
+        var a = SeededGenerator(seed: 42), b = SeededGenerator(seed: 42), c = SeededGenerator(seed: 43)
+        let first = (0..<20).map { _ in a.int(1...1_000) }
+        #expect(first == (0..<20).map { _ in b.int(1...1_000) })
+        #expect(first != (0..<20).map { _ in c.int(1...1_000) })
+        #expect(first.allSatisfy { (1...1_000).contains($0) })
+    }
+}
