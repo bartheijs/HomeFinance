@@ -209,6 +209,26 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Verrekenen per tag: uitgaven met een tag (bv. Tanken) die de gebruiker periodiek terugstort.
+        m.registerMigration("v3-settlement") { db in
+            try db.alter(table: "tag") { t in
+                t.add(column: "settles", .boolean).notNull().defaults(to: false)
+            }
+            try db.create(table: "settlement") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("tagId", .integer).notNull().indexed().references("tag", onDelete: .cascade)
+                t.column("day", .text).notNull()
+                t.column("amount", .integer).notNull()
+                t.column("depositEntryId", .integer).references("entry", onDelete: .setNull)
+                t.column("isOpening", .boolean).notNull().defaults(to: false)
+                t.column("note", .text).notNull().defaults(to: "")
+                t.column("createdAt", .datetime).notNull()
+            }
+            try db.alter(table: "entry") { t in
+                t.add(column: "settlementId", .integer).references("settlement", onDelete: .setNull)
+            }
+        }
+
         return m
     }
 }

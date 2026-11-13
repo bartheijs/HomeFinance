@@ -258,14 +258,17 @@ public struct Entry: Codable, Identifiable, Equatable, Sendable, FetchableRecord
     /// Tijdelijk geleend van spaar (tijdelijk anti-rood): een bedrag dat op de betaalrekening staat maar terug
     /// moet. Erbij (+) bij het lenen, eraf (−) bij het terugboeken. Het uitstaande saldo telt niet als besteedbaar.
     public var temporaryLoan: Bool
+    /// De verrekening waarin deze boeking is meegenomen (zie `Settlement`), of nil als hij nog openstaat.
+    public var settlementId: Int64?
 
     public static let databaseTableName = "entry"
     public init(id: Int64? = nil, accountId: Int64, bankTransactionId: Int64? = nil, day: Day, amount: Money,
                 label: String, budgetItemId: Int64? = nil, potId: Int64? = nil, reimburse: Bool = false,
                 savingsTransferId: Int64? = nil, counterEntryId: Int64? = nil, reviewed: Bool = true,
                 note: String = "", ruleId: Int64? = nil, confidence: Confidence? = nil, createdAt: Date = Date(),
-                temporaryLoan: Bool = false) {
+                temporaryLoan: Bool = false, settlementId: Int64? = nil) {
         self.temporaryLoan = temporaryLoan
+        self.settlementId = settlementId
         self.id = id; self.accountId = accountId; self.bankTransactionId = bankTransactionId
         self.day = day; self.amount = amount; self.label = label
         self.budgetItemId = budgetItemId; self.potId = potId; self.reimburse = reimburse
@@ -283,10 +286,13 @@ public struct Tag: Codable, Identifiable, Equatable, Sendable, FetchableRecord, 
     /// Kleur als hex "#RRGGBB".
     public var color: String
     public var sortOrder: Int
+    /// Uitgaven met deze tag worden periodiek verrekend: de gebruiker stort het openstaande bedrag terug
+    /// op de betaalrekening (bv. Tanken na het binnenkomen van het loon).
+    public var settles: Bool
 
     public static let databaseTableName = "tag"
-    public init(id: Int64? = nil, name: String, color: String = "#888888", sortOrder: Int = 0) {
-        self.id = id; self.name = name; self.color = color; self.sortOrder = sortOrder
+    public init(id: Int64? = nil, name: String, color: String = "#888888", sortOrder: Int = 0, settles: Bool = false) {
+        self.id = id; self.name = name; self.color = color; self.sortOrder = sortOrder; self.settles = settles
     }
     public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
 }
@@ -392,6 +398,31 @@ public struct SavingsTransfer: Codable, Identifiable, Equatable, Sendable, Fetch
     public static let databaseTableName = "savingsTransfer"
     public init(id: Int64? = nil, day: Day, amount: Money, done: Bool = false, doneAt: Date? = nil, note: String = "") {
         self.id = id; self.day = day; self.amount = amount; self.done = done; self.doneAt = doneAt; self.note = note
+    }
+    public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
+}
+
+/// Eén verrekening van een tag: de boekingen met die tag die hiermee zijn afgerekend.
+/// Openstaand voor een tag = − som van de boekingen op betaalrekeningen met die tag en zonder `settlementId`
+/// (uitgaven negatief, dus het openstaande bedrag is positief; een terugbetaling met dezelfde tag telt eraf).
+public struct Settlement: Codable, Identifiable, Equatable, Sendable, FetchableRecord, MutablePersistableRecord {
+    public var id: Int64?
+    public var tagId: Int64
+    public var day: Day
+    /// Het verrekende bedrag (positief): wat er is teruggestort.
+    public var amount: Money
+    /// De bijschrijving op de betaalrekening waarmee is teruggestort, als die gekoppeld is.
+    public var depositEntryId: Int64?
+    /// Beginstand: alles van vóór het moment dat verrekenen voor deze tag is aangezet. Geen echte storting.
+    public var isOpening: Bool
+    public var note: String
+    public var createdAt: Date
+
+    public static let databaseTableName = "settlement"
+    public init(id: Int64? = nil, tagId: Int64, day: Day, amount: Money, depositEntryId: Int64? = nil,
+                isOpening: Bool = false, note: String = "", createdAt: Date = Date()) {
+        self.id = id; self.tagId = tagId; self.day = day; self.amount = amount
+        self.depositEntryId = depositEntryId; self.isOpening = isOpening; self.note = note; self.createdAt = createdAt
     }
     public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
 }
