@@ -157,6 +157,7 @@ private struct DemoBanner: View {
         .font(.callout)
         .padding(.horizontal, 16).padding(.vertical, 8)
         .background(Theme.warning.opacity(0.14), ignoresSafeAreaEdges: [])
+        .background(Theme.background, ignoresSafeAreaEdges: [])
         .overlay(alignment: .bottom) { Divider() }
     }
 }
