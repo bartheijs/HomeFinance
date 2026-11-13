@@ -52,7 +52,6 @@ public struct GridRow: Identifiable, Equatable, Sendable {
     public let frequency: Frequency
     public let expectedMonths: [Int]
     public let expectedDay: Int?
-    public let reducesReserve: Bool
     public let potId: Int64?
     /// Twaalf cellen, januari t/m december.
     public let cells: [GridCell]
@@ -195,7 +194,7 @@ extension Insight {
             return GridRow(id: item.id!, label: item.label, direction: item.direction,
                            kind: item.isReserveTotal ? .reserveTotal : (item.isReserveLine ? .reserveLine : .item),
                            plan: plans.plan(item), frequency: item.frequency, expectedMonths: item.months,
-                           expectedDay: item.expectedDay, reducesReserve: item.reducesReserve, potId: item.potId,
+                           expectedDay: item.expectedDay, potId: item.potId,
                            cells: cells, yearTotal: cells.map(\.sum).sum(),
                            planYearTotal: cells.compactMap(\.expected).sum())
         }

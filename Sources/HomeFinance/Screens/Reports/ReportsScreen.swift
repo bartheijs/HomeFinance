@@ -141,7 +141,7 @@ struct ReportsScreen: View {
                     scroll { ReportsSpendableTab(summary: summary, points: data.spendable) }
                 } else {
                     EmptyState(title: "Geen begroting voor \(String(model.year))",
-                               message: "Besteedbaar is het saldo min wat gereserveerd is en min de buffers. Daarvoor is een begroting voor dit jaar nodig.",
+                               message: "Besteedbaar is het saldo min de buffers. Daarvoor is een begroting voor dit jaar nodig.",
                                icon: "wallet.bifold", actionTitle: "Naar Instellingen") { model.selection = .settings }
                 }
             case .tags:

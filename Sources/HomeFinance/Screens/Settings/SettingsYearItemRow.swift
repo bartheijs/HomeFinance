@@ -182,16 +182,7 @@ struct SettingsYearItemRow: View {
     }
 
     @ViewBuilder private var extraRow: some View {
-        if item.direction == .UIT && !item.isReserveTotal {
-            GridRow {
-                Text("Reservering").foregroundStyle(.secondary)
-                Toggle(isOn: Binding(get: { draft.reducesReserve }, set: { draft.reducesReserve = $0; commit() })) {
-                    Text("Verlaagt reservering")
-                }
-                .toggleStyle(.checkbox)
-                .help("Betalingen op deze post gaan af van het gereserveerde bedrag op de betaalrekening (bijvoorbeeld een aflossing waarvoor al geld apart staat).")
-            }
-        } else if item.direction == .RES {
+        if item.direction == .RES {
             GridRow {
                 Text("Vult pot").foregroundStyle(.secondary)
                 Picker("Pot", selection: Binding(get: { draft.potId }, set: { draft.potId = $0; commit() })) {

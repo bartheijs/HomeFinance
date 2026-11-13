@@ -119,13 +119,13 @@ struct ReportsSpendableTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             ReportsQuestion("Hoeveel kunnen we vrij uitgeven?",
-                            detail: "Besteedbaar is wat er op de betaalrekening staat, min wat gereserveerd is en min de buffers. Stand aan het eind van elke maand.")
+                            detail: "Besteedbaar is wat er op de betaalrekening staat, min de buffers. Stand aan het eind van elke maand.")
             HStack(spacing: 56) {
                 ReportsKeyNumber(title: "Besteedbaar nu", value: summary.spendable.formatted(),
                                  tint: summary.spendable.isNegative ? ReportsColor.over : .primary)
                 ReportsKeyNumber(title: "Op de rekening", value: summary.balance.formatted())
-                ReportsKeyNumber(title: "Gereserveerd", value: summary.reserved.formatted())
-                    .help("Geld dat al een bestemming heeft. Daarnaast staat er \(summary.buffers.formatted()) aan buffers apart.")
+                ReportsKeyNumber(title: "Buffers", value: summary.buffers.formatted())
+                    .help("Anti-rood en tijdelijk anti-rood: dit blijft op de rekening staan en telt niet mee als besteedbaar.")
             }
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 18) {
@@ -162,7 +162,6 @@ struct ReportsSpendableTab: View {
                     .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))) {
                         ReportsTooltip(title: "Stand op \(p.day.short())", lines: [
                             .init(label: "Op de rekening", color: ReportsColor.neutral, value: p.balance.formatted()),
-                            .init(label: "Gereserveerd", color: nil, value: p.reserved.formatted()),
                             .init(label: "Besteedbaar", color: ReportsColor.accent, value: p.spendable.formatted()),
                         ])
                     }
@@ -179,15 +178,13 @@ struct ReportsSpendableTab: View {
             GridRow {
                 ReportsColumnTitle("Stand op", alignment: .leading)
                 ReportsColumnTitle("Op de rekening", help: "Saldo van de betaalrekening(en)")
-                ReportsColumnTitle("Gereserveerd", help: "Geld dat al een bestemming heeft")
-                ReportsColumnTitle("Besteedbaar", help: "Op de rekening min gereserveerd min buffers")
+                ReportsColumnTitle("Besteedbaar", help: "Op de rekening min buffers")
             }
             Divider()
             ForEach(points) { p in
                 GridRow {
                     Text(p.day.short()).monospacedDigit().frame(maxWidth: .infinity, alignment: .leading)
                     ReportsAmount(amount: p.balance)
-                    ReportsAmount(amount: p.reserved)
                     ReportsAmount(amount: p.spendable, redIfNegative: true)
                 }
             }

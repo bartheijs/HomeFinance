@@ -125,9 +125,9 @@ handmatige boeking tegenover staat.
 
 | Functie | Doet |
 |---|---|
-| `createYear(db, year:, antiRood:, tijdelijkAntiRood:, reserveBase:)` | Leeg jaar. |
+| `createYear(db, year:, antiRood:, tijdelijkAntiRood:)` | Leeg jaar. |
 | `createYear(db, year:, copyingFrom:)` | Kopieert buffers en alle posten (zonder boekingen). |
-| `updateBuffers(db, year:, antiRood:, tijdelijkAntiRood:, reserveBase:)` | Buffers wijzigen. |
+| `updateBuffers(db, year:, antiRood:, tijdelijkAntiRood:)` | Buffers wijzigen. |
 | `closeYear(db, year:)` / `reopenYear(db, year:)` | Afsluiten en heropenen. |
 | `createItem(db, BudgetItem)` / `updateItem(db, BudgetItem)` | Post maken of wijzigen; geeft de opgeslagen post terug. |
 | `deleteItem(db, itemId:, convertEntriesToDivers:)` | Met boekingen alleen als ze "divers" mogen worden. |

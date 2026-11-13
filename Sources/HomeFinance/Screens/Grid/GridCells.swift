@@ -290,9 +290,6 @@ struct GridLabelLayer: View, Equatable {
                     Text(row.frequency == .kwartaal ? "kwartaal" : "jaar")
                         .font(.system(size: 9)).foregroundStyle(.tertiary)
                 }
-                if row.reducesReserve {
-                    Image(systemName: "arrow.down.right.circle").font(.system(size: 9)).foregroundStyle(.tertiary)
-                }
             }
             .font(.system(size: layout.fontSize + 0.5))
             .padding(.leading, 24).padding(.trailing, 8)
@@ -309,7 +306,6 @@ struct GridLabelLayer: View, Equatable {
         case .jaar: text += "\nPer jaar: " + row.expectedMonths.map { Day.monthNamesShort[$0 - 1] }.joined(separator: ", ")
         }
         if let day = row.expectedDay { text += ", rond dag \(day)" }
-        if row.reducesReserve { text += "\nBetalingen op deze post verlagen het gereserveerde bedrag op de betaalrekening." }
         return text
     }
 }

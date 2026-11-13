@@ -60,8 +60,8 @@ for try await dashboard in observation.values(in: appDatabase.reader) {
 
 | Functie | Geeft |
 |---|---|
-| `spendable(db, year:today:)` | `Spendable`: `balance`, `reserved` (= `reserveBase` + `reserveReduction`), `antiRood`, `tijdelijkAntiRood`, `spendable`, en de simulatie: `expectedItems`, `expectedTotal`, `spendableEndOfMonth` |
-| `yearSummary(db, year:today:)` | `YearSummary`: op de rekening op 1-1, IN, UIT, op de rekening, gereserveerd, buffers, besteedbaar, IN/UIT divers en gemiddelden per verstreken maand |
+| `spendable(db, year:today:)` | `Spendable`: `balance`, `antiRood`, `tijdelijkAntiRood`, `spendable`, en de simulatie: `expectedItems`, `expectedTotal`, `spendableEndOfMonth` |
+| `yearSummary(db, year:today:)` | `YearSummary`: op de rekening op 1-1, IN, UIT, op de rekening, buffers, besteedbaar, IN/UIT divers en gemiddelden per verstreken maand |
 | `spendableSeries(db, year:today:)` | `[SpendablePoint]` per maandeinde t/m de peildag |
 
 De peildag (`asOf`) is vandaag in het lopende jaar en 31-12 voor een voorbij jaar. De simulatie is alleen gevuld
@@ -128,7 +128,7 @@ bankomschrijving), `budgetItemId`, `potId`, `tagId`, `diversOnly`, `unreviewedOn
 
 ## Gekozen uitleg
 
-- Boekingen met een datum ná de peildag tellen niet mee in saldo, gereserveerd, besteedbaar en potsaldi; het
+- Boekingen met een datum ná de peildag tellen niet mee in saldo, besteedbaar en potsaldi; het
   maandgrid toont wel alle boekingen van het jaar.
 - "Op de rekening op 1-1" = op de rekening − IN − UIT. Het beginsaldo van een betaalrekening die in de loop van
   het jaar start, zit daar dus in.

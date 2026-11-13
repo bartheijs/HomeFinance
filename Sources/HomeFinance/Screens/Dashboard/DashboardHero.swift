@@ -71,8 +71,6 @@ struct DashboardHero: View {
             Text("Nu").font(.subheadline).foregroundStyle(.secondary)
             line("Saldo betaalrekening", spendable.balance, sign: " ",
                  help: "Wat er vandaag op de betaalrekening(en) staat volgens de boekingen.")
-            line("Gereserveerd", spendable.reserved, sign: "−",
-                 help: "Geld op de betaalrekening dat al een bestemming heeft, zoals de jaarlijkse posten waarvoor je spaart.")
             line("Anti-rood", spendable.antiRood, sign: "−",
                  help: "Vaste buffer die altijd op de rekening blijft staan, zodat je niet rood komt te staan.")
             if !spendable.tijdelijkAntiRood.isZero {

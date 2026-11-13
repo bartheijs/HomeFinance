@@ -34,7 +34,7 @@ struct Fixture {
                                                                openingBalance: c(100_000), openingDate: d("2027-01-01")))
             let spaar = try AccountService.create(db, Account(name: "Testspaar", iban: Fixture.spaarIban, kind: .spaar,
                                                               openingBalance: c(500_000), openingDate: d("2027-01-01")))
-            let year = try YearService.createYear(db, year: 2027, antiRood: c(50_000), reserveBase: c(20_000))
+            let year = try YearService.createYear(db, year: 2027, antiRood: c(50_000))
             let potVerzekering = try PotService.create(db, Pot(accountId: spaar.id!, name: "Verzekering", kind: .reservering,
                                                                monthlyAmount: c(10_000)))
             let potVakantie = try PotService.create(db, Pot(accountId: spaar.id!, name: "Vakantie", kind: .reservering,

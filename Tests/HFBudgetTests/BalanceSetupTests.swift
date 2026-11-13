@@ -133,7 +133,7 @@ import Testing
             #expect(throws: BudgetError.yearClosed(2027)) {
                 try YearService.closeYear(db, year: 2027)
                 defer { try? YearService.reopenYear(db, year: 2027) }
-                try YearService.updateBuffers(db, year: 2027, antiRood: .zero, tijdelijkAntiRood: .zero, reserveBase: .zero)
+                try YearService.updateBuffers(db, year: 2027, antiRood: .zero, tijdelijkAntiRood: .zero)
             }
         }
     }
@@ -163,9 +163,9 @@ import Testing
     @Test func jaarKopieren() throws {
         let fx = try Fixture()
         try fx.app.write { db in
-            try YearService.updateBuffers(db, year: 2027, antiRood: c(50_000), tijdelijkAntiRood: c(10_000), reserveBase: c(20_000))
+            try YearService.updateBuffers(db, year: 2027, antiRood: c(50_000), tijdelijkAntiRood: c(10_000))
             var q = fx.boodschappen
-            q.frequency = .kwartaal; q.expectedMonths = "1,4,7,10"; q.expectedDay = 3; q.reducesReserve = true
+            q.frequency = .kwartaal; q.expectedMonths = "1,4,7,10"; q.expectedDay = 3
             try YearService.updateItem(db, q)
             try YearService.reorderItems(db, yearId: fx.year.id!, orderedIds: [
                 fx.reserveringen.id!, fx.salaris.id!, fx.boodschappen.id!, fx.resVakantie.id!, fx.resVerzekering.id!])
@@ -173,7 +173,7 @@ import Testing
                                                    label: "x", budgetItemId: fx.boodschappen.id))
 
             let copy = try YearService.createYear(db, year: 2028, copyingFrom: 2027)
-            #expect(copy.antiRood == c(50_000) && copy.tijdelijkAntiRood == c(10_000) && copy.reserveBase == c(20_000))
+            #expect(copy.antiRood == c(50_000) && copy.tijdelijkAntiRood == c(10_000))
             #expect(copy.closed == false)
             func items(_ yearId: Int64) throws -> [BudgetItem] {
                 try BudgetItem.fetchAll(db, sql: "SELECT * FROM budgetItem WHERE yearId = ? ORDER BY sortOrder", arguments: [yearId])

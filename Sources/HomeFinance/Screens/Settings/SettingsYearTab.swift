@@ -108,7 +108,7 @@ struct SettingsYearTab: View {
                                    color: Theme.warning)
                 }
                 yearLine(year)
-                SettingsBuffersCard(year: year) { saveBuffers($0, $1, $2) }
+                SettingsBuffersCard(year: year) { saveBuffers($0, $1) }
                     .id("buffers-\(year.year)-\(resetToken)")
                     .disabled(year.closed)
                 VStack(alignment: .leading, spacing: 12) {
@@ -257,10 +257,10 @@ struct SettingsYearTab: View {
         load()
     }
 
-    private func saveBuffers(_ antiRood: Money, _ tijdelijk: Money, _ reserve: Money) {
+    private func saveBuffers(_ antiRood: Money, _ tijdelijk: Money) {
         write { db in
             _ = try YearService.updateBuffers(db, year: model.year, antiRood: antiRood,
-                                              tijdelijkAntiRood: tijdelijk, reserveBase: reserve)
+                                              tijdelijkAntiRood: tijdelijk)
         }
     }
 
@@ -330,20 +330,18 @@ struct SettingsYearTab: View {
 /// De drie buffers van het jaar. Bewaart bij Enter of zodra je een veld verlaat.
 struct SettingsBuffersCard: View {
     let year: BudgetYear
-    var onSave: (Money, Money, Money) -> Void
+    var onSave: (Money, Money) -> Void
 
-    private enum Field: Hashable { case antiRood, tijdelijk, reserve }
+    private enum Field: Hashable { case antiRood, tijdelijk }
 
     @State private var antiRood: Money?
     @State private var tijdelijk: Money?
-    @State private var reserve: Money?
     @FocusState private var focus: Field?
 
-    init(year: BudgetYear, onSave: @escaping (Money, Money, Money) -> Void) {
+    init(year: BudgetYear, onSave: @escaping (Money, Money) -> Void) {
         self.year = year; self.onSave = onSave
         _antiRood = State(initialValue: year.antiRood)
         _tijdelijk = State(initialValue: year.tijdelijkAntiRood)
-        _reserve = State(initialValue: year.reserveBase)
     }
 
     var body: some View {
@@ -358,12 +356,6 @@ struct SettingsBuffersCard: View {
                 field($tijdelijk, .tijdelijk)
             }
             .help("Bijvoorbeeld vlak voor een grote afschrijving. Telt ook niet mee als besteedbaar.")
-            .padding(.horizontal, 18).padding(.vertical, 12)
-            Divider().padding(.leading, 18)
-            SettingsRow("Gereserveerd", text: "Geld op de betaalrekening dat al een bestemming heeft.") {
-                field($reserve, .reserve)
-            }
-            .help("Betalingen op posten met ‘Verlaagt reservering’ gaan van dit bedrag af.")
             .padding(.horizontal, 18).padding(.vertical, 12)
         }
         .font(.title3)
@@ -383,9 +375,9 @@ struct SettingsBuffersCard: View {
     }
 
     private func commit() {
-        guard let antiRood, let tijdelijk, let reserve else { return }
-        guard antiRood != year.antiRood || tijdelijk != year.tijdelijkAntiRood || reserve != year.reserveBase else { return }
-        onSave(antiRood, tijdelijk, reserve)
+        guard let antiRood, let tijdelijk else { return }
+        guard antiRood != year.antiRood || tijdelijk != year.tijdelijkAntiRood else { return }
+        onSave(antiRood, tijdelijk)
     }
 }
 

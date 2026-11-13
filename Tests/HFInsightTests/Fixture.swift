@@ -45,7 +45,7 @@ struct Fixture {
                              openingBalance: eur(5000), openingDate: d("2027-01-01"), sortOrder: 2)
             try a2.insert(db); spaar = a2.id!
 
-            var year = BudgetYear(year: 2027, antiRood: eur(500), tijdelijkAntiRood: eur(100), reserveBase: eur(2000))
+            var year = BudgetYear(year: 2027, antiRood: eur(500), tijdelijkAntiRood: eur(100))
             try year.insert(db)
             let y = year.id!
 

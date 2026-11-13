@@ -40,8 +40,8 @@ public struct BudgetYear: Codable, Identifiable, Equatable, Sendable, FetchableR
     public var antiRood: Money
     /// Tijdelijke extra buffer (positief bedrag, meestal 0).
     public var tijdelijkAntiRood: Money
-    /// Bedrag dat op de betaalrekening staat maar gereserveerd is (de regel "Reserveringen"
-    /// in het jaaroverzicht van de Excel), vóór de correctie met posten die `reducesReserve` hebben.
+    /// Niet meer in gebruik (besluit 13-11-2026): geld met een bestemming staat in een pot op de
+    /// spaarrekening. De kolom blijft bestaan omdat migraties niet worden aangepast.
     public var reserveBase: Money
     /// Afgesloten jaar: alleen-lezen.
     public var closed: Bool
@@ -83,7 +83,7 @@ public struct BudgetItem: Codable, Identifiable, Equatable, Sendable, FetchableR
     public var expectedDay: Int?
     /// De ene regel RESERVERINGEN: plan = som van alle RES-regels van het jaar. Hoogstens één per jaar.
     public var isReserveTotal: Bool
-    /// Betalingen op deze post verlagen het gereserveerde bedrag op de betaalrekening (bv. een privélening).
+    /// Niet meer in gebruik (besluit 13-11-2026); zie `BudgetYear.reserveBase`.
     public var reducesReserve: Bool
     /// Voor RES-regels: de pot op de spaarrekening die hiermee gevuld wordt.
     public var potId: Int64?

@@ -67,21 +67,17 @@ public struct ExpectedItem: Identifiable, Equatable, Sendable {
     public let isLate: Bool
 }
 
-/// Besteedbaar volgens de Excel-formule, met de simulatie tot het eind van de maand.
+/// Besteedbaar, met de simulatie tot het eind van de maand.
 public struct Spendable: Equatable, Sendable {
     public let year: Int
     /// Peildag: vandaag, of 31-12 voor een voorbij jaar.
     public let asOf: Day
     /// Saldo van alle betaalrekeningen.
     public let balance: Money
-    public let reserveBase: Money
-    /// Som van de boekingen van het jaar op posten met `reducesReserve` (negatief).
-    public let reserveReduction: Money
-    /// Gereserveerd = `reserveBase` + `reserveReduction`.
-    public let reserved: Money
     public let antiRood: Money
     public let tijdelijkAntiRood: Money
-    /// Besteedbaar = saldo − gereserveerd − antiRood − tijdelijkAntiRood.
+    /// Besteedbaar = saldo − antiRood − tijdelijkAntiRood.
+    /// Geld met een bestemming staat in potten op de spaarrekening, niet op de betaalrekening.
     public let spendable: Money
     /// Posten die deze maand verwacht worden en nog geen boeking hebben (leeg buiten het lopende jaar).
     public let expectedItems: [ExpectedItem]
@@ -102,7 +98,6 @@ public struct YearSummary: Equatable, Sendable {
     public let expenses: Money
     /// Op de rekening = begin + IN + UIT.
     public let balance: Money
-    public let reserved: Money
     public let antiRood: Money
     public let tijdelijkAntiRood: Money
     public let spendable: Money
@@ -124,7 +119,6 @@ public struct SpendablePoint: Identifiable, Equatable, Sendable {
     public var id: Day { day }
     public let day: Day
     public let balance: Money
-    public let reserved: Money
     public let spendable: Money
 }
 
@@ -239,12 +233,7 @@ extension Insight {
         let budgetYear = try Q.budgetYear(db, year)
         let asOf = Q.asOf(year, today)
         let balance = try checkingBalance(db, on: asOf)
-        let reduction = try Money.fetchOne(db, sql: """
-            SELECT COALESCE(SUM(e.amount), 0) FROM entry e JOIN budgetItem i ON i.id = e.budgetItemId
-            WHERE i.reducesReserve = 1 AND e.accountId IN \(Q.betaal) AND e.day >= ? AND e.day <= ?
-            """, arguments: [Q.yearStart(year), asOf]) ?? .zero
-        let reserved = budgetYear.reserveBase + reduction
-        let spendable = balance - reserved - budgetYear.antiRood - budgetYear.tijdelijkAntiRood
+        let spendable = balance - budgetYear.antiRood - budgetYear.tijdelijkAntiRood
 
         var expected: [ExpectedItem] = []
         if today.year == year {
@@ -261,14 +250,13 @@ extension Insight {
             }
         }
         let expectedTotal = expected.map(\.plan).sum()
-        return Spendable(year: year, asOf: asOf, balance: balance, reserveBase: budgetYear.reserveBase,
-                         reserveReduction: reduction, reserved: reserved, antiRood: budgetYear.antiRood,
+        return Spendable(year: year, asOf: asOf, balance: balance, antiRood: budgetYear.antiRood,
                          tijdelijkAntiRood: budgetYear.tijdelijkAntiRood, spendable: spendable,
                          expectedItems: expected, expectedTotal: expectedTotal,
                          spendableEndOfMonth: spendable + expectedTotal)
     }
 
-    /// Het jaaroverzicht (op de rekening op 1-1, IN, UIT, op de rekening, gereserveerd, buffers, besteedbaar,
+    /// Het jaaroverzicht (op de rekening op 1-1, IN, UIT, op de rekening, buffers, besteedbaar,
     /// divers en gemiddelden per verstreken maand).
     public static func yearSummary(_ db: Database, year: Int, today: Day) throws -> YearSummary {
         let s = try spendable(db, year: year, today: today)
@@ -282,7 +270,7 @@ extension Insight {
         let income: Money = r["pos"], expenses: Money = r["neg"], inD: Money = r["posD"], uitD: Money = r["negD"]
         let n = Q.elapsedMonths(year, today)
         return YearSummary(year: year, asOf: s.asOf, openingBalance: s.balance - income - expenses,
-                           income: income, expenses: expenses, balance: s.balance, reserved: s.reserved,
+                           income: income, expenses: expenses, balance: s.balance,
                            antiRood: s.antiRood, tijdelijkAntiRood: s.tijdelijkAntiRood, spendable: s.spendable,
                            inDivers: inD, uitDivers: uitD, elapsedMonths: n,
                            averageIncome: Q.average(income, n), averageExpenses: Q.average(expenses, n),
@@ -296,16 +284,9 @@ extension Insight {
         let asOf = Q.asOf(year, today)
         let days = seriesDays(from: Day(year: year, month: 1, day: 1)!, to: asOf, step: .monthEnd)
         let balances = try balances(db, accountClause: "IN \(Q.betaal)", arguments: [], at: days)
-        let reductions = try Row.fetchAll(db, sql: """
-            SELECT e.day, SUM(e.amount) AS s FROM entry e JOIN budgetItem i ON i.id = e.budgetItemId
-            WHERE i.reducesReserve = 1 AND e.accountId IN \(Q.betaal) AND e.day >= ? AND e.day <= ?
-            GROUP BY e.day ORDER BY e.day
-            """, arguments: [Q.yearStart(year), asOf]).map { ($0["day"] as Day, $0["s"] as Money) }
-        let reserved = Q.cumulative(reductions, at: days, start: budgetYear.reserveBase)
         let buffers = budgetYear.antiRood + budgetYear.tijdelijkAntiRood
         return days.indices.map {
-            SpendablePoint(day: days[$0], balance: balances[$0], reserved: reserved[$0],
-                           spendable: balances[$0] - reserved[$0] - buffers)
+            SpendablePoint(day: days[$0], balance: balances[$0], spendable: balances[$0] - buffers)
         }
     }
 }

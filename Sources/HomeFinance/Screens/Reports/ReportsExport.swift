@@ -16,8 +16,8 @@ extension ReportsData {
             return ReportsFormat.tsv(["Maand", "IN", "UIT", "Resultaat"], rows)
 
         case .spendable:
-            let rows = spendable.map { [$0.day.dutch, p($0.balance), p($0.reserved), p($0.spendable)] }
-            return ReportsFormat.tsv(["Datum", "Op de rekening", "Gereserveerd", "Besteedbaar"], rows)
+            let rows = spendable.map { [$0.day.dutch, p($0.balance), p($0.spendable)] }
+            return ReportsFormat.tsv(["Datum", "Op de rekening", "Besteedbaar"], rows)
 
         case .tags:
             let header = ["Tag"] + Day.monthNamesShort + ["Dit jaar t/m nu", "Gemiddeld per maand", "Vorig jaar t/m zelfde datum", "Heel vorig jaar"]

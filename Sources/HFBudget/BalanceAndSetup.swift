@@ -129,15 +129,14 @@ public enum YearService {
     /// Maakt een leeg begrotingsjaar met zijn buffers.
     @discardableResult
     public static func createYear(_ db: Database, year: Int, antiRood: Money = .zero,
-                                  tijdelijkAntiRood: Money = .zero, reserveBase: Money = .zero) throws -> BudgetYear {
+                                  tijdelijkAntiRood: Money = .zero) throws -> BudgetYear {
         try atomic(db) {
             guard (1900...2200).contains(year) else { throw BudgetError.validation("\(year) is geen geldig jaar.") }
             let exists = try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM budgetYear WHERE year = ?)",
                                            arguments: [year]) ?? false
             guard !exists else { throw BudgetError.yearExists(year) }
             try validateBuffers(antiRood, tijdelijkAntiRood)
-            var record = BudgetYear(year: year, antiRood: antiRood, tijdelijkAntiRood: tijdelijkAntiRood,
-                                    reserveBase: reserveBase)
+            var record = BudgetYear(year: year, antiRood: antiRood, tijdelijkAntiRood: tijdelijkAntiRood)
             try record.insert(db)
             return record
         }
@@ -150,7 +149,7 @@ public enum YearService {
         try atomic(db) {
             let source = try Check.budgetYear(db, year: sourceYear)
             let target = try createYear(db, year: year, antiRood: source.antiRood,
-                                        tijdelijkAntiRood: source.tijdelijkAntiRood, reserveBase: source.reserveBase)
+                                        tijdelijkAntiRood: source.tijdelijkAntiRood)
             let items = try BudgetItem.fetchAll(db, sql: "SELECT * FROM budgetItem WHERE yearId = ? ORDER BY sortOrder, id",
                                                 arguments: [source.id])
             for var item in items {
@@ -165,13 +164,13 @@ public enum YearService {
 
     /// Werkt de buffers van een (niet afgesloten) jaar bij.
     @discardableResult
-    public static func updateBuffers(_ db: Database, year: Int, antiRood: Money, tijdelijkAntiRood: Money,
-                                     reserveBase: Money) throws -> BudgetYear {
+    public static func updateBuffers(_ db: Database, year: Int, antiRood: Money,
+                                     tijdelijkAntiRood: Money) throws -> BudgetYear {
         try atomic(db) {
             var record = try Check.budgetYear(db, year: year)
             guard !record.closed else { throw BudgetError.yearClosed(year) }
             try validateBuffers(antiRood, tijdelijkAntiRood)
-            record.antiRood = antiRood; record.tijdelijkAntiRood = tijdelijkAntiRood; record.reserveBase = reserveBase
+            record.antiRood = antiRood; record.tijdelijkAntiRood = tijdelijkAntiRood
             try record.update(db)
             return record
         }

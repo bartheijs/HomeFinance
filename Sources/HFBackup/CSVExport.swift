@@ -15,7 +15,7 @@ extension Backup {
     /// Kolommen met een geldbedrag (in de database in centen), per tabel.
     static let moneyColumns: [String: Set<String>] = [
         "account": ["openingBalance"],
-        "budgetYear": ["antiRood", "tijdelijkAntiRood", "reserveBase"],
+        "budgetYear": ["antiRood", "tijdelijkAntiRood"],
         "budgetItem": ["planAmount"],
         "pot": ["monthlyAmount", "targetAmount"],
         "importBatch": ["openingBalance", "closingBalance"],

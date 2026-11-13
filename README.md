@@ -36,7 +36,7 @@ administratie beginnen**. Je kunt later altijd wisselen via Instellingen › Ove
 | Reserveringen | Wat je maandelijks opzijzet voor jaarlijkse of onregelmatige kosten. Eén overboeking naar spaar, verdeeld over potten. |
 | Pot | Een deel van het saldo op je spaarrekening met een eigen doel. |
 | Anti-rood | Buffer die altijd op de betaalrekening moet blijven staan. |
-| Besteedbaar | Saldo betaalrekening − gereserveerd − anti-rood − tijdelijk anti-rood. |
+| Besteedbaar | Saldo betaalrekening − anti-rood − tijdelijk anti-rood. Geld met een bestemming staat in potten op de spaarrekening. |
 | Vergoeden uit spaar | Een uitgave van de betaalrekening die je later terugboekt vanaf de spaarrekening. |
 | Tag | Label om uitgaven te volgen (tanken, uit eten). Telt niet als extra uitgave. |
 

@@ -211,31 +211,28 @@ private let today = Fixture.today
     @Test func spendableAndSimulation() throws {
         let s = try f.db.read { try Insight.spendable($0, year: 2027, today: today) }
         // saldo betaalrekening                      3.540,00
-        // gereserveerd = 2000 + (−200 −100 −100)    1.600,00
         // antiRood                                    500,00
         // tijdelijkAntiRood                           100,00
-        // besteedbaar = 3540 − 1600 − 500 − 100     1.340,00
+        // besteedbaar = 3540 − 500 − 100            2.940,00
         #expect(s.balance == eur(3540))
-        #expect(s.reserveReduction == eur(-400))
-        #expect(s.reserved == eur(1600))
-        #expect(s.spendable == eur(1340))
+        #expect(s.spendable == eur(2940))
         // Simulatie maart: nog verwacht en niet geboekt:
         //   Salaris +3000 · Energie −150 · RESERVERINGEN −250 (som RES-regels) · Lening −200 = +2400
         //   (Huur is al geboekt, Verzekering is in maart niet verwacht, RES-regels tellen niet mee)
-        // besteedbaar eind van de maand = 1340 + 2400 = 3.740,00
+        // besteedbaar eind van de maand = 2940 + 2400 = 5.340,00
         #expect(s.expectedItems.map(\.label) == ["Salaris", "Energie", "RESERVERINGEN", "Lening"])
         #expect(s.expectedItems.map(\.plan) == [eur(3000), eur(-150), eur(-250), eur(-200)])
         #expect(s.expectedItems.map(\.isLate) == [false, false, true, false])
         #expect(s.expectedTotal == eur(2400))
-        #expect(s.spendableEndOfMonth == eur(3740))
+        #expect(s.spendableEndOfMonth == eur(5340))
     }
 
     @Test func spendableForPastYearUsesYearEnd() throws {
         let s = try f.db.read { try Insight.spendable($0, year: 2027, today: d("2028-02-01")) }
         #expect(s.asOf == d("2027-12-31"))
-        #expect(s.spendable == eur(1340))
+        #expect(s.spendable == eur(2940))
         #expect(s.expectedItems.isEmpty)
-        #expect(s.spendableEndOfMonth == eur(1340))
+        #expect(s.spendableEndOfMonth == eur(2940))
     }
 
     @Test func yearSummary() throws {
@@ -247,9 +244,8 @@ private let today = Fixture.today
         #expect(y.expenses == eur(-5520))
         #expect(y.balance == eur(3540))
         #expect(y.result == eur(540))
-        #expect(y.reserved == eur(1600))
         #expect(y.buffers == eur(600))
-        #expect(y.spendable == eur(1340))
+        #expect(y.spendable == eur(2940))
         #expect(y.inDivers == eur(60))
         #expect(y.uitDivers == eur(-510))
         #expect(y.elapsedMonths == 3)
@@ -262,9 +258,8 @@ private let today = Fixture.today
     @Test func spendableSeries() throws {
         let s = try f.db.read { try Insight.spendableSeries($0, year: 2027, today: today) }
         #expect(s.map(\.day) == [d("2027-01-31"), d("2027-02-28"), today])
-        // 31-1: 3760 − (2000 − 200) − 600 = 1360 · 28-2: 4930 − 1600 − 600 = 2730 · 15-3: 1340
-        #expect(s.map(\.reserved) == [eur(1800), eur(1600), eur(1600)])
-        #expect(s.map(\.spendable) == [eur(1360), eur(2730), eur(1340)])
+        // 31-1: 3760 − 600 = 3160 · 28-2: 4930 − 600 = 4330 · 15-3: 3540 − 600 = 2940
+        #expect(s.map(\.spendable) == [eur(3160), eur(4330), eur(2940)])
     }
 }
 
@@ -522,8 +517,8 @@ private let today = Fixture.today
 
     @Test func dashboard() throws {
         let dash = try f.db.read { try Insight.dashboard($0, today: today, recentLimit: 3) }
-        #expect(dash.spendable?.spendable == eur(1340))
-        #expect(dash.spendable?.spendableEndOfMonth == eur(3740))
+        #expect(dash.spendable?.spendable == eur(2940))
+        #expect(dash.spendable?.spendableEndOfMonth == eur(5340))
         #expect(dash.accounts.map(\.balance) == [eur(3540), eur(5335)])
         #expect((dash.paidCount, dash.openCount, dash.lateCount) == (1, 3, 1))
         #expect(dash.recentEntries.map(\.label) == ["Terugbetaling", "Tandarts", "Boodschappen"])

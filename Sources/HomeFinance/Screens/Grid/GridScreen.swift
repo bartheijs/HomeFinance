@@ -143,14 +143,12 @@ struct GridYearOverview: View {
             line("UIT", summary.expenses.magnitude, sign: "−", help: "Alle uitgaven tot en met de peildag, vaste posten en divers samen.")
             Divider().padding(.vertical, 5)
             line("Op de rekening", summary.balance, strong: true, help: "Het berekende saldo van de betaalrekening(en).")
-            line("Gereserveerd", summary.reserved, sign: "−",
-                 help: "Geld op de betaalrekening dat al een bestemming heeft. Het daalt als je een post betaalt die uit de reservering komt.")
             line("Anti-rood", summary.buffers, sign: "−",
                  help: "Buffer die je op de rekening wilt laten staan: anti-rood \(summary.antiRood.formatted()) plus tijdelijk anti-rood \(summary.tijdelijkAntiRood.formatted()).")
             Divider().padding(.vertical, 5)
             line("Besteedbaar", summary.spendable, strong: true,
                  color: summary.spendable.isNegative ? Theme.negative : Theme.accent,
-                 help: "Op de rekening min gereserveerd min anti-rood: wat je vrij kunt uitgeven.")
+                 help: "Op de rekening min anti-rood: wat je vrij kunt uitgeven.")
         }
         .padding(16)
         .frame(width: 300)
