@@ -105,7 +105,7 @@ public enum DemoData {
         let checkingId = checking.id!, savingsId = savings.id!
 
         // Jaar
-        var budgetYear = BudgetYear(year: year, antiRood: Money(euros: 4_500), reserveBase: Money(euros: 2_250))
+        var budgetYear = BudgetYear(year: year, antiRood: Money(euros: 4_500))
         try budgetYear.insert(db)
 
         // Potten
@@ -128,7 +128,7 @@ public enum DemoData {
             var item = BudgetItem(yearId: budgetYear.id!, label: def.label, direction: def.direction,
                                   planAmount: Money(cents: def.cents), frequency: def.frequency,
                                   expectedMonths: def.frequency == .maand ? "" : def.months.map(String.init).joined(separator: ","),
-                                  expectedDay: def.day, isReserveTotal: isTotal, reducesReserve: def.reducesReserve,
+                                  expectedDay: def.day, isReserveTotal: isTotal,
                                   sortOrder: sortOrder)
             try item.insert(db)
             itemIds[def.label] = item.id
@@ -154,7 +154,13 @@ public enum DemoData {
             var rule = Rule(name: def.label, priority: 10, accountId: checkingId, amount: Money(cents: def.cents),
                             targetItemLabel: def.label, entryLabel: def.label)
             switch def.kind {
-            case .normal: rule.counterpartyContains = def.party
+            case .normal:
+                rule.counterpartyContains = def.party
+                if def.label == DemoPlan.loanLabel {
+                    // De rente op de privélening wordt uit de pot vergoed.
+                    rule.targetPotId = potIds[DemoPlan.loanPot.name]
+                    rule.reimburse = true
+                }
             case .reserveTotal: rule.counterpartyIban = def.iban
             case .saving:
                 rule.counterpartyIban = def.iban
@@ -195,7 +201,7 @@ public enum DemoData {
         // Wat er op 1 januari op de spaarrekening staat: één handboeking per pot. Het beginsaldo van de
         // rekening zelf is nul, zodat er geen bedrag zonder pot overblijft.
         var entryCount = 0
-        for def in DemoPlan.pots {
+        for def in DemoPlan.pots where def.initial != 0 {
             var entry = Entry(accountId: savingsId, day: plan.yearStart, amount: Money(cents: def.initial),
                               label: "Beginsaldo \(def.name)", potId: potIds[def.name], createdAt: stamp)
             try entry.insert(db)

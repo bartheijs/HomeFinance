@@ -67,7 +67,6 @@ struct DemoItem {
     var party: String
     var iban: String
     var code: String = "INC"
-    var reducesReserve = false
     var kind: Kind = .normal
 }
 
@@ -125,7 +124,15 @@ struct DemoPlan {
         DemoPot(name: "Buffer gezin", kind: .spaar, monthly: 150_00, target: 10_000_00, initial: 4_000_00),
     ]
 
-    static var pots: [DemoPot] { reservePots + savingsPots }
+    /// Pot voor de rente op de privélening: één keer per jaar gevuld met een schenking, dus geen maandbedrag
+    /// en geen RES-regel. De maandelijkse rentebetaling wordt uit deze pot vergoed.
+    static let loanPot = DemoPot(name: "Rente privélening", kind: .reservering, monthly: 0, initial: 0)
+    static let loanLabel = "Privélening"
+    /// Dag van de maand waarop de vergoedingen van spaar naar betaal gaan (vlak vóór de rentebetaling,
+    /// zodat de laatste rentebetaling altijd nog openstaat).
+    static let transferDayOfMonth = 27
+
+    static var pots: [DemoPot] { reservePots + [loanPot] + savingsPots }
     static var reserveTotal: Money { Money(cents: reservePots.map(\.monthly).reduce(0, +)) }
     /// Beginsaldo van de spaarrekening in de app: nul. Wat er op 1 januari staat is per pot geboekt.
     static let savingsOpening = Money.zero
@@ -168,7 +175,7 @@ struct DemoPlan {
         DemoItem(label: "Sportvereniging", direction: .UIT, cents: -135_00, frequency: .kwartaal, months: [1, 4, 7, 10],
                  day: 6, party: "Sportclub Voorbeeld", iban: "NL00TEST0000000115"),
         DemoItem(label: "Privélening", direction: .UIT, cents: -250_00, day: 28,
-                 party: "Lening Familie Voorbeeld", iban: "NL00TEST0000000116", code: "OVB", reducesReserve: true),
+                 party: "Lening Familie Voorbeeld", iban: "NL00TEST0000000116", code: "OVB"),
         DemoItem(label: reserveLabel, direction: .UIT, cents: -reserveTotal.cents, day: 26,
                  party: "Spaarrekening gezin", iban: savingsIban, code: "OVB", kind: .reserveTotal),
         DemoItem(label: "Sparen Kind 1", direction: .UIT, cents: -25_00, day: 26,
@@ -244,6 +251,8 @@ struct DemoPlan {
         self.yearStart = Day(year: year, month: 1, day: 1)!
         let yearEnd = Day(year: year, month: 12, day: 31)!
         var all: [DemoTx] = []
+        /// Uitgaven op de betaalrekening die uit een pot vergoed worden.
+        var reimbursements: [DemoTx] = []
         var nextLink = 0
 
         func day(_ month: Int, _ wanted: Int) -> Day {
@@ -271,6 +280,11 @@ struct DemoPlan {
                 var tx = DemoTx(day: date, amount: amount, name: item.party, iban: item.iban,
                                 description: description, code: item.code, lines: [line])
                 switch item.kind {
+                case .normal where item.label == Self.loanLabel:
+                    // De rente op de privélening wordt vergoed uit de pot die met de schenking gevuld is.
+                    tx.lines[0].potName = Self.loanPot.name
+                    tx.lines[0].reimburse = true
+                    reimbursements.append(tx)
                 case .normal:
                     all.append(tx)
                 case .reserveTotal:
@@ -351,8 +365,23 @@ struct DemoPlan {
         oneOff(7, 14, -186_00, "Camping Fictief", "NL00TEST0000000254", "Aanbetaling kampeerplaats", "Camping", tags: ["Vakantie"])
         oneOff(10, 9, 75_00, "Ouder 2 Voorbeeld", "NL00TEST0000000255", "Terugbetaling voorgeschoten bedrag", "Terugbetaling voorschot")
 
-        // 5. Uitgaven die uit een pot vergoed worden.
-        var reimbursements: [DemoTx] = []
+        // 4b. Jaarlijkse schenking van een familielid: binnen op de betaalrekening, een dag later door naar
+        // de pot voor de rente op de privélening.
+        if let loan = Self.items.first(where: { $0.label == Self.loanLabel }) {
+            let gift = Money(cents: -loan.cents * 12)
+            oneOff(1, 5, gift.cents, "Familielid Voorbeeld", "NL00TEST0000000256", "Schenking \(year)", "Schenking familie")
+            let description = "Schenking naar pot \(Self.loanPot.name)"
+            all.append(DemoTx(day: day(1, 6), amount: -gift, name: "Spaarrekening gezin", iban: Self.savingsIban,
+                              description: description, code: "OVB",
+                              lines: [DemoLine(amount: -gift, label: "Schenking naar spaarrekening")], link: nextLink))
+            all.append(DemoTx(onSavings: true, day: day(1, 6), amount: gift, name: "Ouder 1 en Ouder 2",
+                              iban: Self.checkingIban, description: description, code: "OVB",
+                              lines: [DemoLine(amount: gift, label: "Schenking familie", potName: Self.loanPot.name)],
+                              link: nextLink))
+            nextLink += 1
+        }
+
+        // 5. Losse uitgaven die uit een pot vergoed worden.
         var rng = generator(4)
         var date = yearStart.adding(days: rng.int(8...20))
         while date <= yearEnd {
@@ -365,9 +394,9 @@ struct DemoPlan {
             date = date.adding(days: rng.int(16...30))
         }
 
-        // 6. Elke twee maanden één overboeking van spaar naar betaal voor de uitgaven tot dan toe.
-        for month in [3, 5, 7, 9, 11] {
-            let transferDay = day(month, 2)
+        // 6. Elke maand één overboeking van spaar naar betaal voor de uitgaven tot dan toe.
+        for month in 1...12 {
+            let transferDay = day(month, Self.transferDayOfMonth)
             var perPot: [(pot: String, amount: Money)] = []
             var total = Money.zero
             for index in reimbursements.indices

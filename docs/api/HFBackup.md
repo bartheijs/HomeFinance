@@ -118,9 +118,9 @@ Dezelfde `today` geeft altijd exact dezelfde data (eigen generator, vaste tijdst
 
 Wat erin zit, van 1 januari van het jaar van `today` t/m `today`:
 
-- Betaalrekening (beginsaldo € 6.850) en spaarrekening; jaar met anti-rood € 4.500 en reserveBase € 2.250.
+- Betaalrekening (beginsaldo € 6.850) en spaarrekening; jaar met anti-rood € 4.500 (`reserveBase` blijft 0).
 - 20 vaste posten (salarissen, kinderbijslag en sportvereniging per kwartaal, hypotheek, verzekeringen, energie,
-  telecom, streaming, privélening met `reducesReserve`, RESERVERINGEN, drie spaarposten) en 20 RES-regels,
+  telecom, streaming, privélening, RESERVERINGEN, drie spaarposten) en 20 RES-regels,
   elk gekoppeld aan een reserveringspot. 5 spaarpotten met doel, waarvan 4 met eigenaar.
 - De spaarrekening heeft beginsaldo € 0,00; wat er op 1 januari staat is per pot geboekt als handboeking
   "Beginsaldo <pot>". De eerste banktransactie heeft als saldo vóór mutatie de som van die boekingen.
@@ -132,7 +132,12 @@ Wat erin zit, van 1 januari van het jaar van `today` t/m `today`:
 - Afwijkingen van het plan (energie in maart, mobiel in februari, salaris met vakantiegeld in mei,
   zorgverzekering in augustus) en één ontbrekende betaling (Water) voor een "te laat".
 - Wekelijks zakgeld, tanken en uit eten met tag, eenmalige inkomsten.
-- Uitgaven met `reimburse` en pot: elke twee maanden vergoed in een afgeronde `SavingsTransfer`; de rest open.
+- Uitgaven met `reimburse` en pot: elke maand op de 27e vergoed in één afgeronde `SavingsTransfer` (met de
+  banktransacties spaar → betaal); wat daarna komt staat open.
+- Privélening: op 5 januari komt "Schenking familie" binnen (12 × de maandrente, IN divers), op 6 januari gaat
+  dat bedrag naar de pot "Rente privélening" op de spaarrekening (reserveringspot zonder maandbedrag en zonder
+  RES-regel, gekoppeld via `counterEntryId`). Elke rentebetaling (de 28e) heeft `reimburse` met die pot en zit
+  in de spaaroverboeking van de maand erna; de laatste staat altijd open. De regel "Privélening" stelt dit voor.
 - De maandelijkse reservering: één boeking op de betaalrekening, op de spaarrekening gesplitst over de 20
   potten en gekoppeld via `counterEntryId`. Jaarrekeningen worden rechtstreeks uit een pot betaald.
 - Eén afstemming met verschil € 0,00 op `bookedThrough`.

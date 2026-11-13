@@ -125,9 +125,10 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
             // Elke pot heeft één beginsaldo-boeking op 1 januari, zonder banktransactie.
             let openings = try Entry.fetchAll(database, sql:
                 "SELECT * FROM entry WHERE accountId = ? AND bankTransactionId IS NULL", arguments: [account.id])
-            #expect(openings.count == pots.count)
+            // (De pot voor de rente op de privélening begint leeg en heeft er dus geen.)
+            #expect(openings.count == pots.count - 1)
             #expect(openings.allSatisfy { $0.potId != nil && $0.amount > .zero && $0.day == account.openingDate })
-            #expect(Set(openings.compactMap(\.potId)).count == pots.count)
+            #expect(Set(openings.compactMap(\.potId)).count == pots.count - 1)
             for pot in pots {
                 #expect((pot["balance"] as Money) >= .zero, "pot \(pot["name"] as String) staat negatief")
             }
@@ -136,6 +137,67 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
                 SELECT COUNT(*) FROM entry e JOIN pot p ON p.id = e.potId
                 WHERE e.accountId = ? AND p.accountId <> e.accountId
                 """, arguments: [account.id]) == 0)
+        }
+    }
+
+    /// De privélening: jaarlijkse schenking naar een pot, maandelijkse rente vergoed uit die pot.
+    @Test(arguments: demoDays)
+    func loanInterestIsReimbursedFromItsPot(today: Day) throws {
+        let (db, summary) = try seeded(today)
+        let cutoff = today.adding(days: -10)
+        try db.read { database in
+            let pot = try #require(try Pot.filter(Column("name") == "Rente privélening").fetchOne(database))
+            #expect(pot.kind == .reservering)
+            #expect(pot.monthlyAmount == .zero)
+            #expect(pot.accountId == summary.savingsAccountId)
+            #expect(try BudgetItem.filter(Column("potId") == pot.id).fetchCount(database) == 0)
+            let item = try #require(try BudgetItem.filter(Column("label") == "Privélening").fetchOne(database))
+            let gift = Money(cents: -item.planAmount.cents * 12)
+
+            // Schenking: binnen op de betaalrekening (divers), door naar de pot, aan beide kanten gekoppeld.
+            let received = try Entry.fetchAll(database, sql:
+                "SELECT * FROM entry WHERE accountId = ? AND label = 'Schenking familie'", arguments: [summary.checkingAccountId])
+            let inPot = try Entry.fetchAll(database, sql:
+                "SELECT * FROM entry WHERE accountId = ? AND potId = ? AND amount > 0", arguments: [summary.savingsAccountId, pot.id])
+            let giftBooked = Day(year: today.year, month: 1, day: 6)! <= cutoff
+            #expect(received.count == (giftBooked ? 1 : 0))
+            #expect(inPot.count == (giftBooked ? 1 : 0))
+            if giftBooked {
+                #expect(received[0].amount == gift && received[0].budgetItemId == nil)
+                #expect(inPot[0].amount == gift)
+                let out = try #require(try Entry.fetchOne(database, key: inPot[0].counterEntryId))
+                #expect(out.accountId == summary.checkingAccountId && out.amount == -gift && out.budgetItemId == nil)
+                #expect(out.counterEntryId == inPot[0].id)
+            }
+
+            // Elke rentebetaling is gemarkeerd met de pot; alleen de laatste staat nog open.
+            let payments = try Entry.fetchAll(database, sql:
+                "SELECT * FROM entry WHERE budgetItemId = ? ORDER BY day", arguments: [item.id])
+            #expect(payments.allSatisfy { $0.reimburse && $0.potId == pot.id && $0.accountId == summary.checkingAccountId })
+            let open = payments.filter { $0.savingsTransferId == nil }
+            #expect(open.map(\.id) == Array(payments.suffix(1)).map(\.id))
+            if today == testToday {
+                #expect(payments.count == 5)
+                #expect(open.map(\.day) == [Day(year: 2027, month: 5, day: 28)!])
+            }
+
+            // Saldo van de pot = schenking − vergoede maanden.
+            let balance = try Money.fetchOne(database, sql:
+                "SELECT COALESCE(SUM(amount), 0) FROM entry WHERE accountId = ? AND potId = ?",
+                arguments: [summary.savingsAccountId, pot.id])!
+            let reimbursed = payments.filter { $0.savingsTransferId != nil }.map(\.amount).sum()
+            #expect(balance == (giftBooked ? gift : .zero) + reimbursed)
+            #expect(balance >= .zero)
+
+            // Eén afgeronde spaaroverboeking per maand, elk met de rente van de maand ervoor erin.
+            let transfers = try SavingsTransfer.fetchAll(database, sql: "SELECT * FROM savingsTransfer ORDER BY day")
+            #expect(Set(transfers.map(\.day.month)).count == transfers.count)
+            #expect(transfers.allSatisfy { $0.done && $0.day.day == 27 && $0.day <= cutoff })
+
+            // De regel herkent de tegenpartij en stelt vergoeden uit de pot voor.
+            let rule = try #require(try Rule.filter(Column("name") == "Privélening").fetchOne(database))
+            #expect(rule.reimburse && rule.targetPotId == pot.id && rule.targetItemLabel == "Privélening")
+            #expect(rule.counterpartyContains == "Lening Familie Voorbeeld")
         }
     }
 
@@ -179,7 +241,7 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
             let year = try BudgetYear.fetchOne(database)!
             #expect(year.year == 2027)
             #expect(year.antiRood == Money(euros: 4_500))
-            #expect(year.reserveBase == Money(euros: 2_250))
+            #expect(year.reserveBase == .zero)
 
             let items = try BudgetItem.fetchAll(database)
             #expect(items.count == summary.budgetItemCount)
@@ -191,12 +253,12 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
             #expect(total[0].planAmount == res.map(\.planAmount).sum())
             #expect(items.filter { $0.direction != .RES }.count >= 15)
             #expect(items.contains { $0.frequency == .kwartaal && $0.expectedMonths == "1,4,7,10" })
-            #expect(items.filter(\.reducesReserve).count == 1)
+            #expect(items.filter { $0.reducesReserve }.isEmpty)
             #expect(items.filter { $0.direction == .IN }.allSatisfy { !$0.planAmount.isNegative })
             #expect(items.filter { $0.direction == .UIT }.allSatisfy { $0.planAmount.isNegative })
 
             let pots = try Pot.fetchAll(database)
-            #expect(pots.filter { $0.kind == .reservering }.count == 20)
+            #expect(pots.filter { $0.kind == .reservering }.count == 21)
             #expect(pots.filter { $0.kind == .reservering }.map(\.monthlyAmount).sum() == -total[0].planAmount)
             #expect(Set(pots.filter { $0.kind == .spaar }.compactMap(\.owner)) == ["Kind 1", "Kind 2", "Ouder 1", "Ouder 2"])
             #expect(pots.filter { $0.kind == .spaar }.allSatisfy { $0.targetAmount != nil })
