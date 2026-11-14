@@ -131,7 +131,8 @@ private struct ReviewImportPartView: View {
             }
             HStack(alignment: .top, spacing: 26) {
                 fact("Nieuw", "\(preview.newCount)", strong: true)
-                fact("Al bekend", "\(preview.duplicateCount)")
+                fact("Al bekend", "\(part.knownCount)")
+                    .help(part.knownBreakdown + ". Nieuw, al bekend en fout zijn samen alle regels in het bestand.")
                 fact("Fout", "\(preview.errorCount)", color: preview.errorCount > 0 ? Theme.negative : nil)
                 fact("Periode", period)
                 fact("Beginsaldo", preview.openingBalance?.formatted() ?? "—")
@@ -148,7 +149,7 @@ private struct ReviewImportPartView: View {
             DisclosureGroup(isExpanded: $expanded) {
                 rows.padding(.top, 6)
             } label: {
-                Text("Transacties in het bestand (\(preview.rows.count))").font(.callout)
+                Text("Transacties in het bestand (\(preview.rowCount))" + (preview.errorCount > 0 ? " · \(preview.errorCount) fout, zie hierboven" : "")).font(.callout)
             }
         }
         .padding(16)
@@ -230,10 +231,8 @@ private struct ReviewImportPartView: View {
                     Text(row.day.short(withYear: true)).monospacedDigit().frame(width: 84, alignment: .leading)
                     Text(row.counterpartyName.isEmpty ? row.descriptionText : row.counterpartyName).lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if row.isBeforeCutover {
-                        Text("gaat niet mee").font(.caption).foregroundStyle(.secondary)
-                    } else if row.isDuplicate {
-                        Text("al bekend").font(.caption).foregroundStyle(.secondary)
+                    if let known = part.knownLabel(row) {
+                        Text(known).font(.caption).foregroundStyle(.secondary)
                     }
                     Text(row.amount.formatted(symbol: false)).monospacedDigit().frame(width: 92, alignment: .trailing)
                 }
@@ -384,7 +383,7 @@ private struct ReviewSeamBlock: View {
                             Text(row.day.short(withYear: true)).frame(width: 84, alignment: .leading)
                             Text(row.counterpartyName.isEmpty ? row.descriptionText : row.counterpartyName).lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            if row.isDuplicate { Text("al bekend").font(.caption).foregroundStyle(.secondary) }
+                            if row.isDuplicate { Text("al geïmporteerd").font(.caption).foregroundStyle(.secondary) }
                             Text(row.amount.formatted(symbol: false)).frame(width: 84, alignment: .trailing)
                             Text(row.balanceBefore?.formatted(symbol: false) ?? "").foregroundStyle(.secondary)
                                 .frame(width: 92, alignment: .trailing)

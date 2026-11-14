@@ -114,6 +114,31 @@ struct ReviewImportPart: Identifiable {
     /// Eerste import van de rekening: positie (in tijdsvolgorde) van de eerste regel die volgens het
     /// eerste voorstel meegaat. Daaromheen toont het venster de regels om zelf te kiezen.
     var seamCenter: Int?
+    /// Regelnummers die de app zelf buiten de import hield (vóór het beginsaldo of in de Excel-historie),
+    /// om ze te onderscheiden van regels die de gebruiker zelf uitzet.
+    var autoSkipped: Set<Int> = []
+
+    /// Alles wat niet nieuw is: eerder geïmporteerd of niet meegenomen. Nieuw + al bekend + fout = alle regels.
+    var knownCount: Int { preview.duplicateCount + preview.cutoverSkippedCount }
+
+    /// Het label bij een regel die niet wordt geïmporteerd, of nil als hij meegaat.
+    func knownLabel(_ row: ImportRow) -> String? {
+        if row.isBeforeCutover {
+            guard autoSkipped.contains(row.lineNumber) else { return "gaat niet mee" }
+            return hasHistory ? "al bekend (in je Excel-historie)" : "al bekend (vóór je beginsaldo)"
+        }
+        return row.isDuplicate ? "al geïmporteerd" : nil
+    }
+
+    /// Uitsplitsing van "Al bekend", bv. "3 van vóór je beginsaldo · 0 eerder geïmporteerd".
+    var knownBreakdown: String {
+        let before = preview.rows.filter { $0.isBeforeCutover && autoSkipped.contains($0.lineNumber) }.count
+        let manual = preview.cutoverSkippedCount - before
+        var parts = ["\(before) \(hasHistory ? "uit je Excel-historie" : "van vóór je beginsaldo")",
+                     "\(preview.duplicateCount) eerder geïmporteerd"]
+        if manual > 0 { parts.append("\(manual) zelf uitgezet") }
+        return parts.joined(separator: " · ")
+    }
 }
 
 /// Een gekozen bestand (zip van de bank of een los afschrift) dat gelezen is en op bevestiging wacht.
@@ -654,7 +679,7 @@ final class ReviewStore {
                 try item.preview.map {
                     ReviewImportPart(fileName: item.fileName, accountName: item.account?.name ?? "Onbekende rekening",
                                      preview: $0, hasHistory: try importer.historyCutover(accountId: $0.accountId) != nil,
-                                     seamCenter: Self.seamCenter($0))
+                                     seamCenter: Self.seamCenter($0), autoSkipped: Self.autoSkipped($0))
                 }
             }
             return ReviewPendingImport(fileName: fileName, archive: archive, parts: parts, skipped: archive.skippedItems)
@@ -671,11 +696,15 @@ final class ReviewStore {
             fileName: fileName,
             parts: [ReviewImportPart(fileName: fileName, accountName: name, preview: preview,
                                      hasHistory: try importer.historyCutover(accountId: target) != nil,
-                                     seamCenter: Self.seamCenter(preview))],
+                                     seamCenter: Self.seamCenter(preview), autoSkipped: Self.autoSkipped(preview))],
             recognition: match?.account != nil
                 ? "Herkend als: \(name)"
                 : "\(match?.message ?? "De rekening is niet herkend.") Het bestand gaat naar de gekozen rekening: \(name).",
             recognized: match?.account != nil)
+    }
+
+    private static func autoSkipped(_ preview: ImportPreview) -> Set<Int> {
+        Set(preview.rows.filter(\.isBeforeCutover).map(\.lineNumber))
     }
 
     private static func seamCenter(_ preview: ImportPreview) -> Int? {
@@ -728,14 +757,15 @@ final class ReviewStore {
         if results.count == 1, let only = results.first {
             let n = only.result.transactions.count
             var parts = [n == 1 ? "1 transactie geïmporteerd" : "\(n) transacties geïmporteerd"]
-            if only.result.duplicateCount > 0 { parts.append("\(only.result.duplicateCount) al bekend") }
+            let known = only.result.duplicateCount + only.result.cutoverSkippedCount
+            if known > 0 { parts.append("\(known) al bekend") }
             if only.result.skippedErrorCount > 0 { parts.append("\(only.result.skippedErrorCount) fout overgeslagen") }
-            if only.result.cutoverSkippedCount > 0 { parts.append("\(only.result.cutoverSkippedCount) overgeslagen (stond al in je administratie)") }
             model.toast = parts.joined(separator: " · ")
         } else {
-            let skipped = results.map(\.result.cutoverSkippedCount).reduce(0, +)
-            model.toast = "Geïmporteerd · " + results.map { "\($0.name): \($0.result.transactions.count) nieuw" }.joined(separator: " · ")
-                + (skipped > 0 ? " · \(skipped) overgeslagen (stond al in je administratie)" : "")
+            model.toast = "Geïmporteerd · " + results.map { r in
+                let known = r.result.duplicateCount + r.result.cutoverSkippedCount
+                return "\(r.name): \(r.result.transactions.count) nieuw" + (known > 0 ? ", \(known) al bekend" : "")
+            }.joined(separator: " · ")
         }
         pendingImport = nil
         notice = nil
