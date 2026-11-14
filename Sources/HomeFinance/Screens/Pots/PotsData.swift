@@ -141,6 +141,11 @@ enum PotsFormat {
         return text.hasSuffix(",00") ? String(text.dropLast(3)) : text
     }
 
+    /// "nog te verrekenen: € 25,00 erbij" (positief = gaat de pot uit).
+    static func pending(_ amount: Money) -> String {
+        "nog te verrekenen: \(amount.magnitude.formatted()) \(amount > .zero ? "eraf" : "erbij")"
+    }
+
     static func percent(_ share: Double) -> String {
         let p = share * 100
         return p < 1 && p > 0 ? "<1%" : "\(Int(p.rounded()))%"

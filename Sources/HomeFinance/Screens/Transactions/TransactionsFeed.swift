@@ -77,7 +77,7 @@ private struct TransactionsFeedRow: View {
                 subtitle
             }
             Spacer(minLength: 8)
-            if hovering, !locked, store.selection.count <= 1 {
+            if hovering, !locked, store.selection.count <= 1, item.entry?.isSettlementBooking != true, item.pending?.transferMatch == nil {
                 quickActions.transition(.opacity)
             }
             TransactionsAmountText(amount: item.amount)
@@ -105,7 +105,9 @@ private struct TransactionsFeedRow: View {
     private var avatar: some View {
         ZStack {
             Circle().fill(Color.primary.opacity(0.06))
-            if item.entry?.counterEntryId != nil {
+            if item.entry?.isSettlementBooking == true || item.pending?.transferMatch != nil {
+                Image(systemName: "arrow.triangle.swap").font(.system(size: 13, weight: .semibold))
+            } else if item.entry?.counterEntryId != nil {
                 Image(systemName: "arrow.left.arrow.right").font(.system(size: 12, weight: .semibold))
             } else {
                 Text(String(item.title.first { $0.isLetter || $0.isNumber } ?? "•").uppercased())
@@ -140,7 +142,14 @@ private struct TransactionsFeedRow: View {
             row.settlementId != nil && store.lookups.tag(tag.id)?.settles == true ? "\(tag.name) ✓" : tag.name
         })
         if let month = TransactionsFormat.month(of: row.period) { parts.append("telt in \(Day.monthNamesShort[month - 1])") }
-        if row.reimburse { parts.append(row.savingsTransferId == nil ? "vergoeden uit spaar" : "vergoed uit spaar") }
+        if let direction = row.settlementDirection {
+            if let id = row.savingsTransferId, store.lookups.doneTransferIds.contains(id) {
+                parts.append("verrekend")
+            } else {
+                let pot = row.potName.map { "pot \($0)" } ?? "spaar"
+                parts.append(direction == .fromPot ? "uit \(pot)" : "naar \(pot)")
+            }
+        }
         if row.temporaryLoan { parts.append(row.amount.isNegative ? "terug naar spaar" : "tijdelijk geleend") }
         if let bank = row.bank, bank.amount != row.amount { parts.append("gesplitst") }
         if row.bankTransactionId == nil { parts.append("handinvoer") }
@@ -164,6 +173,25 @@ private struct TransactionsFeedRow: View {
     @ViewBuilder private func suggestionButton(_ p: TransactionsPending) -> some View {
         if locked {
             Label("Jaar afgesloten", systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary)
+        } else if let transferMatch = p.transferMatch {
+            Button {
+                if let transfer = transferMatch.transfer {
+                    store.attachTransfer(model, p, transfer: transfer)
+                } else {
+                    store.selection = [item.id]
+                    store.showDetail = true
+                }
+            } label: {
+                Text(transferMatch.isAmbiguous ? "Kies welke verrekening…"
+                     : (transferMatch.needsMarkDone ? "Afvinken en aanhangen" : "Aanhangen aan verrekening"))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 9).padding(.vertical, 3)
+                    .background(Theme.accent.opacity(0.15), in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("Dit is de overboeking van een verrekening met spaar. Hij wordt niet opnieuw geboekt, maar aan de verrekening gehangen.")
         } else if let match = p.match, p.bookableMatch == nil {
             // Vaste storting herkend, maar er valt nog iets te kiezen: het detail laat de verdeling zien.
             Button {
@@ -249,11 +277,14 @@ private struct TransactionsFeedRow: View {
                 iconMenu("tag", help: "Tag aan of uit") {
                     TransactionsTagMenuItems(store: store, ids: [item.id])
                 }
-                if row.accountKind == .betaal, row.amount.isNegative {
-                    Button { store.toggleReimburse(model, ids: [item.id]) } label: {
-                        TransactionsIconLabel(icon: "arrow.uturn.backward", active: row.reimburse)
+                if row.accountKind == .betaal, !row.amount.isZero {
+                    Menu {
+                        TransactionsSettleMenuItems(store: store, ids: [item.id])
+                    } label: {
+                        TransactionsIconLabel(icon: "arrow.triangle.swap", active: row.reimburse)
                     }
-                    .help(row.reimburse ? "Vergoeden uit spaar staat aan; klik om uit te zetten" : "Vergoeden uit spaar: haal dit bedrag later terug van de spaarrekening")
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                    .help("Verrekenen met spaar… " + TransactionsFormat.settleHelp)
                 }
                 iconMenu("ellipsis", help: "Meer acties") {
                     if row.bankTransactionId != nil {
@@ -372,8 +403,11 @@ struct TransactionsContextMenu: View {
         let chosen = store.items.filter { ids.contains($0.id) }
         let rows = chosen.compactMap(\.entry)
         let news = chosen.compactMap(\.pending)
-        let expenses = rows.filter { $0.accountKind == .betaal && $0.amount.isNegative }
+        let expenses = rows.filter { $0.accountKind == .betaal && !$0.amount.isZero }
         let locked = chosen.contains { store.isLocked($0) }
+        if chosen.contains(where: { $0.entry?.isSettlementBooking == true || $0.pending?.transferMatch != nil }) {
+            Button("Naar Spaaroverboekingen", systemImage: "arrow.triangle.swap") { model.selection = .reimbursements }
+        } else {
         Group {
             if news.contains(where: \.hasSuggestion) {
                 Button(news.count > 1 ? "Boek volgens voorstel (\(news.filter(\.hasSuggestion).count))" : "Boek volgens voorstel",
@@ -388,17 +422,8 @@ struct TransactionsContextMenu: View {
                 Menu("Tag", systemImage: "tag") { TransactionsTagMenuItems(store: store, ids: ids) }
             }
             if !expenses.isEmpty {
-                let allOn = expenses.allSatisfy(\.reimburse)
-                Button(allOn ? "Vergoeden uit spaar uitzetten" : "Vergoeden uit spaar", systemImage: "arrow.uturn.backward") {
-                    store.toggleReimburse(model, ids: ids)
-                }
-                if allOn {
-                    Menu("Vergoeden uit pot", systemImage: "tray.full") {
-                        Button("Nog niet gekozen") { store.setReimbursePot(model, ids: ids, potId: nil) }
-                        ForEach(store.lookups.pots(accountId: nil)) { pot in
-                            Button(pot.name) { store.setReimbursePot(model, ids: ids, potId: pot.id) }
-                        }
-                    }
+                Menu("Verrekenen met spaar…", systemImage: "arrow.triangle.swap") {
+                    TransactionsSettleMenuItems(store: store, ids: ids)
                 }
             }
             if rows.contains(where: { $0.accountKind == .betaal }) {
@@ -439,6 +464,40 @@ struct TransactionsContextMenu: View {
             }
         }
         .disabled(locked)
+        }
+    }
+}
+
+/// Inhoud van "Verrekenen met spaar…": de pot kiezen (uitgave: komt uit pot, bijschrijving: gaat naar pot) of uitzetten.
+struct TransactionsSettleMenuItems: View {
+    @Environment(AppModel.self) private var model
+    let store: TransactionsStore
+    let ids: [TransactionsItemID]
+
+    var body: some View {
+        let rows = store.items.filter { ids.contains($0.id) }.compactMap(\.entry)
+            .filter { $0.accountKind == .betaal && !$0.amount.isZero }
+        let allOut = rows.allSatisfy { $0.amount.isNegative }, allIn = rows.allSatisfy { !$0.amount.isNegative }
+        let current = rows.count == 1 && rows[0].reimburse ? rows[0].potId : nil
+        Section(allOut ? "Komt uit pot" : (allIn ? "Gaat naar pot" : "Verrekenen met pot")) {
+            ForEach(store.lookups.pots(accountId: nil, keeping: current)) { pot in
+                Button {
+                    store.setReimbursePot(model, ids: ids, potId: pot.id)
+                } label: {
+                    if current != nil, current == pot.id { Label(pot.name, systemImage: "checkmark") } else { Text(pot.name) }
+                }
+            }
+        }
+        Section {
+            Button("Pot later kiezen") { store.setReimbursePot(model, ids: ids, potId: nil) }
+            if rows.contains(where: \.reimburse) {
+                Button("Niet meer verrekenen met spaar") {
+                    // Staat het overal aan, dan zet de schakelaar het uit.
+                    if rows.allSatisfy(\.reimburse) { store.toggleReimburse(model, ids: ids) }
+                    else { store.toggleReimburse(model, ids: rows.filter(\.reimburse).map { .entry($0.id) }) }
+                }
+            }
+        }
     }
 }
 

@@ -103,7 +103,10 @@ struct ReviewQueueRow: View {
     /// Het voorstel als één label; oranje alleen als je zelf nog moet kiezen of het bedrag afwijkt.
     @ViewBuilder private func proposal(_ draft: ReviewDraft) -> some View {
         let s = row.suggestion
-        if let match = row.match, !store.isEdited(row) {
+        if let settlement = row.settlement {
+            label(settlement.transfer.map { store.title(of: $0) } ?? "Kies verrekening", attention: true)
+                .help("De overboeking van een verrekening met spaar. Deze boek je niet opnieuw; je hangt hem aan de verrekening.")
+        } else if let match = row.match, !store.isEdited(row) {
             if let distribution = match.distribution {
                 label(match.exactAmount ? distribution.name : "\(distribution.name) · ander bedrag", attention: !match.exactAmount)
                     .help(match.exactAmount ? "Herkend als vaste storting."

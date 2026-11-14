@@ -52,7 +52,8 @@ private struct TransactionsSingleDetail: View {
     private var isManual: Bool { row != nil && row?.bankTransactionId == nil }
     private var inTransfer: Bool { row?.savingsTransferId != nil }
     private var ids: [TransactionsItemID] { [item.id] }
-    private var isExpense: Bool { store.kind == .betaal && item.amount.isNegative }
+    private var canSettle: Bool { store.kind == .betaal && !item.amount.isZero }
+    private var isSettlementBooking: Bool { row?.isSettlementBooking == true }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -63,18 +64,25 @@ private struct TransactionsSingleDetail: View {
                         Label("Het jaar \(String(item.day.year)) is afgesloten: bekijken kan, wijzigen niet.", systemImage: "lock.fill")
                             .font(.callout).foregroundStyle(.secondary)
                     }
-                    if let row, let forecast = store.forecast { forecastBox(forecast, row: row) }
-                    Group {
-                        actionRow
-                        if let p = pending, let match = store.matchChoice {
-                            TransactionsDistributionSection(store: store, pending: p, match: match)
-                        } else {
-                            assignment
+                    if isSettlementBooking {
+                        settlementBookingBox
+                    } else if let p = pending, let transferMatch = p.transferMatch {
+                        transferSection(p, transferMatch)
+                    } else {
+                        if let row, let forecast = store.forecast { forecastBox(forecast, row: row) }
+                        Group {
+                            actionRow
+                            if let p = pending, let match = store.matchChoice {
+                                TransactionsDistributionSection(store: store, pending: p, match: match)
+                            } else {
+                                assignment
+                                if canSettle { settleRow }
+                            }
+                            if store.kind == .betaal { periodRow }
+                            more
                         }
-                        if store.kind == .betaal { periodRow }
-                        more
+                        .disabled(locked)
                     }
-                    .disabled(locked)
                 }
                 .padding(18)
             }
@@ -138,10 +146,8 @@ private struct TransactionsSingleDetail: View {
                     TransactionsAssignMenuItems(store: store, ids: ids)
                 }
                 actionMenu("tag", "Tag aan of uit (T)") { TransactionsTagMenuItems(store: store, ids: ids) }
-                if isExpense {
-                    action("arrow.uturn.backward", row.reimburse ? "Vergoeden uit spaar staat aan (V)" : "Vergoeden uit spaar (V)", active: row.reimburse, disabled: inTransfer) {
-                        store.toggleReimburse(model, ids: ids)
-                    }
+                if canSettle {
+                    actionMenu("arrow.triangle.swap", "Verrekenen met spaar… (V)") { TransactionsSettleMenuItems(store: store, ids: ids) }
                 }
                 if row.accountKind == .betaal {
                     action("hourglass", (row.temporaryLoan ? "Tijdelijk geleend van spaar staat aan. " : "Tijdelijk geleend van spaar. ") + TransactionsFormat.loanHelp, active: row.temporaryLoan) {
@@ -210,6 +216,69 @@ private struct TransactionsSingleDetail: View {
                 }
             }
         }
+    }
+
+    // MARK: Verrekenen met spaar
+
+    private var settleRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle("Verrekenen met spaar", isOn: reimburseBinding)
+                .disabled(inTransfer)
+                .help(TransactionsFormat.settleHelp + " (V)")
+            if reimburseBinding.wrappedValue {
+                HStack(spacing: 8) {
+                    Text(item.amount.isNegative ? "Komt uit pot" : "Gaat naar pot").font(.callout).foregroundStyle(.secondary)
+                    TransactionsPotPicker(pots: store.lookups.pots(accountId: nil, keeping: reimbursePotBinding.wrappedValue),
+                                          noneTitle: "Nog niet gekozen", selection: reimbursePotBinding)
+                        .disabled(inTransfer)
+                }
+            }
+            if inTransfer {
+                Text(transferText).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Een boeking die een verrekening zelf heeft gemaakt: niets te bewerken hier.
+    private var settlementBookingBox: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Hoort bij een verrekening; ongedaan maken doe je bij Spaaroverboekingen", systemImage: "arrow.triangle.swap")
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+            if let pot = row?.potName {
+                Text("Pot \(pot)").font(.callout).foregroundStyle(.secondary)
+            }
+            Button("Naar Spaaroverboekingen") { model.selection = .reimbursements }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.background, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// Een bankregel die de overboeking van een verrekening met spaar is: aanhangen, niet boeken.
+    private func transferSection(_ p: TransactionsPending, _ match: SavingsTransferMatch) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Verrekening spaar").font(.headline)
+            Text(match.isAmbiguous
+                 ? "Dit bedrag past bij meer verrekeningen. Kies bij welke deze overboeking hoort."
+                 : "Dit is de overboeking van een verrekening met spaar. Hij wordt niet opnieuw geboekt, maar aan de verrekening gehangen.")
+                .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(match.transfers) { transfer in
+                Button {
+                    store.attachTransfer(model, p, transfer: transfer)
+                } label: {
+                    Text("\(transfer.done ? "Aanhangen" : "Afvinken en aanhangen"): verrekening van \(transfer.day.short(withYear: true)), \(transfer.amount.magnitude.formatted())")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .help(transfer.done ? "Hangt deze bankregel aan de boekingen van de afgevinkte verrekening"
+                                    : "Vinkt de verrekening af op de dag van deze bankregel (dan wordt hij geboekt) en hangt de bankregel eraan")
+            }
+            Button("Naar Spaaroverboekingen") { model.selection = .reimbursements }
+                .buttonStyle(.link).font(.caption)
+        }
+        .disabled(locked)
     }
 
     // MARK: Telt mee in
@@ -282,7 +351,6 @@ private struct TransactionsSingleDetail: View {
         let tagCount = pending != nil ? store.draft.tagIds.count : (row?.tags.count ?? 0)
         if tagCount > 0 { parts.append(tagCount == 1 ? "1 tag" : "\(tagCount) tags") }
         if !(row?.note ?? store.draft.note).isEmpty { parts.append("notitie") }
-        if row?.reimburse ?? store.draft.reimburse { parts.append("vergoeden") }
         if row?.temporaryLoan ?? store.draft.temporaryLoan { parts.append("tijdelijk geleend") }
         if store.extra.parts.count > 1 { parts.append("gesplitst") }
         return parts.joined(separator: " · ")
@@ -311,24 +379,6 @@ private struct TransactionsSingleDetail: View {
                     TextField("Notitie", text: $store.draft.note, axis: .vertical)
                         .lineLimit(1...4)
                         .textFieldStyle(.roundedBorder)
-                }
-                if isExpense {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Toggle("Vergoeden uit spaar", isOn: reimburseBinding)
-                            .disabled(inTransfer)
-                            .help("Je betaalt dit van de betaalrekening en haalt het bedrag later terug van de spaarrekening. Het komt op de lijst Spaaroverboekingen.")
-                        if reimburseBinding.wrappedValue {
-                            HStack(spacing: 8) {
-                                Text("Uit pot").font(.callout).foregroundStyle(.secondary)
-                                TransactionsPotPicker(pots: store.lookups.pots(accountId: nil, keeping: reimbursePotBinding.wrappedValue),
-                                                      noneTitle: "Nog niet gekozen", selection: reimbursePotBinding)
-                            }
-                        }
-                        if inTransfer {
-                            Text(transferText).font(.caption).foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
                 }
                 if store.kind == .betaal {
                     Toggle("Tijdelijk geleend van spaar", isOn: loanBinding)
@@ -470,7 +520,10 @@ private struct TransactionsSingleDetail: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            if let p = pending {
+            if isSettlementBooking || pending?.transferMatch != nil {
+                Text("Verrekeningen beheer je bij Spaaroverboekingen").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+            } else if let p = pending {
                 Button("Sla over") { store.skip(model, ids: ids) }
                     .help("Niet boeken, bv. omdat je hem al met de hand hebt ingevoerd")
                 Spacer()
@@ -552,11 +605,11 @@ private struct TransactionsMultiDetail: View {
                         Label("Tag", systemImage: "tag")
                     }
                     .help("Tag aan of uit voor alle gekozen boekingen (T)")
-                    if rows.contains(where: { $0.accountKind == .betaal && $0.amount.isNegative }) {
+                    if rows.contains(where: { $0.accountKind == .betaal && !$0.amount.isZero }) {
                         Button { store.toggleReimburse(model, ids: ids) } label: {
-                            Label("Vergoeden uit spaar aan/uit", systemImage: "arrow.uturn.backward").frame(maxWidth: .infinity, alignment: .leading)
+                            Label("Verrekenen met spaar aan/uit", systemImage: "arrow.triangle.swap").frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .help("Zet vergoeden uit spaar aan voor alle gekozen uitgaven; staat het overal al aan, dan gaat het uit (V)")
+                        .help("Zet verrekenen met spaar aan voor alle gekozen boekingen; staat het overal al aan, dan gaat het uit (V). De pot kies je per boeking of via rechtsklik.")
                     }
                     if rows.contains(where: { $0.accountKind == .betaal }) {
                         Button { store.toggleTemporaryLoan(model, ids: ids) } label: {

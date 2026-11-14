@@ -5,6 +5,7 @@ import HFInsight
 
 /// Rechterpaneel: één pot met saldografiek, mutaties en acties.
 struct PotsDetailPanel: View {
+    @Environment(AppModel.self) private var model
     let pot: PotSummary
     let accountName: String
     let history: [PotHistoryRow]
@@ -90,6 +91,15 @@ struct PotsDetailPanel: View {
                     .foregroundStyle(pot.balance.isNegative ? Theme.warning : Color.primary)
                     .lineLimit(1).minimumScaleFactor(0.6)
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
+            }
+
+            if !pot.pendingSettlement.isZero {
+                HStack(spacing: 10) {
+                    Text(PotsFormat.pending(pot.pendingSettlement)).font(.callout).foregroundStyle(.secondary)
+                    Button("Naar verrekenen") { model.selection = .reimbursements }
+                        .buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout)
+                        .help("Open Verrekenen met spaar om deze boekingen met de pot te verrekenen.")
+                }
             }
 
             HStack(spacing: 0) {

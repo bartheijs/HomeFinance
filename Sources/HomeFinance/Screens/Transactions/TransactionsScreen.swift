@@ -39,6 +39,9 @@ struct TransactionsScreen: View {
                     }
                     if !store.pendingAll.isEmpty { newBanner }
                     if store.kind == .betaal, store.loanOutstanding > .zero { loanBanner }
+                    if store.kind == .betaal, let open = store.openReimbursements, !open.entries.isEmpty {
+                        reimbursementBanner(open)
+                    }
                     if store.kind == .betaal {
                         ForEach(store.settlements) { settlement in settlementBanner(settlement) }
                     }
@@ -169,6 +172,27 @@ struct TransactionsScreen: View {
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 9))
         .help(TransactionsFormat.loanHelp)
+    }
+
+    /// Eén rustige regel zolang er boekingen zijn die nog met spaar verrekend moeten worden.
+    private func reimbursementBanner(_ open: OpenReimbursements) -> some View {
+        let direction: String = switch open.direction {
+        case .fromSavings: "\(open.transferAmount.formatted()) van spaar naar betaal"
+        case .toSavings: "\(open.transferAmount.formatted()) van betaal naar spaar"
+        case .none: "tussen potten"
+        }
+        return HStack(spacing: 10) {
+            Image(systemName: "arrow.triangle.swap").foregroundStyle(.secondary)
+            Text("Te verrekenen met spaar: \(direction) · \(TransactionsFormat.entries(open.entries.count))")
+            Button("Naar Spaaroverboekingen") { model.selection = .reimbursements }
+                .buttonStyle(.link)
+                .help("Daar maak je het saldo in één keer over en vink je de verrekening af; dan wordt alles geboekt")
+            Spacer(minLength: 0)
+        }
+        .font(.callout)
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 9))
+        .help(TransactionsFormat.settleHelp)
     }
 
     /// Eén rustige regel per tag waarvan nog iets terug te storten is.

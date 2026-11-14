@@ -263,7 +263,7 @@ struct ReviewEmptyView: View {
                 .background(RoundedRectangle(cornerRadius: 20)
                     .strokeBorder(Theme.accent.opacity(0.45), style: StrokeStyle(lineWidth: 1.5, dash: [8, 6])))
 
-                if !store.pairs.isEmpty { ReviewBanner().frame(maxWidth: 640) }
+                if !store.pairs.isEmpty || store.notice != nil { ReviewBanner().frame(maxWidth: 640) }
 
                 if let batch = store.lastBatch, let check = store.check {
                     VStack(spacing: 4) {

@@ -19,6 +19,9 @@ struct TransactionsPending: Equatable {
     let suggestion: Suggestion
     /// De vaste storting waar deze transactie bij past, als die herkend is (gaat vóór de regels).
     var match: DistributionMatch? = nil
+    /// De verrekening met spaar waarvan dit de bankregel is (gaat vóór alles). Zo'n transactie wordt niet
+    /// geboekt maar aan de verrekening gehangen.
+    var transferMatch: SavingsTransferMatch? = nil
 
     var id: Int64 { transaction.id ?? 0 }
     /// Herkende vaste storting waarvan de regels precies het bankbedrag zijn: zo te boeken.
@@ -29,10 +32,12 @@ struct TransactionsPending: Equatable {
     }
     /// Het voorstel is bruikbaar zonder verder te kiezen.
     var hasSuggestion: Bool {
-        match == nil ? suggestion.confidence != .geen && suggestion.warnings.isEmpty : bookableMatch != nil
+        if transferMatch != nil { return false }
+        return match == nil ? suggestion.confidence != .geen && suggestion.warnings.isEmpty : bookableMatch != nil
     }
     var isCertain: Bool {
-        match == nil ? suggestion.confidence == .hoog && suggestion.warnings.isEmpty : bookableMatch != nil
+        if transferMatch != nil { return false }
+        return match == nil ? suggestion.confidence == .hoog && suggestion.warnings.isEmpty : bookableMatch != nil
     }
     /// De regels om mee te boeken volgens het voorstel (nagekeken, want de gebruiker klikt zelf).
     func suggestedAllocations(kind: AccountKind) -> [Allocation] {
@@ -63,6 +68,7 @@ struct TransactionsFeedItem: Identifiable, Equatable {
     var day: Day { entry?.day ?? pending?.transaction.day ?? Day.today() }
     var amount: Money { entry?.amount ?? pending?.transaction.amount ?? .zero }
     var title: String {
+        if entry?.isSettlementBooking == true || pending?.transferMatch != nil { return "Verrekening spaar" }
         let text = entry?.label ?? pending?.match?.distribution?.name ?? pending?.suggestion.label ?? ""
         return text.isEmpty ? "Zonder omschrijving" : text
     }
@@ -150,6 +156,8 @@ struct TransactionsLookups: Equatable {
     var closedYears: Set<Int> = []
     var pots: [Pot] = []
     var tags: [HFCore.Tag] = []
+    /// Verrekeningen met spaar die al zijn afgevinkt (en dus geboekt).
+    var doneTransferIds: Set<Int64> = []
 
     func account(_ id: Int64?) -> AccountOverview? { accounts.first { $0.id == id } }
     func items(year: Int) -> [BudgetItem] { itemsByYear[year] ?? [] }
@@ -183,6 +191,7 @@ struct TransactionsLookups: Equatable {
         }
         l.pots = try Pot.order(Column("accountId"), Column("sortOrder"), Column("name")).fetchAll(db)
         l.tags = try HFCore.Tag.order(Column("sortOrder"), Column("name")).fetchAll(db)
+        l.doneTransferIds = Set(try SavingsTransfer.filter(Column("done") == true).fetchAll(db).compactMap(\.id))
         return l
     }
 }
@@ -197,7 +206,7 @@ struct TransactionsDraft: Equatable {
     /// Bedrag zonder teken; nil zolang de invoer niet klopt.
     var magnitude: Money? = nil
     var itemId: Int64?
-    /// Spaarrekening: de pot. Betaalrekening: de pot die vergoedt.
+    /// Spaarrekening: de pot. Betaalrekening: de pot waarmee verrekend wordt (uitgave: eruit, bijschrijving: erin).
     var potId: Int64?
     var reimburse = false
     var tagIds: Set<Int64> = []
@@ -237,7 +246,7 @@ struct TransactionsDraft: Equatable {
         switch kind {
         case .betaal:
             itemId = s.budgetItemId
-            reimburse = s.reimburse && t.amount.isNegative
+            reimburse = s.reimburse && !t.amount.isZero
             potId = reimburse ? s.potId : nil
         case .spaar:
             potId = s.potId
@@ -257,7 +266,7 @@ struct TransactionsDraft: Equatable {
 
     /// De boekingsregel voor een banktransactie met deze keuzes.
     func allocation(amount: Money, kind: AccountKind, ruleId: Int64? = nil, confidence: Confidence? = nil) -> Allocation {
-        let wantsReimburse = kind == .betaal && reimburse && amount.isNegative
+        let wantsReimburse = kind == .betaal && reimburse && !amount.isZero
         return Allocation(amount: amount, label: label.trimmingCharacters(in: .whitespaces),
                           budgetItemId: kind == .betaal ? itemId : nil,
                           potId: kind == .spaar ? potId : (wantsReimburse ? potId : nil),
@@ -346,6 +355,8 @@ final class TransactionsStore {
     /// Tags die verrekend worden en waar nog iets van openstaat.
     private(set) var settlements: [TagSettlementSummary] = []
     var settleTarget: TransactionsSettleTarget?
+    /// Gemarkeerde boekingen die nog met spaar verrekend moeten worden, gesaldeerd.
+    private(set) var openReimbursements: HFInsight.OpenReimbursements?
 
     var selection = Set<TransactionsItemID>()
     var showDetail = false
@@ -399,7 +410,10 @@ final class TransactionsStore {
         let limit = key == loadedKey ? max(Self.pageSize, entries.count) : Self.pageSize
         loadedKey = key
 
+        attachSettlements(model, accountId: accountId)
         pendingAll = model.read([]) { db in
+            // Volgorde van herkennen: verrekeningen met spaar, vaste stortingen, regels.
+            let transfers = try SavingsTransferService.recognizeAll(db, accountId: accountId)
             let suggestions = try RuleEngine.suggestAll(db, accountId: accountId)
             // Vaste stortingen worden vóór de regels herkend.
             let matches = try DistributionService.recognizeAll(db, accountId: accountId)
@@ -407,11 +421,14 @@ final class TransactionsStore {
             for item in try Insight.reviewQueue(db, accountId: accountId) {
                 guard let id = item.transaction.id else { continue }
                 let suggestion = try suggestions[id] ?? RuleEngine.suggest(for: item.transaction, db)
-                list.append(TransactionsPending(transaction: item.transaction, suggestion: suggestion, match: matches[id]))
+                let transfer = transfers[id]
+                list.append(TransactionsPending(transaction: item.transaction, suggestion: suggestion,
+                                                match: transfer == nil ? matches[id] : nil, transferMatch: transfer))
             }
             return list
         }
         loanOutstanding = model.read(Money.zero) { try Insight.temporaryLoanOutstanding($0, on: model.today) }
+        openReimbursements = model.read(nil as HFInsight.OpenReimbursements?) { try Insight.openReimbursements($0) }
         let kind = kind
         labels = model.read(labels) { try Insight.allLabels($0, accountKind: kind) }
         settlements = model.read([]) {
@@ -435,6 +452,22 @@ final class TransactionsStore {
         loadSummary(model, accountId: accountId)
         rebuild(model)
         hasLoaded = true
+    }
+
+    /// Hangt bankregels van al afgevinkte verrekeningen met spaar automatisch aan (alleen eenduidige).
+    /// Eerst alleen lezen; er wordt pas geschreven als er echt iets aan te hangen is.
+    private func attachSettlements(_ model: AppModel, accountId: Int64) {
+        let needed = model.read(false) { db in
+            try SavingsTransferService.recognizeAll(db, accountId: accountId).values
+                .contains { $0.transfer != nil && !$0.needsMarkDone }
+        }
+        guard needed else { return }
+        var count = 0
+        let ok = model.perform { try model.db.write { count = try SavingsTransferService.attachAll($0, accountId: accountId) } }
+        if ok, count > 0 {
+            model.toast = count == 1 ? "1 bankregel aan een verrekening met spaar gehangen"
+                                     : "\(count) bankregels aan verrekeningen met spaar gehangen"
+        }
     }
 
     func loadMore(_ model: AppModel) {
@@ -513,7 +546,7 @@ final class TransactionsStore {
             draftFor = item?.id
             resetDraft()
         } else if let row = item?.entry {
-            // Keuzes (post, tags, vergoeden) zijn al bewaard; alleen getypte tekst blijft als concept staan.
+            // Keuzes (post, tags, verrekenen) zijn al bewaard; alleen getypte tekst blijft als concept staan.
             let fresh = TransactionsDraft(row: row)
             if draft == original {
                 if fresh != original { draft = fresh; original = fresh; draftVersion += 1 }
@@ -759,26 +792,44 @@ final class TransactionsStore {
         run(model, { "Tags bijgewerkt" }) { try EntryService.setTags($0, entryId: row.id, tagIds: tagIds.sorted()) }
     }
 
-    /// Vergoeden uit spaar aan of uit (uit als het bij alle gekozen uitgaven al aan staat).
+    /// Verrekenen met spaar aan of uit (uit als het bij alle gekozen boekingen al aan staat).
+    /// Een uitgave komt uit de pot, een bijschrijving gaat naar de pot.
     func toggleReimburse(_ model: AppModel, ids: [TransactionsItemID]) {
-        let rows = entries(in: ids).filter { $0.accountKind == .betaal && $0.amount.isNegative }
+        let rows = entries(in: ids).filter { $0.accountKind == .betaal && !$0.amount.isZero && !$0.isSettlementBooking }
         guard !rows.isEmpty else {
-            model.toast = pendings(in: ids).isEmpty ? "Vergoeden uit spaar kan alleen bij een uitgave op de betaalrekening"
-                                                    : "Boek de transactie eerst; daarna kun je vergoeden aanzetten"
+            model.toast = pendings(in: ids).isEmpty ? "Verrekenen met spaar kan alleen bij een boeking op de betaalrekening"
+                                                    : "Open de transactie en zet ‘Verrekenen met spaar’ aan; het gaat mee bij het boeken"
             return
         }
         let on = !rows.allSatisfy(\.reimburse)
-        run(model, { on ? "Vergoeden uit spaar aangezet" : "Vergoeden uit spaar uitgezet" }) { db in
+        run(model, { on ? "Verrekenen met spaar aangezet. Kies nog de pot." : "Verrekenen met spaar uitgezet" }) { db in
             for row in rows { try EntryService.setReimburse(db, entryId: row.id, on, potId: on ? row.potId : nil) }
         }
     }
 
+    /// Zet verrekenen met spaar aan met deze pot (nil = pot later kiezen).
     func setReimbursePot(_ model: AppModel, ids: [TransactionsItemID], potId: Int64?) {
-        let rows = entries(in: ids).filter { $0.accountKind == .betaal && $0.amount.isNegative }
+        let rows = entries(in: ids).filter { $0.accountKind == .betaal && !$0.amount.isZero && !$0.isSettlementBooking }
         guard !rows.isEmpty else { return }
         let name = lookups.pot(potId)?.name
-        run(model, { name.map { "Vergoeden uit pot ‘\($0)’" } ?? "Vergoeden uit spaar, pot nog niet gekozen" }) { db in
+        let allOut = rows.allSatisfy { $0.amount.isNegative }, allIn = rows.allSatisfy { !$0.amount.isNegative }
+        run(model, {
+            guard let name else { return "Verrekenen met spaar aangezet; pot nog niet gekozen" }
+            if allOut { return "Komt uit pot ‘\(name)’" }
+            if allIn { return "Gaat naar pot ‘\(name)’" }
+            return "Verrekenen met pot ‘\(name)’"
+        }) { db in
             for row in rows { try EntryService.setReimburse(db, entryId: row.id, true, potId: potId) }
+        }
+    }
+
+    /// Hangt de bankregel aan een verrekening met spaar; een nog niet afgevinkte verrekening wordt eerst
+    /// afgevinkt op de dag van de bankregel.
+    func attachTransfer(_ model: AppModel, _ p: TransactionsPending, transfer: SavingsTransfer) {
+        guard let transferId = transfer.id else { return }
+        run(model, { transfer.done ? "Bankregel aan de verrekening gehangen" : "Verrekening afgevinkt en bankregel aangehangen" }) { db in
+            if !transfer.done { try SavingsTransferService.markDone(db, savingsTransferId: transferId, on: p.transaction.day) }
+            try SavingsTransferService.attach(db, savingsTransferId: transferId, bankTransactionId: p.id)
         }
     }
 
@@ -826,7 +877,7 @@ final class TransactionsStore {
         if row.bankTransactionId == nil, let amount = d.amount {
             e.day = d.day
             e.amount = amount
-            if !amount.isNegative, row.accountKind == .betaal { e.reimburse = false; e.potId = nil }
+            if amount.isZero, row.accountKind == .betaal { e.reimburse = false; e.potId = nil }
         }
         try EntryService.update(db, entryId: row.id, e)
     }
@@ -866,7 +917,7 @@ final class TransactionsStore {
     @discardableResult
     func create(_ model: AppModel, accountId: Int64, kind: AccountKind, draft d: TransactionsDraft) -> Bool {
         guard let amount = d.amount else { return false }
-        let reimburse = kind == .betaal && d.reimburse && amount.isNegative
+        let reimburse = kind == .betaal && d.reimburse && !amount.isZero
         let entryDraft = EntryDraft(
             accountId: accountId, day: d.day, amount: amount,
             label: d.label.trimmingCharacters(in: .whitespaces),
@@ -1052,6 +1103,7 @@ enum TransactionsFormat {
 
     static let loanHelp = "Geld dat je even van spaar haalt en later terugboekt. Het telt niet mee als besteedbaar zolang het uitstaat. Markeer ook de terugboeking."
 
+    static let settleHelp = "Bij een uitgave komt het bedrag uit de pot op de spaarrekening, bij een bijschrijving gaat het naar de pot. Het saldo maak je later in één keer over bij Spaaroverboekingen."
     static let periodHelp = "Voor iets dat eind van de maand is betaald maar bij de volgende maand hoort. Het saldo van je rekening verandert er niet door."
 
     /// "yyyy-MM" voor de maand vóór (−1), van (0) of na (+1) de datum; nil voor de maand van de datum zelf.

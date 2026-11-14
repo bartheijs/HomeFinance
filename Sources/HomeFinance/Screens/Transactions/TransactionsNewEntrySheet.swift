@@ -63,14 +63,15 @@ struct TransactionsNewEntrySheet: View {
                     TextField("Notitie", text: $draft.note, prompt: Text("Optioneel"), axis: .vertical)
                         .lineLimit(1...4)
                 }
-                if kind == .betaal, !draft.isIncome {
+                if kind == .betaal {
                     Section {
                         Toggle(isOn: $draft.reimburse) {
-                            Text("Vergoeden uit spaar")
-                            Text("Je haalt dit bedrag later terug van de spaarrekening")
+                            Text("Verrekenen met spaar")
+                            Text(draft.isIncome ? "Dit bedrag gaat later door naar de spaarrekening" : "Dit bedrag komt later terug van de spaarrekening")
                         }
+                        .help(TransactionsFormat.settleHelp)
                         if draft.reimburse {
-                            LabeledContent("Uit pot") {
+                            LabeledContent(draft.isIncome ? "Gaat naar pot" : "Komt uit pot") {
                                 TransactionsPotPicker(pots: store.lookups.pots(accountId: nil),
                                                       noneTitle: "Nog niet gekozen", selection: $draft.potId)
                             }
@@ -104,9 +105,6 @@ struct TransactionsNewEntrySheet: View {
         .onChange(of: accountId) { _, _ in
             // Post en pot horen bij de soort rekening.
             draft.itemId = nil; draft.potId = nil; draft.reimburse = false
-        }
-        .onChange(of: draft.isIncome) { _, income in
-            if income { draft.reimburse = false; if kind == .betaal { draft.potId = nil } }
         }
         .onChange(of: draft.reimburse) { _, on in
             if !on, kind == .betaal { draft.potId = nil }

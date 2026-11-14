@@ -265,6 +265,11 @@ struct PotsRowView: View {
                         Text(pot.name).lineLimit(1).truncationMode(.tail)
                         if pot.archived { Text("gearchiveerd").font(.callout).foregroundStyle(.tertiary) }
                     }
+                    if !pot.pendingSettlement.isZero {
+                        Text(PotsFormat.pending(pot.pendingSettlement))
+                            .font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                            .help("Er staan boekingen op de betaalrekening open die nog met deze pot verrekend moeten worden. Dat doe je bij Verrekenen met spaar.")
+                    }
                     if let recovery = pot.recovery {
                         Text(PotsRecoveryText.line(recovery))
                             .font(.callout)

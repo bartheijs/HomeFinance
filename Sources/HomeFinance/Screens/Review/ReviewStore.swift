@@ -24,9 +24,12 @@ struct ReviewSplitLine: Identifiable, Equatable {
     var target: ReviewTarget = .none
     /// Het verschil tussen het gestorte bedrag en de vaste storting; de gebruiker kiest waar het heen gaat.
     var isDifference = false
+    /// Verrekenen met spaar voor deze regel (alleen betaalrekening): de pot, of nil voor "Nee".
+    var settlePotId: Int64?
 
     static func == (l: Self, r: Self) -> Bool {
         l.amount == r.amount && l.label == r.label && l.target == r.target && l.isDifference == r.isDifference
+            && l.settlePotId == r.settlePotId
     }
 }
 
@@ -89,6 +92,8 @@ struct ReviewRow: Identifiable, Equatable {
     let group: ReviewGroup
     /// Herkend als (een kant van) een vaste storting; gaat vóór de regels.
     let match: DistributionMatch?
+    /// De bankregel van een verrekening met spaar; gaat vóór vaste stortingen en regels.
+    let settlement: SavingsTransferMatch?
     /// Deze transactie is één kant van een overboeking tussen eigen rekeningen.
     let pair: TransferPair?
 
@@ -237,7 +242,28 @@ final class ReviewStore {
 
     // MARK: Laden
 
+    /// Bankregels van al afgevinkte verrekeningen met spaar worden aan hun boekingen gehangen en verdwijnen
+    /// uit de wachtrij. Schrijft alleen als er echt iets te doen is.
+    private func attachSettlements(_ model: AppModel) {
+        let accountIds: [Int64] = model.read([]) { db in
+            try Int64.fetchAll(db, sql: "SELECT id FROM account WHERE archived = 0").filter { id in
+                try SavingsTransferService.recognizeAll(db, accountId: id).values.contains { $0.transfer?.done == true }
+            }
+        }
+        guard !accountIds.isEmpty else { return }
+        var attached = 0
+        model.perform {
+            try model.db.write { db in
+                for id in accountIds { attached += try SavingsTransferService.attachAll(db, accountId: id) }
+            }
+        }
+        guard attached > 0 else { return }
+        let text = attached == 1 ? "1 verrekening herkend en afgehandeld" : "\(attached) verrekeningen herkend en afgehandeld"
+        notice = ReviewNotice(text: text)
+    }
+
     func load(_ model: AppModel) {
+        attachSettlements(model)
         model.read(()) { db in
             accounts = try Account.fetchAll(db, sql: "SELECT * FROM account WHERE archived = 0 ORDER BY sortOrder, id")
             if accountId == nil || !accounts.contains(where: { $0.id == accountId }) { accountId = accounts.first?.id }
@@ -262,23 +288,33 @@ final class ReviewStore {
                 return
             }
             let suggestions = try RuleEngine.suggestAll(db, accountId: accountId)
+            // Volgorde van herkennen: verrekeningen met spaar, dan vaste stortingen, dan regels.
+            let settlements = try SavingsTransferService.recognizeAll(db, accountId: accountId)
             let matches = try DistributionService.recognizeAll(db, accountId: accountId)
             labels = try Insight.allLabels(db, accountKind: account.kind)
-            pairs = try TransferService.findTransferPairs(db).filter {
-                ($0.from.accountId == accountId || $0.to.accountId == accountId)
-                    && ($0.from.status == .nieuw || $0.to.status == .nieuw)
+            // Wat als verrekening of vaste storting herkend is, telt niet mee als losse overboeking.
+            pairs = try TransferService.findTransferPairs(db).filter { pair in
+                guard pair.from.accountId == accountId || pair.to.accountId == accountId,
+                      pair.from.status == .nieuw || pair.to.status == .nieuw else { return false }
+                for side in [pair.from, pair.to] where side.status == .nieuw {
+                    if try SavingsTransferService.recognize(db, bankTransaction: side) != nil { return false }
+                    if try DistributionService.recognize(db, bankTransaction: side) != nil { return false }
+                }
+                return true
             }
             rows = queue.filter { $0.transaction.accountId == accountId }.map { item in
                 let tx = item.transaction
                 let suggestion = suggestions[item.id] ?? Suggestion(bankTransactionId: item.id)
-                let match = chosenMatches[item.id] ?? matches[item.id]
+                let settlement = settlements[item.id]
+                let match = settlement == nil ? chosenMatches[item.id] ?? matches[item.id] : nil
                 let pair = pairs.first { $0.from.id == tx.id || $0.to.id == tx.id }
                 return ReviewRow(
                     item: item, suggestion: suggestion,
                     cleanLabel: LabelCleaner.cleanLabel(counterparty: tx.counterpartyName, description: tx.descriptionText),
-                    group: match.map { $0.distribution != nil && $0.exactAmount ? .certain : .doubt }
+                    group: settlement != nil ? .doubt
+                        : match.map { $0.distribution != nil && $0.exactAmount ? .certain : .doubt }
                         ?? Self.group(suggestion, hasProposal: pair != nil),
-                    match: match, pair: pair)
+                    match: match, settlement: settlement, pair: pair)
             }
             .sorted { ($0.group.rawValue, $0.tx.day, $0.id) < ($1.group.rawValue, $1.tx.day, $1.id) }
 
@@ -341,7 +377,7 @@ final class ReviewStore {
         switch kind {
         case .betaal:
             if let id = s.budgetItemId, itemsById[id] != nil { draft.target = .item(id) }
-            draft.reimburse = s.reimburse && row.tx.amount.isNegative
+            draft.reimburse = s.reimburse
             draft.reimbursePotId = draft.reimburse ? s.potId : nil
             draft.temporaryLoan = looksLikeLoanReturn(row)
         case .spaar:
@@ -416,13 +452,14 @@ final class ReviewStore {
             return draft.lines.map { line in
                 let t = ids(line.target)
                 let label = line.label.trimmingCharacters(in: .whitespaces)
+                let settle = kind == .betaal ? line.settlePotId : nil
                 return Allocation(amount: line.amount ?? .zero, label: label.isEmpty ? draft.label : label,
-                                  budgetItemId: t.item, potId: t.pot, tagIds: tagIds, note: note, reviewed: reviewed,
-                                  period: draft.period)
+                                  budgetItemId: t.item, potId: settle ?? t.pot, reimburse: settle != nil,
+                                  tagIds: tagIds, note: note, reviewed: reviewed, period: draft.period)
             }
         }
         let t = ids(draft.target)
-        let reimburse = kind == .betaal && row.tx.amount.isNegative && draft.reimburse
+        let reimburse = kind == .betaal && draft.reimburse
         let sameTarget = s.ruleId != nil && draft.target == defaults[row.id]?.target
         let label = draft.label.trimmingCharacters(in: .whitespaces)
         return [Allocation(amount: row.tx.amount, label: label.isEmpty ? row.cleanLabel : label,
@@ -442,7 +479,7 @@ final class ReviewStore {
         case .item(let id): itemLabel = itemsById[id]?.label
         case .pot(let id): potId = id
         }
-        let reimburse = kind == .betaal && row.tx.amount.isNegative && draft.reimburse
+        let reimburse = kind == .betaal && draft.reimburse
         if reimburse { potId = draft.reimbursePotId }
         let label = draft.label.trimmingCharacters(in: .whitespaces)
         return Correction(bankTransaction: row.tx, itemLabel: itemLabel, potId: potId,
@@ -496,6 +533,11 @@ final class ReviewStore {
     /// Boekt de geselecteerde transactie met het voorstel zoals het er staat, en leert van de keuze.
     func bookCurrent(_ model: AppModel) {
         guard let row = singleRow else { return }
+        if let settlement = row.settlement {
+            if let transfer = settlement.transfer { attachSettlement(transfer, to: row, model) }
+            else { model.errorMessage = "Er passen meer verrekeningen bij deze overboeking. Kies rechts welke het is." }
+            return
+        }
         if let problem = problem(for: row) { model.errorMessage = problem; return }
         let draft = draft(for: row)
         let allocations = allocations(for: row, reviewed: true)
@@ -511,6 +553,7 @@ final class ReviewStore {
         var text = "Geboekt: \(allocations.count == 1 ? allocations[0].label : "\(row.cleanLabel) in \(allocations.count) regels")"
         let changedRules = learned.flatMap { $0.outcome == .unchanged ? nil : $0 }
         if let changedRules { text += " · \(changedRules.message)" }
+        if allocations.contains(where: \.reimburse) { text += " · \(settlementBalanceText(model))" }
         announce(model, text, unbook: [row.id], learned: changedRules)
         finish(model, handled: [row.id])
     }
@@ -535,6 +578,10 @@ final class ReviewStore {
 
     private func book(_ chosen: [ReviewRow], _ model: AppModel, reviewedIfEdited: Bool) {
         guard !chosen.isEmpty else { return }
+        guard !chosen.contains(where: { $0.settlement != nil }) else {
+            model.errorMessage = "In de selectie zit de overboeking van een verrekening met spaar. Die boek je niet opnieuw: hang hem apart aan."
+            return
+        }
         let requests = chosen.map { row in
             BookingRequest(bankTransactionId: row.id,
                            allocations: allocations(for: row, reviewed: reviewedIfEdited && isEdited(row)))
@@ -548,9 +595,45 @@ final class ReviewStore {
         }
         guard ok else { return }
         let ids = Set(chosen.map(\.id))
-        let text = ids.count == 1 ? "1 transactie geboekt" : "\(ids.count) transacties geboekt"
-        announce(model, text + (reviewedIfEdited ? "" : " · nog na te kijken in Transacties"), unbook: Array(ids), learned: nil)
+        var text = ids.count == 1 ? "1 transactie geboekt" : "\(ids.count) transacties geboekt"
+        if !reviewedIfEdited { text += " · nog na te kijken in Transacties" }
+        if requests.contains(where: { $0.allocations.contains(where: \.reimburse) }) { text += " · \(settlementBalanceText(model))" }
+        announce(model, text, unbook: Array(ids), learned: nil)
         finish(model, handled: ids)
+    }
+
+    /// "Te verrekenen met spaar: nu € 310,00 van spaar naar betaal", na een boeking met Verrekenen met spaar.
+    private func settlementBalanceText(_ model: AppModel) -> String {
+        model.read("Te verrekenen met spaar") { db in
+            let open = try Insight.openReimbursements(db)
+            switch open.direction {
+            case .fromSavings: return "Te verrekenen met spaar: nu \(open.transferAmount.formatted()) van spaar naar betaal"
+            case .toSavings: return "Te verrekenen met spaar: nu \(open.transferAmount.formatted()) van betaal naar spaar"
+            case .none: return "Te verrekenen met spaar: per saldo niets over te maken"
+            }
+        }
+    }
+
+    /// De bankregel van een verrekening: zo nodig eerst afvinken (dan wordt de verrekening geboekt op de dag van
+    /// de bankregel), daarna de bankregel aan die boekingen hangen. Er komt geen boeking bij.
+    func attachSettlement(_ transfer: SavingsTransfer, to row: ReviewRow, _ model: AppModel) {
+        guard let id = transfer.id else { return }
+        let ok = model.perform {
+            try model.db.write { db in
+                if !transfer.done { _ = try SavingsTransferService.markDone(db, savingsTransferId: id, on: row.tx.day) }
+                try SavingsTransferService.attach(db, savingsTransferId: id, bankTransactionId: row.id)
+            }
+        }
+        guard ok else { return }
+        let text = transfer.done ? "Bankregel aan de verrekening gehangen" : "Verrekening afgevinkt en bankregel aangehangen"
+        model.toast = text
+        notice = ReviewNotice(text: text)
+        finish(model, handled: [row.id])
+    }
+
+    /// "Verrekening van 12 jun (€ 310,00)".
+    func title(of transfer: SavingsTransfer) -> String {
+        "Verrekening van \(transfer.day.short()) (\(transfer.amount.magnitude.formatted()))"
     }
 
     func skipSelection(_ model: AppModel) {
@@ -614,7 +697,7 @@ final class ReviewStore {
                         }
                         let s = try RuleEngine.suggest(for: side, db)
                         guard let ruleId = s.ruleId, !s.amountDiffers, s.warnings.isEmpty else { continue }
-                        let reimburse = kind == .betaal && side.amount.isNegative && s.reimburse
+                        let reimburse = kind == .betaal && s.reimburse
                         let allocation = Allocation(
                             amount: side.amount, label: s.label,
                             budgetItemId: kind == .betaal ? s.budgetItemId : nil,

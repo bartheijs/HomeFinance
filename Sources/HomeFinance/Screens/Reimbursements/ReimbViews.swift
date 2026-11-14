@@ -2,7 +2,7 @@ import SwiftUI
 import HFCore
 import HFInsight
 
-/// Kaart zonder binnenmarge.
+/// Rustig vlak zonder rand.
 struct ReimbPanel<Content: View>: View {
     var tint: Color?
     @ViewBuilder var content: Content
@@ -20,80 +20,21 @@ struct ReimbPanel<Content: View>: View {
     }
 }
 
-/// "uit pot Auto € 412,00 · uit pot Kleding € 80,00"
-struct ReimbShareLine: View {
-    let shares: [ReimbPotShare]
-
-    var body: some View {
-        ReimbFlowLayout(spacing: 18, lineSpacing: 4) {
-            ForEach(shares) { share in
-                HStack(spacing: 6) {
-                    Text(share.title)
-                    Text(share.amount.formatted()).monospacedDigit().foregroundStyle(.primary)
-                }
-                .font(.body)
-                .lineLimit(1)
-                .foregroundStyle(share.potId == nil ? AnyShapeStyle(Theme.warning) : AnyShapeStyle(.secondary))
-                .help(share.potId == nil
-                      ? "Bij \(ReimbFormat.expenses(share.count)) is nog niet gekozen welke pot betaalt. Kies de pot in de lijst."
-                      : "\(ReimbFormat.expenses(share.count)) uit deze pot.")
-            }
-        }
-    }
-}
-
-/// Opdracht voor de bank-app bij een vastgelegde, nog niet uitgevoerde overboeking.
-struct ReimbInstructionCard: View {
-    let transfer: SavingsTransferDetail
-    var onDone: () -> Void
-    var onCancel: () -> Void
-
-    var body: some View {
-        ReimbPanel(tint: Theme.accent) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: "iphone.gen3")
-                    .font(.system(size: 26)).foregroundStyle(Theme.accent)
-                    .frame(width: 34).padding(.top, 2)
-                VStack(alignment: .leading, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Nu doen").font(.callout.weight(.semibold)).foregroundStyle(Theme.accent)
-                        Text("Maak in je bank-app \(Text(transfer.amount.formatted()).fontWeight(.bold).monospacedDigit()) over van spaar naar betaal")
-                            .font(.title3)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text("Vastgelegd voor \(transfer.day.short(withYear: true)) · \(ReimbFormat.expenses(transfer.entries.count))")
-                            .font(.callout).foregroundStyle(.secondary)
-                    }
-                    ReimbShareLine(shares: ReimbPotShare.shares(for: transfer.entries))
-                }
-                Spacer(minLength: 8)
-                VStack(alignment: .trailing, spacing: 8) {
-                    Button(action: onDone) { Label("Gedaan", systemImage: "checkmark") }
-                        .buttonStyle(.borderedProminent).controlSize(.large)
-                        .help("Vink af zodra je het bedrag bij de bank hebt overgemaakt.")
-                    Button("Toch niet…", action: onCancel)
-                        .buttonStyle(.plain).font(.callout).foregroundStyle(.secondary)
-                        .help("Verwijdert deze overboeking; de uitgaven staan dan weer open.")
-                }
-            }
-            .padding(18)
-            .help("Komt de opname later binnen op de spaarrekening, boek hem dan bij het nakijken op deze potten.")
-        }
-    }
-}
-
-/// Eén openstaande uitgave met vinkje en potkeuze.
+/// Eén open boeking met vinkje en potkeuze.
 struct ReimbOpenRow: View {
     let entry: EntryRow
     let selected: Bool
     let pots: [PotSummary]
     var toggle: () -> Void
     var setPot: (Int64?) -> Void
-    var stopReimbursing: () -> Void
+    var stopSettling: () -> Void
     @State private var hovering = false
+
+    private var incoming: Bool { entry.amount > .zero }
 
     var body: some View {
         HStack(spacing: 12) {
-            Toggle("Meenemen in de overboeking", isOn: Binding(get: { selected }, set: { _ in toggle() }))
+            Toggle("Meenemen in de verrekening", isOn: Binding(get: { selected }, set: { _ in toggle() }))
                 .toggleStyle(.checkbox).labelsHidden()
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.label.isEmpty ? "Zonder omschrijving" : entry.label).lineLimit(1)
@@ -102,7 +43,7 @@ struct ReimbOpenRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .help(detail ?? "")
             potMenu
-            MoneyText(entry.amount)
+            MoneyText(entry.amount, alwaysSign: incoming)
                 .frame(width: 100, alignment: .trailing)
         }
         .font(.body)
@@ -115,16 +56,16 @@ struct ReimbOpenRow: View {
         .contextMenu {
             Button(selected ? "Niet meenemen" : "Meenemen", action: toggle)
             Divider()
-            Button("Niet meer vergoeden uit spaar", systemImage: "xmark.circle", action: stopReimbursing)
+            Button("Niet meer verrekenen met spaar", systemImage: "xmark.circle", action: stopSettling)
         }
     }
 
     private var detail: String? {
-        var parts: [String] = []
+        var parts: [String] = [entry.accountName]
         if let name = entry.bank?.counterpartyName, !name.isEmpty, name != entry.label { parts.append(name) }
         if let item = entry.itemLabel { parts.append(item) }
         if !entry.tags.isEmpty { parts.append(entry.tags.map(\.name).joined(separator: ", ")) }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        return parts.joined(separator: " · ")
     }
 
     private var potMenu: some View {
@@ -147,25 +88,64 @@ struct ReimbOpenRow: View {
             }
         } label: {
             if let name = entry.potName {
-                Text("uit pot \(name)").foregroundStyle(.secondary)
+                Text(incoming ? "naar pot \(name)" : "uit pot \(name)").foregroundStyle(.secondary)
             } else {
-                Label("Kies pot…", systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
+                Label("Kies een pot…", systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
             }
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help("De pot op de spaarrekening die deze uitgave betaalt.")
+        .help(incoming ? "De pot op de spaarrekening waar dit bedrag naartoe gaat."
+              : "De pot op de spaarrekening die deze uitgave betaalt.")
     }
 }
 
-/// Eén eerdere overboeking, uitklapbaar naar de uitgaven.
+/// Wat elke pot uit gaat of in komt, met het saldo erna.
+struct ReimbPerPotList: View {
+    let shares: [ReimbPotShare]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(shares.enumerated()), id: \.element.id) { index, share in
+                if index > 0 { Divider().padding(.leading, 18) }
+                HStack(spacing: 12) {
+                    Text(share.potName ?? "Nog geen pot gekozen")
+                        .foregroundStyle(share.potId == nil ? Theme.warning : Color.primary)
+                        .lineLimit(1)
+                    Spacer(minLength: 12)
+                    Text(movement(share)).monospacedDigit()
+                    Group {
+                        if let after = share.balanceAfter {
+                            Text("saldo erna \(after.formatted())").monospacedDigit()
+                                .foregroundStyle(after.isNegative ? Theme.warning : Color.secondary)
+                        } else {
+                            Text("")
+                        }
+                    }
+                    .font(.callout)
+                    .frame(width: 180, alignment: .trailing)
+                }
+                .font(.body)
+                .padding(.horizontal, 18).padding(.vertical, 8)
+                .help(ReimbFormat.bookings(share.count))
+            }
+        }
+    }
+
+    private func movement(_ share: ReimbPotShare) -> String {
+        if share.amount.isZero { return "per saldo niets" }
+        return share.amount > .zero ? "\(share.amount.formatted()) eruit" : "\(share.amount.magnitude.formatted()) erbij"
+    }
+}
+
+/// Eén eerdere verrekening, uitklapbaar naar de boekingen en de potmutaties.
 struct ReimbHistoryRow: View {
     let transfer: SavingsTransferDetail
+    /// Na 5 dagen nog niet in een bankbestand gezien.
+    let unconfirmed: Bool
     let expanded: Bool
     var toggle: () -> Void
-    var onDone: () -> Void
-    var onReopen: () -> Void
-    var onDelete: () -> Void
+    var onUndo: () -> Void
     @State private var hovering = false
 
     var body: some View {
@@ -177,31 +157,22 @@ struct ReimbHistoryRow: View {
                     .frame(width: 12)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(transfer.day.short(withYear: true)).monospacedDigit()
-                    Text(ReimbFormat.expenses(transfer.entries.count)).font(.callout).foregroundStyle(.secondary)
+                    Text(ReimbFormat.bookings(transfer.entries.count)).font(.callout).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 6)
-                if transfer.done {
-                    Label("gedaan", systemImage: "checkmark").font(.callout).foregroundStyle(.secondary)
-                        .help(transfer.doneAt.map { "Afgevinkt op \(Day(date: $0).short(withYear: true))." } ?? "Overgemaakt bij de bank.")
-                } else {
-                    Pill("Open", color: Theme.warning, icon: "clock")
-                        .help("Vastgelegd, maar nog niet overgemaakt bij de bank.")
+                status
+                VStack(alignment: .trailing, spacing: 2) {
+                    MoneyText(transfer.transferAmount)
+                    Text(ReimbFormat.direction(transfer.direction)).font(.callout).foregroundStyle(.secondary)
                 }
-                MoneyText(transfer.amount)
-                    .frame(width: 100, alignment: .trailing)
+                .frame(width: 170, alignment: .trailing)
                 Menu {
-                    if transfer.done {
-                        Button("Heropenen…", systemImage: "arrow.uturn.backward", action: onReopen)
-                    } else {
-                        Button("Gedaan", systemImage: "checkmark", action: onDone)
-                    }
-                    Divider()
-                    Button("Verwijderen…", systemImage: "trash", role: .destructive, action: onDelete)
+                    Button("Ongedaan maken…", systemImage: "arrow.uturn.backward", role: .destructive, action: onUndo)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                .help("Heropenen of verwijderen")
+                .help("Verrekening ongedaan maken")
             }
             .font(.body)
             .padding(.horizontal, 18).padding(.vertical, 9)
@@ -210,70 +181,67 @@ struct ReimbHistoryRow: View {
             .onTapGesture(perform: toggle)
             .onHover { hovering = $0 }
 
-            if expanded {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(transfer.entries) { entry in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(entry.day.short()).monospacedDigit().foregroundStyle(.secondary)
-                                .frame(width: 46, alignment: .leading)
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(entry.label.isEmpty ? "Zonder omschrijving" : entry.label).lineLimit(1)
-                                Text(entry.potName.map { "uit pot \($0)" } ?? "geen pot gekozen")
-                                    .foregroundStyle(entry.potName == nil ? Theme.warning : Color.secondary)
-                                    .lineLimit(1)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            MoneyText(entry.amount)
-                        }
-                        .font(.callout)
-                        .padding(.vertical, 4)
-                    }
-                    if !transfer.note.isEmpty {
-                        Text(transfer.note).font(.caption).foregroundStyle(.secondary).padding(.top, 4)
-                    }
-                    if transfer.entriesTotal != -transfer.amount {
-                        Label("De uitgaven tellen op tot \((-transfer.entriesTotal).formatted()), niet tot het bedrag van de overboeking.",
-                              systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption).foregroundStyle(Theme.warning).padding(.top, 4)
-                    }
+            if expanded { details }
+        }
+    }
+
+    @ViewBuilder private var status: some View {
+        if transfer.direction == .none {
+            Text("geen overboeking nodig").font(.callout).foregroundStyle(.secondary)
+                .help("Per saldo hoefde er niets overgemaakt te worden; alleen de potten zijn bijgewerkt.")
+        } else if transfer.bankConfirmed {
+            Label("gezien in de bank", systemImage: "checkmark").font(.callout).foregroundStyle(.secondary)
+                .help("De overboeking is aan beide kanten in een bankbestand herkend.")
+        } else if unconfirmed {
+            Label("nog niet gezien in een bankbestand", systemImage: "exclamationmark.triangle.fill")
+                .font(.callout).foregroundStyle(Theme.warning)
+                .help(bankHelp + " Het is al meer dan 5 dagen geleden: heb je het bedrag echt overgemaakt, en heb je daarna geïmporteerd?")
+        } else {
+            Label("wacht op de bank", systemImage: "clock").font(.callout).foregroundStyle(.secondary)
+                .help(bankHelp)
+        }
+    }
+
+    private var bankHelp: String {
+        switch (transfer.checkingBankConfirmed, transfer.savingsBankConfirmed) {
+        case (true, false): "Gezien op de betaalrekening, nog niet op de spaarrekening. De app herkent de bankregel bij je volgende import."
+        case (false, true): "Gezien op de spaarrekening, nog niet op de betaalrekening. De app herkent de bankregel bij je volgende import."
+        default: "De app herkent de overboeking bij je volgende import en hangt hem aan deze verrekening."
+        }
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Verrekende boekingen").font(.callout.weight(.medium)).foregroundStyle(.secondary).padding(.bottom, 2)
+            ForEach(transfer.entries) { entry in
+                line(entry.day, entry.label.isEmpty ? "Zonder omschrijving" : entry.label,
+                     entry.potName.map { entry.amount > .zero ? "naar pot \($0)" : "uit pot \($0)" } ?? "geen pot", entry.amount)
+            }
+            if !transfer.potEntries.isEmpty {
+                Text("Geboekt op de spaarrekening").font(.callout.weight(.medium)).foregroundStyle(.secondary)
+                    .padding(.top, 10).padding(.bottom, 2)
+                ForEach(transfer.potEntries) { entry in
+                    line(entry.day, entry.potName ?? "Zonder pot", entry.label, entry.amount)
                 }
-                .padding(.leading, 40).padding(.trailing, 50).padding(.bottom, 10)
+            }
+            if !transfer.note.isEmpty {
+                Text(transfer.note).font(.callout).foregroundStyle(.secondary).padding(.top, 6)
             }
         }
-    }
-}
-
-/// Zet onderdelen achter elkaar en breekt af naar een nieuwe regel als de breedte op is.
-struct ReimbFlowLayout: Layout {
-    var spacing: CGFloat = 8
-    var lineSpacing: CGFloat = 4
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
-        return CGSize(width: proposal.width ?? rows.width, height: rows.height)
+        .padding(.leading, 40).padding(.trailing, 50).padding(.bottom, 12)
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = arrange(width: bounds.width, subviews: subviews)
-        for (index, point) in result.points.enumerated() {
-            subviews[index].place(at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y),
-                                  proposal: .unspecified)
-        }
-    }
-
-    private func arrange(width: CGFloat, subviews: Subviews) -> (points: [CGPoint], width: CGFloat, height: CGFloat) {
-        var points: [CGPoint] = []
-        var x: CGFloat = 0, y: CGFloat = 0, lineHeight: CGFloat = 0, maxX: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x > 0 && x + size.width > width {
-                x = 0; y += lineHeight + lineSpacing; lineHeight = 0
+    private func line(_ day: Day, _ title: String, _ subtitle: String, _ amount: Money) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(day.short()).monospacedDigit().foregroundStyle(.secondary).frame(width: 50, alignment: .leading)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title).lineLimit(1)
+                Text(subtitle).foregroundStyle(.secondary).lineLimit(1)
             }
-            points.append(CGPoint(x: x, y: y))
-            x += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
-            maxX = max(maxX, x - spacing)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            MoneyText(amount, alwaysSign: true)
         }
-        return (points, maxX, y + lineHeight)
+        .font(.callout)
+        .padding(.vertical, 4)
     }
 }

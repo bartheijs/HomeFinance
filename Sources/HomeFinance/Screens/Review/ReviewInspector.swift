@@ -1,6 +1,7 @@
 import SwiftUI
 import HFCore
 import HFInsight
+import HFBudget
 
 /// Rechterpaneel: de ruwe bankgegevens van de gekozen transactie en het voorstel dat je kunt aanpassen.
 struct ReviewInspector: View {
@@ -68,12 +69,21 @@ private struct ReviewDetail: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     head
-                    warning
-                    target
-                    DisclosureGroup(isExpanded: moreBinding) {
-                        more.padding(.top, 14)
-                    } label: {
-                        Text("Meer opties").font(.callout).foregroundStyle(.secondary)
+                    if let settlement = row.settlement {
+                        settlementSection(settlement)
+                        DisclosureGroup(isExpanded: moreBinding) {
+                            bank.padding(.top, 14)
+                        } label: {
+                            Text("Van de bank").font(.callout).foregroundStyle(.secondary)
+                        }
+                    } else {
+                        warning
+                        target
+                        DisclosureGroup(isExpanded: moreBinding) {
+                            more.padding(.top, 14)
+                        } label: {
+                            Text("Meer opties").font(.callout).foregroundStyle(.secondary)
+                        }
                     }
                 }
                 .padding(22)
@@ -115,6 +125,32 @@ private struct ReviewDetail: View {
         }
     }
 
+    // MARK: Verrekening met spaar
+
+    /// Deze bankregel is de overboeking van een verrekening met spaar: niet opnieuw boeken, maar aanhangen.
+    private func settlementSection(_ settlement: SavingsTransferMatch) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Waar hoort dit bij?").font(.headline)
+            if let transfer = settlement.transfer {
+                Label(store.title(of: transfer), systemImage: "arrow.left.arrow.right").fontWeight(.medium)
+                Text(transfer.done
+                     ? "Dit is de overboeking van een verrekening met spaar die je al hebt afgevinkt. De bankregel wordt eraan gehangen; er komt geen boeking bij."
+                     : "Dit is de overboeking van een verrekening met spaar die nog niet is afgevinkt. Bij afvinken worden de potten en de betaalrekening geboekt op \(row.tx.day.short()); de bankregel wordt eraan gehangen.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Er passen meer verrekeningen met spaar bij deze overboeking. Kies welke het is.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                ForEach(settlement.transfers) { transfer in
+                    Button(store.title(of: transfer) + (transfer.done ? "" : " · nog afvinken")) {
+                        store.attachSettlement(transfer, to: row, model)
+                    }
+                    .help(transfer.done ? "Hangt de bankregel aan deze verrekening." : "Vinkt deze verrekening af en hangt de bankregel eraan.")
+                }
+            }
+        }
+        .help("Verrekenen met spaar: wat je van de betaalrekening betaalde maar uit een pot hoort te komen (of andersom) maak je in één keer over. Deze bankregel is die overboeking.")
+    }
+
     // MARK: Waar hoort dit bij
 
     @ViewBuilder private var target: some View {
@@ -150,6 +186,16 @@ private struct ReviewDetail: View {
             } else {
                 ReviewTargetPicker(year: row.tx.day.year, selection: draft.target).controlSize(.large)
                 Text(hint).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            if store.kind == .betaal, !draft.wrappedValue.isSplit {
+                ReviewSettlePicker(isExpense: isExpense, allowsWithoutPot: true, selection: Binding(
+                    get: { draft.wrappedValue.reimburse ? (draft.wrappedValue.reimbursePotId ?? ReviewSettlePicker.withoutPot) : nil },
+                    set: { choice in
+                        var d = draft.wrappedValue
+                        d.reimburse = choice != nil
+                        d.reimbursePotId = choice == ReviewSettlePicker.withoutPot ? nil : choice
+                        draft.wrappedValue = d
+                    }))
             }
             if store.kind == .betaal { periodChoice }
         }
@@ -224,19 +270,6 @@ private struct ReviewDetail: View {
                 }
                 .help("Tags volgen een soort uitgave (tanken, uit eten) dwars door de posten heen. Ze tellen niet als extra uitgave.")
             }
-            if store.kind == .betaal, isExpense, !draft.wrappedValue.isSplit {
-                VStack(alignment: .leading, spacing: 6) {
-                    Toggle("Vergoeden uit spaar", isOn: draft.reimburse)
-                        .help("Deze uitgave is voorgeschoten van de betaalrekening en wordt later vanaf de spaarrekening terugbetaald. Hij komt in Spaaroverboekingen te staan.")
-                    if draft.wrappedValue.reimburse {
-                        Picker("Uit pot", selection: draft.reimbursePotId) {
-                            Text("Nog niet gekozen").tag(Int64?.none)
-                            potSections()
-                        }
-                        .help("De pot op de spaarrekening die deze uitgave betaalt.")
-                    }
-                }
-            }
             if store.kind == .betaal, !draft.wrappedValue.isSplit {
                 VStack(alignment: .leading, spacing: 4) {
                     Toggle("Tijdelijk geleend van spaar", isOn: draft.temporaryLoan)
@@ -268,24 +301,16 @@ private struct ReviewDetail: View {
         }
     }
 
-    @ViewBuilder private func potSections() -> some View {
-        let reserve = store.pots(kind: .reservering), saving = store.pots(kind: .spaar)
-        if !reserve.isEmpty {
-            Section("Reserveringspotten") { ForEach(reserve) { Text($0.name).tag($0.id) } }
-        }
-        if !saving.isEmpty {
-            Section("Spaarpotten") { ForEach(saving) { Text($0.name).tag($0.id) } }
-        }
-    }
-
     private var splitBinding: Binding<Bool> {
         Binding(get: { draft.wrappedValue.isSplit }, set: { on in
             var d = draft.wrappedValue
             d.isSplit = on
             if on, d.lines.isEmpty {
-                d.lines = [ReviewSplitLine(amount: row.tx.amount, label: d.label, target: d.target),
+                d.lines = [ReviewSplitLine(amount: row.tx.amount, label: d.label, target: d.target,
+                                           settlePotId: d.reimburse ? d.reimbursePotId : nil),
                            ReviewSplitLine(amount: nil, label: "", target: .none)]
                 d.reimburse = false
+                d.reimbursePotId = nil
                 d.temporaryLoan = false
             }
             if !on { d.lines = [] }
@@ -334,7 +359,9 @@ private struct ReviewDetail: View {
     // MARK: Knoppen
 
     private var actions: some View {
-        let problem = store.problem(for: row)
+        let settlement = row.settlement
+        let problem = settlement == nil ? store.problem(for: row) : nil
+        let bookTitle = settlement.map { $0.needsMarkDone ? "Afvinken en aanhangen" : "Aanhangen" } ?? "Boek"
         return VStack(alignment: .leading, spacing: 8) {
             if let problem {
                 Label(problem, systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(Theme.warning)
@@ -343,11 +370,13 @@ private struct ReviewDetail: View {
                 Button { store.skipSelection(model) } label: { Text("Sla over").frame(maxWidth: .infinity) }
                     .keyboardShortcut("d", modifiers: .command)
                     .help("Niet boeken, bijvoorbeeld omdat je deze al met de hand hebt ingevoerd (⌘D). Een overgeslagen transactie telt niet mee in het saldo.")
-                Button { store.bookCurrent(model) } label: { Text("Boek  ⏎").frame(maxWidth: .infinity) }
+                Button { store.bookCurrent(model) } label: { Text("\(bookTitle)  ⏎").frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(problem != nil)
-                    .help("Boekt deze transactie en gaat naar de volgende (⏎). Wijkt je keuze af van het voorstel, dan leert de app een regel.")
+                    .disabled(problem != nil || settlement?.isAmbiguous == true)
+                    .help(settlement == nil
+                          ? "Boekt deze transactie en gaat naar de volgende (⏎). Wijkt je keuze af van het voorstel, dan leert de app een regel."
+                          : "Vinkt de verrekening zo nodig af en hangt deze bankregel eraan (⏎). Er komt geen dubbele boeking.")
             }
             .controlSize(.large)
         }
@@ -409,6 +438,10 @@ private struct ReviewSplitEditor: View {
                     VStack(spacing: 3) {
                         ReviewLabelField(text: $line.label)
                         ReviewTargetPicker(year: row.tx.day.year, selection: $line.target)
+                        if store.kind == .betaal {
+                            ReviewSettlePicker(isExpense: (line.amount ?? row.tx.amount).isNegative, allowsWithoutPot: false,
+                                               selection: $line.settlePotId)
+                        }
                     }
                     Button {
                         draft.lines.removeAll { $0.id == line.id }
@@ -517,5 +550,38 @@ struct ReviewLabelField: View {
                     .help("Deze omschrijving bestaat al in bijna dezelfde schrijfwijze. Met dezelfde tekst tellen de boekingen bij elkaar op in de rapporten.")
             }
         }
+    }
+}
+
+/// "Verrekenen met spaar": Nee, of de pot waar het bedrag uit komt (uitgave) of naartoe gaat (bijschrijving).
+struct ReviewSettlePicker: View {
+    @Environment(ReviewStore.self) private var store
+    /// Keuze "Ja, pot nog niet gekozen" (een regel kan verrekenen voorstellen zonder pot).
+    static let withoutPot: Int64 = -1
+    let isExpense: Bool
+    var allowsWithoutPot = false
+    @Binding var selection: Int64?
+
+    var body: some View {
+        let reserve = store.pots(kind: .reservering), saving = store.pots(kind: .spaar)
+        HStack(spacing: 6) {
+            Text(selection == nil ? "Verrekenen met spaar" : (isExpense ? "Verrekenen met spaar · komt uit pot" : "Verrekenen met spaar · gaat naar pot"))
+                .foregroundStyle(.secondary).lineLimit(1)
+            Picker("Verrekenen met spaar", selection: $selection) {
+                Text("Nee").tag(Int64?.none)
+                if allowsWithoutPot, selection == Self.withoutPot {
+                    Text("Ja, pot nog kiezen").tag(Int64?.some(Self.withoutPot))
+                }
+                if !reserve.isEmpty {
+                    Section("Reserveringspotten") { ForEach(reserve) { Text($0.name).tag($0.id) } }
+                }
+                if !saving.isEmpty {
+                    Section("Spaarpotten") { ForEach(saving) { Text($0.name).tag($0.id) } }
+                }
+            }
+            .labelsHidden().fixedSize()
+        }
+        .font(.callout).controlSize(.small)
+        .help("Voor iets dat je van de betaalrekening hebt betaald maar uit een pot hoort te komen, of geld dat binnenkomt en door moet naar een pot. Je maakt het later in één keer over bij Spaaroverboekingen.")
     }
 }
