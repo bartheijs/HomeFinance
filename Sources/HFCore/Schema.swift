@@ -229,6 +229,40 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Zelf inrichten en bijsturen: vaste stortingen met een verdeling over potten, een post voor een maand
+        // met de hand op 'voldaan' zetten, en een boeking laten meetellen in een andere maand dan zijn datum.
+        m.registerMigration("v4-distribution-check-period") { db in
+            try db.create(table: "distribution") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("name", .text).notNull()
+                t.column("accountId", .integer).notNull().indexed().references("account", onDelete: .restrict)
+                t.column("sortOrder", .integer).notNull().defaults(to: 0)
+                t.column("archived", .boolean).notNull().defaults(to: false)
+            }
+            try db.create(table: "distributionLine") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("distributionId", .integer).notNull().indexed().references("distribution", onDelete: .cascade)
+                t.column("potId", .integer).notNull().references("pot", onDelete: .cascade)
+                t.column("amount", .integer).notNull()
+                t.column("sortOrder", .integer).notNull().defaults(to: 0)
+                t.uniqueKey(["distributionId", "potId"])
+            }
+            try db.alter(table: "budgetItem") { t in
+                t.add(column: "distributionId", .integer).references("distribution", onDelete: .setNull)
+            }
+            try db.create(table: "itemCheck") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("budgetItemId", .integer).notNull().references("budgetItem", onDelete: .cascade)
+                t.column("month", .integer).notNull()
+                t.column("note", .text).notNull().defaults(to: "")
+                t.column("createdAt", .datetime).notNull()
+                t.uniqueKey(["budgetItemId", "month"])
+            }
+            try db.alter(table: "entry") { t in
+                t.add(column: "period", .text)
+            }
+        }
+
         return m
     }
 }

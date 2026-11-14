@@ -89,11 +89,15 @@ public struct BudgetItem: Codable, Identifiable, Equatable, Sendable, FetchableR
     /// Voor RES-regels: de pot op de spaarrekening die hiermee gevuld wordt.
     public var potId: Int64?
     public var sortOrder: Int
+    /// De vaste storting waar deze post bij hoort. Het plan van de post is dan min het totaal van die storting.
+    public var distributionId: Int64?
 
     public static let databaseTableName = "budgetItem"
     public init(id: Int64? = nil, yearId: Int64, label: String, direction: Direction, planAmount: Money,
                 frequency: Frequency = .maand, expectedMonths: String = "", expectedDay: Int? = nil,
-                isReserveTotal: Bool = false, reducesReserve: Bool = false, potId: Int64? = nil, sortOrder: Int = 0) {
+                isReserveTotal: Bool = false, reducesReserve: Bool = false, potId: Int64? = nil, sortOrder: Int = 0,
+                distributionId: Int64? = nil) {
+        self.distributionId = distributionId
         self.id = id; self.yearId = yearId; self.label = label; self.direction = direction
         self.planAmount = planAmount; self.frequency = frequency; self.expectedMonths = expectedMonths
         self.expectedDay = expectedDay; self.isReserveTotal = isReserveTotal
@@ -260,15 +264,20 @@ public struct Entry: Codable, Identifiable, Equatable, Sendable, FetchableRecord
     public var temporaryLoan: Bool
     /// De verrekening waarin deze boeking is meegenomen (zie `Settlement`), of nil als hij nog openstaat.
     public var settlementId: Int64?
+    /// De maand waarin deze boeking meetelt voor de begroting, als "yyyy-MM", wanneer dat een andere is dan
+    /// de maand van `day` (bv. eind november betaald, hoort bij december). nil = de maand van `day`.
+    /// Het saldo van de rekening volgt altijd `day`.
+    public var period: String?
 
     public static let databaseTableName = "entry"
     public init(id: Int64? = nil, accountId: Int64, bankTransactionId: Int64? = nil, day: Day, amount: Money,
                 label: String, budgetItemId: Int64? = nil, potId: Int64? = nil, reimburse: Bool = false,
                 savingsTransferId: Int64? = nil, counterEntryId: Int64? = nil, reviewed: Bool = true,
                 note: String = "", ruleId: Int64? = nil, confidence: Confidence? = nil, createdAt: Date = Date(),
-                temporaryLoan: Bool = false, settlementId: Int64? = nil) {
+                temporaryLoan: Bool = false, settlementId: Int64? = nil, period: String? = nil) {
         self.temporaryLoan = temporaryLoan
         self.settlementId = settlementId
+        self.period = period
         self.id = id; self.accountId = accountId; self.bankTransactionId = bankTransactionId
         self.day = day; self.amount = amount; self.label = label
         self.budgetItemId = budgetItemId; self.potId = potId; self.reimburse = reimburse
@@ -423,6 +432,55 @@ public struct Settlement: Codable, Identifiable, Equatable, Sendable, FetchableR
                 isOpening: Bool = false, note: String = "", createdAt: Date = Date()) {
         self.id = id; self.tagId = tagId; self.day = day; self.amount = amount
         self.depositEntryId = depositEntryId; self.isOpening = isOpening; self.note = note; self.createdAt = createdAt
+    }
+    public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
+}
+
+/// Een vaste storting: een bedrag dat regelmatig naar een spaarrekening gaat en daar over potten wordt verdeeld.
+/// Het totaal is de som van de regels (`DistributionLine`). Er kunnen er meer zijn.
+public struct Distribution: Codable, Identifiable, Equatable, Sendable, FetchableRecord, MutablePersistableRecord {
+    public var id: Int64?
+    public var name: String
+    /// De spaarrekening waar de storting op binnenkomt.
+    public var accountId: Int64
+    public var sortOrder: Int
+    public var archived: Bool
+
+    public static let databaseTableName = "distribution"
+    public init(id: Int64? = nil, name: String, accountId: Int64, sortOrder: Int = 0, archived: Bool = false) {
+        self.id = id; self.name = name; self.accountId = accountId; self.sortOrder = sortOrder; self.archived = archived
+    }
+    public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
+}
+
+/// Eén regel van de verdeling: dit bedrag (positief) gaat naar deze pot.
+public struct DistributionLine: Codable, Identifiable, Equatable, Sendable, FetchableRecord, MutablePersistableRecord {
+    public var id: Int64?
+    public var distributionId: Int64
+    public var potId: Int64
+    public var amount: Money
+    public var sortOrder: Int
+
+    public static let databaseTableName = "distributionLine"
+    public init(id: Int64? = nil, distributionId: Int64, potId: Int64, amount: Money, sortOrder: Int = 0) {
+        self.id = id; self.distributionId = distributionId; self.potId = potId; self.amount = amount
+        self.sortOrder = sortOrder
+    }
+    public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
+}
+
+/// Met de hand afgevinkt: deze vaste post geldt in deze maand (1–12) van zijn jaar als voldaan,
+/// ook als er geen boeking tegenover staat.
+public struct ItemCheck: Codable, Identifiable, Equatable, Sendable, FetchableRecord, MutablePersistableRecord {
+    public var id: Int64?
+    public var budgetItemId: Int64
+    public var month: Int
+    public var note: String
+    public var createdAt: Date
+
+    public static let databaseTableName = "itemCheck"
+    public init(id: Int64? = nil, budgetItemId: Int64, month: Int, note: String = "", createdAt: Date = Date()) {
+        self.id = id; self.budgetItemId = budgetItemId; self.month = month; self.note = note; self.createdAt = createdAt
     }
     public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
 }
