@@ -448,6 +448,9 @@ public enum HistoryWorkbook {
         try savings(from: try XLSXWorkbook.read(url))
     }
 
+    // De optimizer van Swift 6.3 loopt vast op deze functie in een release-build (compilerfout, geen fout in
+    // de code); daarom zonder optimalisatie. Het is een eenmalige import, snelheid speelt geen rol.
+    @_optimize(none)
     public static func savings(from workbook: XLSXWorkbook) throws -> HistorySavings {
         guard let sheet = workbook.sheet(named: "RES") else { throw HistoryReadError.noSavingsSheet }
         let name = sheet.name
@@ -486,7 +489,8 @@ public enum HistoryWorkbook {
             let first = sheet[row, 1]
             if let day = first.day {
                 current = day
-            } else if case .number(let n) = first.value, n >= 20_000, n <= 80_000, let day = sheet.day(fromSerial: n) {
+            } else if let n = first.number, n >= 20_000, n <= 80_000, let day = sheet.day(fromSerial: n) {
+                // (Geen `if case` op `first.value` hier: dat laat de optimizer van Swift 6.3 vastlopen in een release-build.)
                 current = day
             }
 
