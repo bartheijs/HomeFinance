@@ -535,13 +535,15 @@ private let today = Fixture.today
         #expect(dash.attention == [
             .newBankTransactions(count: 2),
             .unreviewedEntries(count: 1),
-            .openReimbursements(amount: eur(195), count: 2),
+            .openReimbursements(amount: eur(195), count: 2, direction: .fromSavings),
+            // De overboeking van 31-1 (30,00) is afgevinkt maar nog in geen bankbestand gezien.
+            .unconfirmedSettlement(amount: eur(30), day: d("2027-01-31")),
             // Spaarrekening: afstemming van 31-1 heeft € 5 verschil en is 43 dagen oud (> 35).
             .reconciliationDiffers(accountId: f.spaar, accountName: "Spaarrekening", difference: eur(5), day: d("2027-01-31")),
             .reconciliationOld(accountId: f.spaar, accountName: "Spaarrekening", lastDay: d("2027-01-31"), daysAgo: 43),
         ])
         #expect(dash.attention[0].message == "2 banktransacties moeten nog geboekt worden.")
-        #expect(dash.attention[2].message == "€ 195,00 nog over te boeken van spaar (2 uitgaven).")
+        #expect(dash.attention[2].message == "€ 195,00 over te maken van spaar naar betaal (2 boekingen).")
     }
 
     @Test func missingYearForToday() throws {

@@ -8,12 +8,15 @@ public enum AttentionItem: Equatable, Sendable {
     case newBankTransactions(count: Int)
     /// Boekingen die nog nagekeken moeten worden.
     case unreviewedEntries(count: Int)
-    /// Uitgaven die nog uit spaar vergoed moeten worden (`amount` = over te boeken, positief).
-    case openReimbursements(amount: Money, count: Int)
+    /// Boekingen die nog met spaar verrekend moeten worden: `amount` is het netto over te maken bedrag zonder
+    /// teken, `direction` de richting (`.none` = netto nul, alleen tussen potten verrekenen).
+    case openReimbursements(amount: Money, count: Int, direction: SavingsTransferDirection)
     /// De laatste afstemming van een rekening sloot niet op € 0,00.
     case reconciliationDiffers(accountId: Int64, accountName: String, difference: Money, day: Day)
     /// De laatste afstemming is ouder dan 35 dagen (`lastDay` nil = nog nooit afgestemd).
     case reconciliationOld(accountId: Int64, accountName: String, lastDay: Day?, daysAgo: Int)
+    /// Een afgevinkte verrekening met spaar is na 5 dagen nog niet aan beide kanten in een bankbestand gezien.
+    case unconfirmedSettlement(amount: Money, day: Day)
     /// Er is nog geen begroting voor het jaar van vandaag.
     case yearMissing(year: Int)
     /// Er staat nog een bedrag uit dat tijdelijk van spaar geleend is.
@@ -28,13 +31,20 @@ public enum AttentionItem: Equatable, Sendable {
             return n == 1 ? "1 banktransactie moet nog geboekt worden." : "\(n) banktransacties moeten nog geboekt worden."
         case .unreviewedEntries(let n):
             return n == 1 ? "1 boeking moet nog nagekeken worden." : "\(n) boekingen moeten nog nagekeken worden."
-        case .openReimbursements(let amount, let n):
-            return "\(amount.formatted()) nog over te boeken van spaar (\(n) \(n == 1 ? "uitgave" : "uitgaven"))."
+        case .openReimbursements(let amount, let n, let direction):
+            let count = "\(n) \(n == 1 ? "boeking" : "boekingen")"
+            switch direction {
+            case .fromSavings: return "\(amount.formatted()) over te maken van spaar naar betaal (\(count))."
+            case .toSavings: return "\(amount.formatted()) over te maken van betaal naar spaar (\(count))."
+            case .none: return "\(count) te verrekenen tussen potten."
+            }
         case .reconciliationDiffers(_, let name, let difference, let day):
             return "\(name): afstemming van \(day.dutch) heeft een verschil van \(difference.formatted())."
         case .reconciliationOld(_, let name, let lastDay, let days):
             if let lastDay { return "\(name): laatst afgestemd op \(lastDay.dutch) (\(days) dagen geleden)." }
             return "\(name): nog nooit afgestemd."
+        case .unconfirmedSettlement(let amount, let day):
+            return "Verrekening van \(amount.formatted()) op \(day.dutch) is nog niet gezien in een bankbestand."
         case .yearMissing(let year):
             return "Er is nog geen begroting voor \(year)."
         case .temporaryLoanOutstanding(let amount):
@@ -70,6 +80,9 @@ public struct Dashboard: Equatable, Sendable {
 }
 
 extension Insight {
+    /// Aantal dagen waarna een afgevinkte verrekening in een bankbestand gezien hoort te zijn.
+    public static let settlementConfirmationDays = 5
+
     /// Aantal dagen waarna een afstemming als "oud" geldt.
     public static let reconciliationMaxAgeDays = 35
 
@@ -88,10 +101,17 @@ extension Insight {
         let unreviewed = accounts.map(\.unreviewedEntryCount).reduce(0, +)
         if unreviewed > 0 { attention.append(.unreviewedEntries(count: unreviewed)) }
         let open = try Row.fetchOne(db, sql: """
-            SELECT COALESCE(SUM(amount), 0) AS s, COUNT(*) AS c FROM entry WHERE reimburse = 1 AND savingsTransferId IS NULL
+            SELECT COALESCE(SUM(amount), 0) AS s, COUNT(*) AS c FROM entry
+            WHERE reimburse = 1 AND savingsTransferId IS NULL AND accountId IN \(Q.betaal)
             """)!
         if (open["c"] as Int) > 0 {
-            attention.append(.openReimbursements(amount: -(open["s"] as Money), count: open["c"]))
+            let net = -(open["s"] as Money)
+            attention.append(.openReimbursements(amount: net.magnitude, count: open["c"],
+                                                 direction: SavingsTransferDirection(net: net)))
+        }
+        for t in try savingsTransfers(db).reversed()
+        where t.done && !t.bankConfirmed && Q.daysBetween(t.day, today) > settlementConfirmationDays {
+            attention.append(.unconfirmedSettlement(amount: t.transferAmount, day: t.day))
         }
         let borrowed = try temporaryLoanOutstanding(db, on: today)
         if !borrowed.isZero { attention.append(.temporaryLoanOutstanding(amount: borrowed)) }

@@ -51,6 +51,12 @@ public struct EntryRow: Identifiable, Equatable, Sendable {
     /// nil bij handinvoer.
     public let bank: BankFields?
     public internal(set) var tags: [TagRef]
+    /// De boeking is door een verrekening met spaar zelf gemaakt (potmutatie op de spaarrekening of de
+    /// tegenboeking op de betaalrekening), niet door de gebruiker. Op de betaalrekening blijft het een gewone
+    /// diverse boeking in de begroting.
+    public internal(set) var isSettlementBooking: Bool = false
+    /// De verrekening met spaar waar een verrekeningsboeking bij hoort, of nil.
+    public internal(set) var settlementTransferId: Int64? = nil
 
     /// Jaar waarin de boeking meetelt voor de begroting (uit `period`, anders uit `day`).
     public var budgetYear: Int { Self.parse(period)?.0 ?? day.year }
@@ -63,8 +69,22 @@ public struct EntryRow: Identifiable, Equatable, Sendable {
         return (y, m)
     }
 
+    /// Voor een gemarkeerde boeking (`reimburse`): een uitgave komt uit de pot, een bijschrijving gaat naar de pot.
+    public var settlementDirection: SettlementDirection? {
+        guard reimburse, !amount.isZero else { return nil }
+        return amount < .zero ? .fromPot : .toPot
+    }
+
     /// Boeking op een betaalrekening zonder vaste post.
     public var isDivers: Bool { accountKind == .betaal && budgetItemId == nil }
+}
+
+/// Richting van een boeking die met spaar verrekend wordt.
+public enum SettlementDirection: String, Sendable, CaseIterable {
+    /// Uitgave: het bedrag komt uit de pot.
+    case fromPot
+    /// Bijschrijving: het bedrag wordt doorgestort naar de pot.
+    case toPot
 }
 
 /// Sortering van de transactielijst.
@@ -208,6 +228,15 @@ extension Insight {
         let tags = try tagsByEntry(db, ids: rows.map(\.id))
         if !tags.isEmpty {
             for i in rows.indices { rows[i].tags = tags[rows[i].id] ?? [] }
+        }
+        if !rows.isEmpty {
+            let markers = try TransferMarkers(db)
+            for i in rows.indices {
+                if let transferId = markers.transferId(of: rows[i]) {
+                    rows[i].isSettlementBooking = true
+                    rows[i].settlementTransferId = transferId
+                }
+            }
         }
         return rows
     }

@@ -8,7 +8,8 @@ public struct Allocation: Equatable, Sendable {
     public var label: String
     /// Vaste post (alleen betaalrekening); nil = divers.
     public var budgetItemId: Int64?
-    /// Pot: op een spaarrekening de pot zelf, op een betaalrekening de pot die vergoedt (alleen met `reimburse`).
+    /// Pot: op een spaarrekening de pot zelf; op een betaalrekening (alleen met `reimburse`) de pot waarmee
+    /// verrekend wordt: bij een uitgave komt het uit die pot, bij een bijschrijving wordt het ernaar doorgestort.
     public var potId: Int64?
     public var reimburse: Bool
     public var tagIds: [Int64]
@@ -132,6 +133,7 @@ public enum BookingService {
             SELECT COUNT(*) FROM entry WHERE bankTransactionId = ? AND savingsTransferId IS NOT NULL
             """, arguments: [transaction.id]) ?? 0
         guard inTransfer == 0 else { throw BudgetError.inSavingsTransfer }
+        try SavingsTransferService.ensureNotOwned(db, where: "bankTransactionId = ?", arguments: [transaction.id])
         try SettlementService.ensureFree(db, entriesWhere: "bankTransactionId = ?", arguments: [transaction.id])
         // Koppelingen (counterEntryId) naar deze boekingen vervallen vanzelf (ON DELETE SET NULL).
         try db.execute(sql: "DELETE FROM entry WHERE bankTransactionId = ?", arguments: [transaction.id])
@@ -220,6 +222,11 @@ public enum EntryService {
             if entry.savingsTransferId != nil {
                 guard draft.reimburse, draft.amount == entry.amount else { throw BudgetError.inSavingsTransfer }
             }
+            // Een boeking van het afvinken van een verrekening houdt bedrag, rekening, dag en pot.
+            if draft.amount != entry.amount || draft.accountId != entry.accountId || draft.day != entry.day
+                || draft.potId != entry.potId {
+                try SavingsTransferService.ensureNotOwned(db, where: "id = ?", arguments: [entryId])
+            }
             try SettlementService.ensureUnchanged(db, entry: entry, amount: draft.amount, accountId: draft.accountId,
                                                   tagIds: draft.tagIds)
             let account = try Check.account(db, draft.accountId)
@@ -241,7 +248,8 @@ public enum EntryService {
         }
     }
 
-    /// Zet alleen 'vergoeden uit spaar' aan of uit (met optioneel de pot die betaalt).
+    /// Zet alleen 'verrekenen met spaar' aan of uit, met optioneel de pot (uitgave: uit die pot; bijschrijving:
+    /// doorstorten naar die pot).
     @discardableResult
     public static func setReimburse(_ db: Database, entryId: Int64, _ reimburse: Bool,
                                     potId: Int64? = nil) throws -> Entry {
@@ -292,6 +300,7 @@ public enum EntryService {
     public static func delete(_ db: Database, entryId: Int64) throws {
         try atomic(db) {
             let entry = try Check.entry(db, entryId)
+            try SavingsTransferService.ensureNotOwned(db, where: "id = ?", arguments: [entryId])
             guard entry.bankTransactionId == nil else { throw BudgetError.bankEntryDelete }
             guard entry.savingsTransferId == nil else { throw BudgetError.inSavingsTransfer }
             try SettlementService.ensureFree(db, entriesWhere: "id = ?", arguments: [entryId])

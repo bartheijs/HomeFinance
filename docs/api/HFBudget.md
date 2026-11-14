@@ -56,7 +56,8 @@ Regels bij boeken (ook voor handmatige boekingen):
 - De regels tellen exact op tot het bankbedrag.
 - De dag ligt niet vóór de begindatum van de rekening, en het jaar is niet afgesloten.
 - **Betaalrekening:** `budgetItemId` mag (post van het jaar van de transactie; geen RES-regel, wel de regel
-  RESERVERINGEN); `potId` alleen samen met `reimburse`; `reimburse` alleen bij een negatief bedrag.
+  RESERVERINGEN); `potId` alleen samen met `reimburse`; `reimburse` ("verrekenen met spaar") kan bij een
+  uitgave (uit de pot) én bij een bijschrijving (doorstorten naar de pot), niet bij een bedrag van nul.
 - **Spaarrekening:** geen `budgetItemId`, geen `reimburse`; de pot hoort bij die rekening.
 - Opnieuw boeken of ongedaan maken wordt geweigerd zolang een boeking in een spaaroverboeking zit.
   Een koppeling als overboeking vervalt bij opnieuw boeken.
@@ -70,7 +71,7 @@ Regels bij boeken (ook voor handmatige boekingen):
 | `create(db, EntryDraft) -> Entry` | Handmatige boeking (zonder banktransactie), standaard nagekeken. |
 | `draft(db, entryId:) -> EntryDraft` | Huidige waarden, om te bewerken. |
 | `update(db, entryId:, EntryDraft) -> Entry` | Alles wijzigen; bij een boeking uit de bank liggen bedrag, dag en rekening vast. |
-| `setReimburse(db, entryId:, Bool, potId:)` | Vergoeden aan/uit. Uitzetten wordt geweigerd als de boeking in een spaaroverboeking zit. |
+| `setReimburse(db, entryId:, Bool, potId:)` | Verrekenen met spaar aan/uit, met optioneel de pot. Uitzetten wordt geweigerd als de boeking in een spaaroverboeking zit. |
 | `setTemporaryLoan(db, entryId:, Bool)` | Markeert een boeking op een betaalrekening als tijdelijk geleend van spaar (bij het lenen én bij het terugboeken). `Allocation` en `EntryDraft` hebben hetzelfde veld `temporaryLoan`. |
 | `setPeriod(db, entryId:, year:, month:)` | Laat de boeking in een andere maand meetellen; `nil`/`nil` = terug naar de maand van de datum. `Allocation` en `EntryDraft` hebben hetzelfde veld `period` ("yyyy-MM"). |
 | `delete(db, entryId:)` | Alleen handmatige boekingen. |
@@ -239,15 +240,97 @@ uitgave). Het telt nergens in mee behalve in de vooruitblik. Terugkerende storti
 
 Geweigerd in een afgesloten jaar (ook het weghalen) en voor RES-regels; de regel RESERVERINGEN kan wel.
 
-## SavingsTransferService — vergoeden uit spaar
+## SavingsTransferService — verrekenen met spaar
+
+Twee richtingen, gesaldeerd. Een boeking op de betaalrekening met `reimburse`:
+
+- **uitgave** (negatief): het bedrag moet uit de pot (`potId`) terugkomen;
+- **bijschrijving** (positief): het bedrag moet doorgestort worden naar de pot.
+
+De openstaande boekingen worden gesaldeerd tot één verrekening. **Netto positief = van spaar naar betaal,
+negatief = van betaal naar spaar.** Bij het **afvinken** wordt de verrekening meteen volledig geboekt. De
+bankregels van de echte overboeking worden bij een latere import alleen nog herkend en aan die boekingen
+gehangen; er komen dan geen boekingen bij.
 
 | Functie | Doet |
 |---|---|
-| `openReimbursements(db) -> OpenReimbursements` | Openstaande `reimburse`-boekingen en het (positieve) totaal. |
-| `createSavingsTransfer(db, entryIds:, day:, note:) -> SavingsTransfer` | Legt de overboeking vast met het positieve totaal en koppelt de boekingen. |
-| `markDone(db, savingsTransferId:)` / `reopen(db, savingsTransferId:)` | Gedaan aan/uit. |
-| `delete(db, savingsTransferId:)` | Verwijdert; de boekingen staan weer open. |
-| `entries(db, savingsTransferId:) -> [Entry]` | De boekingen in de overboeking. |
+| `openReimbursements(db) -> OpenReimbursements` | Openstaande boekingen, gesaldeerd en per pot. |
+| `openWithoutPot(db) -> [Entry]` | Openstaande boekingen zonder pot, om voor te waarschuwen. |
+| `createSavingsTransfer(db, entryIds:, day:, note:) -> SavingsTransfer` | Legt de verrekening vast; `amount` is het netto bedrag met teken (nul mag). Boekt nog niets. |
+| `markDone(db, savingsTransferId:, on:, at:) -> SavingsTransfer` | Vinkt af en boekt de verrekening op `on` (standaard vandaag). |
+| `reopen(db, savingsTransferId:)` | Terug naar 'nog te doen'; verwijdert de boekingen van het afvinken. |
+| `delete(db, savingsTransferId:)` | Verwijdert de verrekening en haar boekingen; de gemarkeerde boekingen staan weer open. |
+| `summary(db, savingsTransferId:) -> SavingsTransferSummary` | Saldo, per pot, de boekingen van het afvinken en de aangehangen bankregels. |
+| `recognize(db, bankTransaction:) -> SavingsTransferMatch?` / `recognizeAll(db, accountId:)` | Herkent de bankregel van een verrekening; boekt niets. `recognizeAll` voor alle `nieuw`e van een rekening, per transactie-id. |
+| `attach(db, savingsTransferId:, bankTransactionId:) -> SavingsTransferSummary` | Hangt een bankregel aan de boeking(en) van een afgevinkte verrekening. |
+| `attachAll(db, accountId:) -> Int` | Hangt alle eenduidige bankregels van een rekening aan; geeft het aantal. |
+| `detach(db, bankTransactionId:)` | Koppelt een aangehangen bankregel los; de banktransactie wordt weer `nieuw`. |
+| `unconfirmed(db, today:) -> [SavingsTransfer]` | Afgevinkte verrekeningen waar na 5 dagen nog niet aan beide kanten een bankregel hangt. |
+| `entries(db, savingsTransferId:) -> [Entry]` | De gemarkeerde boekingen in de verrekening. |
+
+**`OpenReimbursements`**: `entries`, `fromSavings` (som van de uitgaven, positief), `toSavings` (som van de
+bijschrijvingen, positief), `net` = `fromSavings − toSavings`, en `perPot: [PotMovement]`. `PotMovement` heeft
+`pot` (nil = zonder pot) en `amount`: positief = de pot UIT, negatief = de pot IN; samen zijn ze `net`. Het
+oude veld `total` bestaat nog en is nu gelijk aan `net` (kan dus negatief of nul zijn).
+
+**`SavingsTransfer.amount`** is het netto bedrag met teken, niet meer altijd positief.
+
+**`SavingsTransferSummary`**: `transfer`, `entries`, `fromSavings`, `toSavings`, `perPot`, `net`,
+`needsBankTransfer` (false bij netto nul), `bookedEntries` (de boekingen van het afvinken),
+`checkingAccountId`, `savingsAccountId`, `checkingTransactionId`, `savingsTransactionId` en `isConfirmed`.
+
+**Rekeningen.** De gemarkeerde boekingen moeten op één betaalrekening staan en hun potten op één
+spaarrekening; anders weigert `createSavingsTransfer` (maak per rekeningpaar een aparte verrekening). Heeft
+geen enkele boeking een pot, dan is de spaarrekening de enige niet-gearchiveerde spaarrekening; zijn er meer,
+dan weigert `markDone` met de vraag om een pot te kiezen.
+
+**Afvinken (`markDone`)** boekt in één transactie, als handmatige boekingen op `on`:
+
+- spaarrekening: per pot één boeking (uit de pot negatief, erin positief) en één regel zonder pot voor
+  boekingen zonder pot; samen −netto;
+- betaalrekening: één diverse boeking "Verrekening spaar" van +netto, zonder `reimburse`;
+- bij netto nul: niets op de betaalrekening, en de potmutaties zijn samen nul;
+- de betaal- en spaarkant verwijzen naar elkaar via `counterEntryId`, en alle boekingen krijgen de notitie
+  "Verrekening #<id>".
+
+Nog eens afvinken boekt niet opnieuw. Welke boekingen bij de verrekening horen staat in `Setting`
+(`savingsTransfer.<id>.entries`); de notitie is alleen voor de gebruiker en mag gewijzigd worden.
+
+**Herkennen (`recognize`)**, voor verrekeningen met netto ≠ 0:
+
+- bedrag: op de betaalrekening +netto, op de spaarrekening −netto;
+- afgevinkte verrekening: haar boeking op deze rekening heeft nog geen bankregel;
+- nog niet afgevinkte verrekening: de rekening past bij haar boekingen en potten; `needsMarkDone` is dan
+  `true`. Het scherm biedt "Afvinken en aanhangen" aan: `markDone(on: <dag van de bankregel>)` en dan `attach`;
+- heeft de transactie een tegenrekening, dan moet dat de andere rekening van de verrekening zijn (als daarvan
+  het IBAN bekend is; anders een eigen rekening van de andere soort). Zonder tegenrekening telt het bedrag.
+  IBAN's worden vergeleken zonder spaties en hoofdletters;
+- de dag ligt hoogstens 7 dagen van de dag van het afvinken (niet afgevinkt: de dag van de verrekening);
+- precies één kandidaat: `transfer` is gezet. Meer: `isAmbiguous`, alle kandidaten in `transfers`, en de
+  gebruiker kiest.
+
+`SavingsTransferMatch`: `transfers`, `transfer`, `isAmbiguous`, `side` (`.checking` / `.savings`),
+`needsMarkDone`.
+
+**Aanhangen (`attach`)** zet op de bestaande boeking(en) van die rekening de banktransactie en neemt haar DAG
+over; de banktransactie wordt `verwerkt`. Er komen geen boekingen bij en het eindsaldo verandert niet; alleen
+het saldo op de dagen tussen het afvinken en de bankregel kan verschuiven. Geweigerd als de verrekening niet
+is afgevinkt, de banktransactie niet `nieuw` is, die kant al een bankregel heeft of de som niet gelijk is aan
+het bankbedrag. `attachAll` slaat twijfelgevallen en niet afgevinkte verrekeningen over.
+
+**Bescherming.** Boekingen van het afvinken worden bij Spaaroverboekingen beheerd:
+
+- `BookingService.book` / `unbook` op een aangehangen bankregel, `EntryService.delete`, en een wijziging van
+  bedrag, rekening, dag of pot via `EntryService.update` worden geweigerd met
+  `BudgetError.savingsTransferBooking`. Label, notitie en tags wijzigen mag.
+- `reopen` en `delete` weigeren zolang er een bankregel aan hangt; eerst `detach`.
+- `BalanceService.importCheck` klopt: een aangehangen bankregel is `verwerkt` en telt één keer.
+
+**Let op:** boek de bankregel van een afgevinkte verrekening niet op een andere manier (regels, of
+`TransferService.linkTransfer`); dan staat het bedrag er twee keer. Draai daarom altijd eerst `attachAll`.
+
+**Volgorde in het nakijkscherm:** eerst `SavingsTransferService.attachAll` en `recognizeAll` (per rekening),
+dan `DistributionService.recognizeAll`, dan de regels (`HFRules`).
 
 ## SettlementService — verrekenen per tag
 
@@ -351,7 +434,7 @@ handmatige boeking tegenover staat.
 
 ## Aannames
 
-- `reimburse` kan alleen op een uitgave (negatief bedrag) op een betaalrekening.
+- `reimburse` kan alleen op een betaalrekening, bij een uitgave of een bijschrijving (niet bij nul).
 - Het afgesloten jaar wordt bepaald door het kalenderjaar van de dag van de boeking, voor alle rekeningen.
   Een boeking in een spaaroverboeking opnemen of eruit halen valt daar niet onder.
 - Verplaatsen tussen potten koppelt de twee boekingen niet via `counterEntryId`; dat veld is voor

@@ -199,7 +199,7 @@ import Testing
                 try BookingService.book(db, bankTransactionId: t1.id!, allocations: [Allocation(amount: c(-12_000), label: "x")])
             }
 
-            let done = try SavingsTransferService.markDone(db, savingsTransferId: transfer.id!)
+            let done = try SavingsTransferService.markDone(db, savingsTransferId: transfer.id!, on: d("2027-04-05"))
             #expect(done.done && done.doneAt != nil)
             let reopened = try SavingsTransferService.reopen(db, savingsTransferId: transfer.id!)
             #expect(!reopened.done && reopened.doneAt == nil)

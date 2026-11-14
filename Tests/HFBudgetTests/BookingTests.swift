@@ -109,10 +109,14 @@ import Testing
             try book(Allocation(amount: c(-5_000), label: "Vakantiehuis", potId: fx.potVakantie.id, reimburse: true))
             try book(Allocation(amount: c(-5_000), label: "Reserveringen", budgetItemId: fx.reserveringen.id))
 
+            // Verrekenen met spaar kan ook bij een bijschrijving (doorstorten naar de pot), maar niet bij nul.
             let plus = try fx.tx(db, fx.betaal, "2027-01-11", 5_000)
+            let doorstorten = try BookingService.book(db, bankTransactionId: plus.id!, allocations: [
+                Allocation(amount: c(5_000), label: "Spaargeld kind", potId: fx.potSpaar.id, reimburse: true)])
+            #expect(doorstorten[0].reimburse && doorstorten[0].potId == fx.potSpaar.id)
             #expect(throws: BudgetError.reimburseNotExpense) {
-                try BookingService.book(db, bankTransactionId: plus.id!, allocations: [
-                    Allocation(amount: c(5_000), label: "x", reimburse: true)])
+                try EntryService.create(db, EntryDraft(accountId: fx.betaal.id!, day: d("2027-01-11"), amount: .zero,
+                                                       label: "x", reimburse: true))
             }
         }
     }

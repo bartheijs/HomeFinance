@@ -31,6 +31,7 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
     case potRequiresReimburse
     case potWrongAccount(pot: String)
     case reimburseOnSavings
+    /// 'Verrekenen met spaar' op een bedrag van nul. (De naam stamt uit de tijd dat het alleen bij uitgaven kon.)
     case reimburseNotExpense
     case temporaryLoanOnSavings
     /// De boeking zit in een spaaroverboeking en mag daarom niet zo gewijzigd worden.
@@ -59,6 +60,8 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
     case tagNotSettling(tag: String)
     case notSettleable(entry: String, tag: String)
     case depositInvalid(String)
+    /// De boeking hoort bij het afvinken van een verrekening met spaar en wordt daar beheerd.
+    case savingsTransferBooking
     /// De periode is geen geldige "yyyy-MM".
     case periodInvalid(String)
     /// De periode ligt meer dan 2 maanden van de datum van de boeking.
@@ -92,13 +95,13 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
         case .budgetItemOnSavings:
             return "Een boeking op een spaarrekening kan geen vaste post hebben, alleen een pot."
         case .potRequiresReimburse:
-            return "Op een betaalrekening kan een pot alleen gekozen worden bij 'vergoeden uit spaar'."
+            return "Op een betaalrekening kan een pot alleen gekozen worden bij 'verrekenen met spaar'."
         case let .potWrongAccount(pot):
             return "De pot \(pot) hoort niet bij deze spaarrekening."
         case .reimburseOnSavings:
-            return "'Vergoeden uit spaar' kan alleen bij een boeking op een betaalrekening."
+            return "'Verrekenen met spaar' kan alleen bij een boeking op een betaalrekening."
         case .reimburseNotExpense:
-            return "'Vergoeden uit spaar' kan alleen bij een uitgave (negatief bedrag)."
+            return "'Verrekenen met spaar' kan niet bij een bedrag van nul."
         case .temporaryLoanOnSavings:
             return "'Tijdelijk geleend van spaar' kan alleen bij een boeking op een betaalrekening."
         case .inSavingsTransfer:
@@ -123,7 +126,7 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
         case let .potHasEntries(pot):
             return "De pot \(pot) heeft boekingen en kan niet verwijderd worden. Archiveer de pot."
         case let .notReimbursable(entry):
-            return "De boeking '\(entry)' staat niet (meer) open voor vergoeding uit spaar."
+            return "De boeking '\(entry)' staat niet (meer) open voor verrekening met spaar."
         case let .signMismatch(direction):
             switch direction {
             case .IN: return "Het planbedrag van een IN-post moet positief of nul zijn."
@@ -150,6 +153,9 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
                 + "staat niet op een betaalrekening of is al verrekend."
         case let .depositInvalid(message):
             return message
+        case .savingsTransferBooking:
+            return "Dit is een boeking van een verrekening met spaar. Maak die ongedaan bij Spaaroverboekingen "
+                + "(bankregel loskoppelen, heropenen of verwijderen)."
         case let .periodInvalid(period):
             return "'\(period)' is geen geldige maand. Gebruik de vorm jjjj-mm, bv. 2027-12."
         case let .periodTooFar(period, day):
@@ -281,7 +287,8 @@ enum Check {
                 }
                 guard item.direction != .RES else { throw BudgetError.resItemNoEntries(item: item.label) }
             }
-            if reimburse, !amount.isNegative { throw BudgetError.reimburseNotExpense }
+            // Verrekenen met spaar: een uitgave komt uit de pot, een bijschrijving wordt doorgestort naar de pot.
+            if reimburse, amount.isZero { throw BudgetError.reimburseNotExpense }
             if let potId {
                 guard reimburse else { throw BudgetError.potRequiresReimburse }
                 _ = try pot(db, potId)

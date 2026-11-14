@@ -35,6 +35,9 @@ public struct PotSummary: Identifiable, Equatable, Sendable {
     public let openForecastCount: Int
     /// Voor een pot die in de min staat: hoe en wanneer hij weer op nul komt. nil als het saldo niet negatief is.
     public let recovery: PotRecovery?
+    /// Nog te verrekenen met de betaalrekening volgens de open gemarkeerde boekingen: positief = gaat nog uit de
+    /// pot, negatief = komt er nog bij. € 0,00 als er niets openstaat.
+    public let pendingSettlement: Money
 }
 
 /// Of en wanneer een pot die in de min staat weer wordt aangevuld.
@@ -115,37 +118,132 @@ public struct PotHistoryRow: Identifiable, Equatable, Sendable {
     public let runningBalance: Money
 }
 
-/// Openstaand bedrag per pot (`potId` nil = geen pot gekozen).
+/// Richting van een overboeking tussen spaar- en betaalrekening.
+public enum SavingsTransferDirection: String, Sendable, CaseIterable {
+    /// Van spaar naar betaal (netto meer uitgaven dan bijschrijvingen).
+    case fromSavings
+    /// Van betaal naar spaar (netto meer bijschrijvingen dan uitgaven).
+    case toSavings
+    /// Netto niets over te maken; er kan nog wel tussen potten verrekend worden.
+    case none
+
+    init(net: Money) { self = net > .zero ? .fromSavings : (net < .zero ? .toSavings : .none) }
+}
+
+/// Te verrekenen bedrag per pot (`potId` nil = geen pot gekozen).
 public struct ReimbursementPotTotal: Identifiable, Equatable, Sendable {
     public var id: Int64 { potId ?? 0 }
     public let potId: Int64?
     public let potName: String?
-    /// Som van de uitgaven (negatief).
+    /// Som van de boekingen met hun teken (uitgaven negatief, bijschrijvingen positief).
     public let total: Money
+    /// Wat de pot uit gaat (positief) of in komt (negatief) = −`total`.
+    public let amount: Money
     public let count: Int
+    /// Het potsaldo na het verrekenen (huidig saldo − `amount`); nil zonder pot en in de historie.
+    public let balanceAfter: Money?
 }
 
-/// Uitgaven die nog uit de spaarrekening vergoed moeten worden.
+/// Gemarkeerde boekingen op betaalrekeningen die nog met spaar verrekend moeten worden: uitgaven die uit een
+/// pot komen en bijschrijvingen die naar een pot gaan, gesaldeerd tot één overboeking.
 public struct OpenReimbursements: Equatable, Sendable {
     public let entries: [EntryRow]
-    /// Som van de boekingen (negatief, want het zijn uitgaven).
+    /// Som van de boekingen met hun teken = −`net`.
     public let total: Money
-    /// Over te boeken van spaar naar betaal (positief) = −`total`.
+    /// Som van de uitgaven (positief): komt uit spaar.
+    public let fromSavings: Money
+    /// Som van de bijschrijvingen (positief): gaat naar spaar.
+    public let toSavings: Money
+    /// `fromSavings` − `toSavings`: positief = van spaar naar betaal, negatief = van betaal naar spaar.
+    public let net: Money
+    /// Het over te maken bedrag zonder teken = |`net`|.
     public let transferAmount: Money
+    public let direction: SavingsTransferDirection
     public let perPot: [ReimbursementPotTotal]
+    /// Aantal boekingen waarbij nog geen pot is gekozen.
+    public let withoutPotCount: Int
 }
 
-/// Een spaaroverboeking met de uitgaven die hij vergoedt.
+/// Een overboeking tussen spaar en betaal met de boekingen die erin verrekend zijn.
 public struct SavingsTransferDetail: Identifiable, Equatable, Sendable {
     public let id: Int64
     public let day: Day
+    /// Netto bedrag met teken: positief = van spaar naar betaal, negatief = van betaal naar spaar.
     public let amount: Money
+    /// Het overgemaakte bedrag zonder teken.
+    public let transferAmount: Money
+    public let direction: SavingsTransferDirection
+    /// Afgevinkt: de overboeking bij de bank is gedaan.
     public let done: Bool
     public let doneAt: Date?
     public let note: String
+    /// De verrekende boekingen op de betaalrekening, oudste eerst.
     public let entries: [EntryRow]
-    /// Som van de gekoppelde uitgaven (negatief); hoort −`amount` te zijn.
+    /// Som van die boekingen met hun teken; hoort −`amount` te zijn.
     public let entriesTotal: Money
+    public let perPot: [ReimbursementPotTotal]
+    /// De potmutaties op de spaarrekening die bij deze overboeking geboekt zijn.
+    public let potEntries: [EntryRow]
+    /// De potmutaties zijn al geboekt (er zijn verrekeningsboekingen op een spaarrekening).
+    public let potMutationsBooked: Bool
+    /// Alle boekingen die de verrekening zelf heeft gemaakt: de potmutaties op de spaarrekening en de tegenboeking
+    /// op de betaalrekening.
+    public let bookings: [EntryRow]
+    /// Aan de boeking op de betaalrekening hangt een bankregel.
+    public let checkingBankConfirmed: Bool
+    /// Aan de boekingen op de spaarrekening hangt een bankregel.
+    public let savingsBankConfirmed: Bool
+
+    /// Afgevinkt (zelfde als `done`).
+    public var isDone: Bool { done }
+    /// De overboeking is aan beide kanten in een bankbestand gezien. Bij netto nul is er geen overboeking en is
+    /// dit altijd waar.
+    public var bankConfirmed: Bool { amount.isZero || (checkingBankConfirmed && savingsBankConfirmed) }
+}
+
+/// Hoe `HFBudget` de boekingen van een verrekening met spaar herkenbaar maakt. Een verrekeningsboeking is:
+/// - een boeking met notitie "Verrekening met spaar #<id>";
+/// - een boeking die in de instelling `savingsTransfer.<id>.potEntries` staat;
+/// - een boeking van de banktransactie in `savingsTransfer.<id>.checkingTransaction` of `.savingsTransaction`;
+/// - een boeking op een spaarrekening met `savingsTransferId`.
+struct TransferMarkers {
+    static let notePrefix = "Verrekening met spaar #"
+    var entryTransfer: [Int64: Int64] = [:]
+    var bankTransfer: [Int64: Int64] = [:]
+    var checkingBank: Set<Int64> = []
+    var savingsBank: Set<Int64> = []
+
+    init(_ db: Database) throws {
+        for r in try Row.fetchAll(db, sql: "SELECT key, value FROM setting WHERE key LIKE 'savingsTransfer.%'") {
+            let parts = (r["key"] as String).split(separator: ".")
+            guard parts.count == 3, let transferId = Int64(parts[1]) else { continue }
+            let ids = (r["value"] as String).split(separator: ",").compactMap { Int64($0.trimmingCharacters(in: .whitespaces)) }
+            switch parts[2] {
+            case "potEntries": for id in ids { entryTransfer[id] = transferId }
+            case "checkingTransaction": for id in ids { bankTransfer[id] = transferId }; checkingBank.insert(transferId)
+            case "savingsTransaction": for id in ids { bankTransfer[id] = transferId }; savingsBank.insert(transferId)
+            default: break
+            }
+        }
+    }
+
+    func transferId(of row: EntryRow) -> Int64? {
+        if row.note.hasPrefix(Self.notePrefix), let id = Int64(row.note.dropFirst(Self.notePrefix.count)) { return id }
+        if let id = entryTransfer[row.id] { return id }
+        if let bank = row.bankTransactionId, let id = bankTransfer[bank] { return id }
+        if row.accountKind == .spaar, let id = row.savingsTransferId { return id }
+        return nil
+    }
+
+    /// SQL-voorwaarde die alle mogelijke verrekeningsboekingen selecteert.
+    var clause: String {
+        var parts = ["e.note LIKE '\(Self.notePrefix)%'", "(e.savingsTransferId IS NOT NULL AND a.kind = 'spaar')"]
+        if !entryTransfer.isEmpty { parts.append("e.id IN (\(entryTransfer.keys.map(String.init).joined(separator: ",")))") }
+        if !bankTransfer.isEmpty {
+            parts.append("e.bankTransactionId IN (\(bankTransfer.keys.map(String.init).joined(separator: ",")))")
+        }
+        return "(" + parts.joined(separator: " OR ") + ")"
+    }
 }
 
 // MARK: - Functies
@@ -182,6 +280,7 @@ extension Insight {
         let accountIds = Set(accountRows.map { $0["id"] as Int64 })
         // Eén keer laden voor alle potten; het spaardoel per pot rekent daarna zonder verdere queries.
         let forecast = try ForecastContext(db, today: today)
+        let pending = try pendingSettlements(db)
         let pots = try potRows.compactMap { r -> PotSummary? in
             let pot = try Pot(row: r)
             guard accountIds.contains(pot.accountId) else { return nil }
@@ -195,7 +294,8 @@ extension Insight {
                               remainingToTarget: target.map { max(.zero, $0 - balance) },
                               depositsThisYear: r["dep"], withdrawalsThisYear: r["wd"], lastMovement: r["lastDay"],
                               openForecastCount: r["openForecasts"],
-                              recovery: forecast.recovery(potId: pot.id!, balance: balance))
+                              recovery: forecast.recovery(potId: pot.id!, balance: balance),
+                              pendingSettlement: pending[pot.id!] ?? .zero)
         }
 
         let accounts = accountRows.map { r -> SavingsAccountPots in
@@ -254,10 +354,8 @@ extension Insight {
         return try entryRows(db, where: clause, arguments: args)
     }
 
-    /// Openstaande te vergoeden uitgaven (`reimburse` zonder spaaroverboeking), met totaal en per pot.
-    public static func openReimbursements(_ db: Database) throws -> OpenReimbursements {
-        let entries = try entryRows(db, where: "e.reimburse = 1 AND e.savingsTransferId IS NULL",
-                                    order: "e.day ASC, e.id ASC")
+    /// Groepeert gemarkeerde boekingen per pot, in volgorde van eerste voorkomen.
+    static func reimbursementPots(_ entries: [EntryRow], balances: [Int64: Money]?) -> [ReimbursementPotTotal] {
         var order: [Int64?] = []
         var groups: [Int64?: (String?, Money, Int)] = [:]
         for e in entries {
@@ -265,21 +363,78 @@ extension Insight {
             let g = groups[e.potId] ?? (e.potName, .zero, 0)
             groups[e.potId] = (g.0, g.1 + e.amount, g.2 + 1)
         }
-        let total = entries.map(\.amount).sum()
-        return OpenReimbursements(entries: entries, total: total, transferAmount: -total,
-                                  perPot: order.map { ReimbursementPotTotal(potId: $0, potName: groups[$0]!.0,
-                                                                            total: groups[$0]!.1, count: groups[$0]!.2) })
+        return order.map { potId in
+            let g = groups[potId]!
+            let balance = potId.flatMap { id in balances.map { $0[id] ?? .zero } }
+            return ReimbursementPotTotal(potId: potId, potName: g.0, total: g.1, amount: -g.1, count: g.2,
+                                         balanceAfter: balance.map { $0 + g.1 })
+        }
     }
 
-    /// Alle spaaroverboekingen (nieuwste eerst) met de uitgaven die erin zitten.
+    /// Wat er nog uit elke pot gaat (positief) of erin komt (negatief): de gemarkeerde boekingen die nog niet in
+    /// een afgevinkte verrekening zitten (open, of in een verrekening die nog niet is afgevinkt).
+    static func pendingSettlements(_ db: Database) throws -> [Int64: Money] {
+        var result: [Int64: Money] = [:]
+        for r in try Row.fetchAll(db, sql: """
+            SELECT e.potId, SUM(e.amount) AS s FROM entry e
+            LEFT JOIN savingsTransfer t ON t.id = e.savingsTransferId
+            WHERE e.reimburse = 1 AND (e.savingsTransferId IS NULL OR t.done = 0)
+              AND e.potId IS NOT NULL AND e.accountId IN \(Q.betaal)
+            GROUP BY e.potId
+            """) {
+            result[r["potId"]] = -(r["s"] as Money)
+        }
+        return result
+    }
+
+    /// Gemarkeerde boekingen op betaalrekeningen die nog niet in een overboeking zitten: uitgaven (uit een pot) en
+    /// bijschrijvingen (naar een pot), gesaldeerd, met het bedrag per pot en het potsaldo erna.
+    public static func openReimbursements(_ db: Database) throws -> OpenReimbursements {
+        let entries = try entryRows(db, where: "e.reimburse = 1 AND e.savingsTransferId IS NULL AND a.kind = 'betaal'",
+                                    order: "e.day ASC, e.id ASC")
+        var balances: [Int64: Money] = [:]
+        if entries.contains(where: { $0.potId != nil }) {
+            for r in try Row.fetchAll(db, sql: """
+                SELECT p.id, COALESCE(SUM(e.amount), 0) AS s FROM pot p
+                LEFT JOIN entry e ON e.potId = p.id AND e.accountId = p.accountId GROUP BY p.id
+                """) {
+                balances[r["id"]] = r["s"]
+            }
+        }
+        let fromSavings = -entries.map(\.amount).filter { $0 < .zero }.sum()
+        let toSavings = entries.map(\.amount).filter { $0 > .zero }.sum()
+        let net = fromSavings - toSavings
+        return OpenReimbursements(entries: entries, total: -net, fromSavings: fromSavings, toSavings: toSavings,
+                                  net: net, transferAmount: net.magnitude, direction: SavingsTransferDirection(net: net),
+                                  perPot: reimbursementPots(entries, balances: balances),
+                                  withoutPotCount: entries.filter { $0.potId == nil }.count)
+    }
+
+    /// Alle overboekingen tussen spaar en betaal (nieuwste eerst) met de verrekende boekingen, het bedrag per pot
+    /// en of de potmutaties al geboekt zijn.
     public static func savingsTransfers(_ db: Database) throws -> [SavingsTransferDetail] {
         let transfers = try SavingsTransfer.order(Column("day").desc, Column("id").desc).fetchAll(db)
-        let entries = try entryRows(db, where: "e.savingsTransferId IS NOT NULL", order: "e.day ASC, e.id ASC")
+        guard !transfers.isEmpty else { return [] }
+        let markers = try TransferMarkers(db)
+        let entries = try entryRows(db, where: "e.savingsTransferId IS NOT NULL AND a.kind = 'betaal'",
+                                    order: "e.day ASC, e.id ASC").filter { !$0.isSettlementBooking }
         let grouped = Dictionary(grouping: entries, by: { $0.savingsTransferId! })
+        let bookings = Dictionary(grouping: try entryRows(db, where: markers.clause, order: "e.day ASC, e.id ASC")
+            .filter(\.isSettlementBooking), by: { $0.settlementTransferId! })
         return transfers.map { t in
             let own = grouped[t.id!] ?? []
-            return SavingsTransferDetail(id: t.id!, day: t.day, amount: t.amount, done: t.done, doneAt: t.doneAt,
-                                         note: t.note, entries: own, entriesTotal: own.map(\.amount).sum())
+            let made = bookings[t.id!] ?? []
+            let potEntries = made.filter { $0.accountKind == .spaar }
+            return SavingsTransferDetail(id: t.id!, day: t.day, amount: t.amount, transferAmount: t.amount.magnitude,
+                                         direction: SavingsTransferDirection(net: t.amount), done: t.done,
+                                         doneAt: t.doneAt, note: t.note, entries: own,
+                                         entriesTotal: own.map(\.amount).sum(),
+                                         perPot: reimbursementPots(own, balances: nil), potEntries: potEntries,
+                                         potMutationsBooked: !potEntries.isEmpty, bookings: made,
+                                         checkingBankConfirmed: markers.checkingBank.contains(t.id!)
+                                             || made.contains { $0.accountKind == .betaal && $0.bankTransactionId != nil },
+                                         savingsBankConfirmed: markers.savingsBank.contains(t.id!)
+                                             || made.contains { $0.accountKind == .spaar && $0.bankTransactionId != nil })
         }
     }
 }

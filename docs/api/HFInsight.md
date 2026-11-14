@@ -95,8 +95,70 @@ als vandaag in het gevraagde jaar valt.
 | `potOverview(db, accountId:today:)` | `PotOverview`: `accounts` (saldo, `potTotal`, `unallocated`, `pots`), `byKind`, `byOwner`, totalen |
 | `potHistory(db, potId:)` | `[PotHistoryRow]`: boekingen oudste eerst met `runningBalance` |
 | `unallocatedSavingsEntries(db, accountId:)` | boekingen op spaarrekeningen zonder pot |
-| `openReimbursements(db)` | `OpenReimbursements`: `entries`, `total` (negatief), `transferAmount` (positief), `perPot` |
-| `savingsTransfers(db)` | `[SavingsTransferDetail]`: overboekingen (nieuwste eerst) met hun boekingen |
+| `openReimbursements(db)` | `OpenReimbursements`: de open gemarkeerde boekingen, gesaldeerd (zie "Verrekenen met spaar") |
+| `savingsTransfers(db)` | `[SavingsTransferDetail]`: overboekingen (nieuwste eerst) met richting, boekingen, `perPot` en potmutaties |
+
+### Verrekenen met spaar (twee richtingen)
+
+`Entry.reimburse` op een betaalrekening geldt voor uitgaven ("uit deze pot") én voor bijschrijvingen ("doorstorten
+naar deze pot"). Alles wordt gesaldeerd tot één overboeking; `SavingsTransfer.amount` is het netto bedrag met teken
+(positief = van spaar naar betaal, negatief = van betaal naar spaar).
+
+- `OpenReimbursements`: `entries`, `fromSavings` (som uitgaven, positief), `toSavings` (som bijschrijvingen,
+  positief), `net` (`fromSavings` − `toSavings`), `transferAmount` (|`net`|), `direction`
+  (`SavingsTransferDirection`: `.fromSavings`, `.toSavings`, `.none`), `perPot` en `withoutPotCount`.
+- `ReimbursementPotTotal`: `amount` is wat de pot uit gaat (positief) of in komt (negatief), `balanceAfter` het
+  potsaldo na het verrekenen (nil zonder pot en in de historie), `count`, en `total` (som van de boekingen met teken).
+- `SavingsTransferDetail`: `amount` (netto, met teken), `transferAmount`, `direction`, `done`, `entries` (de
+  verrekende boekingen op de betaalrekening), `entriesTotal` (hoort −`amount` te zijn), `perPot`, `potEntries` en
+  `potMutationsBooked`.
+- `PotSummary.pendingSettlement`: wat er volgens de open gemarkeerde boekingen nog uit de pot gaat (positief) of
+  erin komt (negatief).
+- `EntryRow.settlementDirection`: `.fromPot` (gemarkeerde uitgave), `.toPot` (gemarkeerde bijschrijving) of nil.
+- `AttentionItem.openReimbursements(amount:count:direction:)`: `amount` is het netto bedrag zonder teken. Tekst:
+  "€ 310,00 over te maken van spaar naar betaal (5 boekingen)." / "… van betaal naar spaar …" / bij netto nul
+  "5 boekingen te verrekenen tussen potten."
+
+**Gewijzigd voor de schermen** (was "vergoeden uit spaar", alleen uitgaven):
+
+| Was | Is nu |
+|---|---|
+| `OpenReimbursements.transferAmount` = −`total`, altijd van spaar naar betaal | |`net`|; de richting staat in `direction` |
+| `OpenReimbursements.total` altijd ≤ 0 | som van de boekingen met teken (= −`net`); kan positief zijn |
+| `ReimbursementPotTotal.total` (negatief) | bestaat nog; gebruik `amount` (positief = de pot uit) |
+| `SavingsTransferDetail.amount` altijd positief | netto met teken; gebruik `transferAmount` en `direction` voor weergave |
+| `SavingsTransferDetail.entries` = alle gekoppelde boekingen | alleen die op de betaalrekening; potmutaties staan in `potEntries` |
+| `AttentionItem.openReimbursements(amount:count:)` | heeft er `direction:` bij |
+| alleen uitgaven | ook gemarkeerde bijschrijvingen; alleen boekingen op betaalrekeningen tellen |
+
+### Boeken bij afvinken
+
+Een verrekening wordt volledig geboekt zodra de gebruiker hem afvinkt (`markDone` in `HFBudget`): de potmutaties op
+de spaarrekening en de tegenboeking op de betaalrekening. Bankregels worden er bij een latere import aan gehangen.
+
+- `EntryRow.isSettlementBooking` (en `settlementTransferId`): de boeking is door een verrekening zelf gemaakt. Toon
+  hem als "Verrekening". Op de betaalrekening is de tegenboeking in de begroting een **gewone diverse boeking**
+  (de uitgave bij UIT divers, de terugstorting bij IN divers, zoals in de Excel); hij telt dus mee in het grid.
+- `SavingsTransferDetail`: `isDone`, `bookings` (alle verrekeningsboekingen), `potEntries` (die op de spaarrekening),
+  `potMutationsBooked`, `checkingBankConfirmed`, `savingsBankConfirmed` en `bankConfirmed` (beide kanten; bij netto
+  nul altijd waar). `entries` bevat alleen de gemarkeerde boekingen, niet de verrekeningsboekingen.
+- `PotSummary.pendingSettlement` telt alleen gemarkeerde boekingen die nog niet in een afgevinkte verrekening
+  zitten: open, of in een verrekening die nog niet is afgevinkt.
+- `AttentionItem.unconfirmedSettlement(amount:day:)`: een afgevinkte verrekening (netto niet nul) waar meer dan
+  `Insight.settlementConfirmationDays` (5) dagen na de dag van de verrekening nog niet aan beide kanten een
+  bankregel hangt. Tekst: "Verrekening van € 105,00 op 05-03-2027 is nog niet gezien in een bankbestand."
+  **Nieuwe `case`: schermen met een uitputtende `switch` op `AttentionItem` moeten hem afhandelen.**
+
+**Hoe een verrekeningsboeking herkend wordt** (af te stemmen op `HFBudget`; elk van deze volstaat):
+
+1. de notitie is `Verrekening met spaar #<id van de verrekening>`;
+2. de boeking staat in de instelling `savingsTransfer.<id>.potEntries`;
+3. de boeking hoort bij de banktransactie in `savingsTransfer.<id>.checkingTransaction` of `.savingsTransaction`
+   (die kant geldt dan ook als bevestigd door de bank);
+4. de boeking staat op een spaarrekening en heeft `savingsTransferId`.
+
+Een kant is door de bank bevestigd als een verrekeningsboeking op die rekeningsoort een `bankTransactionId` heeft,
+of als de instelling van punt 3 bestaat.
 
 `PotSummary` heeft `balance`, `monthlyAmount`, `targetAmount`, `progress` (0…1, alleen weergave),
 `remainingToTarget`, `depositsThisYear`, `withdrawalsThisYear`, `lastMovement`. Alleen boekingen op de
