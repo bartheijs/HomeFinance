@@ -441,14 +441,19 @@ public struct Settlement: Codable, Identifiable, Equatable, Sendable, FetchableR
 public struct Distribution: Codable, Identifiable, Equatable, Sendable, FetchableRecord, MutablePersistableRecord {
     public var id: Int64?
     public var name: String
-    /// De spaarrekening waar de storting op binnenkomt.
+    /// De spaarrekening waar de storting op binnenkomt (doel).
     public var accountId: Int64
     public var sortOrder: Int
     public var archived: Bool
+    /// De betaalrekening waar het geld vandaan komt (herkomst), of nil als die niet is ingesteld.
+    /// Met herkomst en doel herkent de app beide kanten van de overboeking aan de tegenrekening.
+    public var sourceAccountId: Int64?
 
     public static let databaseTableName = "distribution"
-    public init(id: Int64? = nil, name: String, accountId: Int64, sortOrder: Int = 0, archived: Bool = false) {
+    public init(id: Int64? = nil, name: String, accountId: Int64, sortOrder: Int = 0, archived: Bool = false,
+                sourceAccountId: Int64? = nil) {
         self.id = id; self.name = name; self.accountId = accountId; self.sortOrder = sortOrder; self.archived = archived
+        self.sourceAccountId = sourceAccountId
     }
     public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
 }

@@ -263,6 +263,13 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // De vaste storting kent ook de rekening waar het geld vandaan komt, zodat beide kanten herkend worden.
+        m.registerMigration("v5-distribution-source") { db in
+            try db.alter(table: "distribution") { t in
+                t.add(column: "sourceAccountId", .integer).references("account", onDelete: .setNull)
+            }
+        }
+
         return m
     }
 }
