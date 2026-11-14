@@ -270,6 +270,20 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Vooruitblik per pot: verwachte bedragen op een datum. Telt nergens in mee, alleen in de vooruitblik.
+        m.registerMigration("v6-forecast") { db in
+            try db.create(table: "forecastItem") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("potId", .integer).notNull().indexed().references("pot", onDelete: .cascade)
+                t.column("day", .text).notNull()
+                t.column("amount", .integer).notNull()
+                t.column("label", .text).notNull().defaults(to: "")
+                t.column("realizedEntryId", .integer).references("entry", onDelete: .setNull)
+                t.column("realizedAt", .datetime)
+                t.column("createdAt", .datetime).notNull()
+            }
+        }
+
         return m
     }
 }

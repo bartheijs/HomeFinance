@@ -490,6 +490,32 @@ public struct ItemCheck: Codable, Identifiable, Equatable, Sendable, FetchableRe
     public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
 }
 
+/// Een verwacht bedrag voor een pot op een datum (gift, bonus, vakantiegeld; of een verwachte uitgave).
+/// Staat buiten de werkelijkheid: telt niet mee in saldo, besteedbaar of begroting, alleen in de vooruitblik.
+/// Terugkerende stortingen staan hier NIET in; die volgen uit de vaste stortingen (`Distribution`).
+public struct ForecastItem: Codable, Identifiable, Equatable, Sendable, FetchableRecord, MutablePersistableRecord {
+    public var id: Int64?
+    public var potId: Int64
+    public var day: Day
+    /// Met teken: positief = erbij, negatief = eraf.
+    public var amount: Money
+    public var label: String
+    /// De echte boeking waarmee deze verwachting is uitgekomen, als die gekoppeld is.
+    public var realizedEntryId: Int64?
+    /// Gezet zodra de verwachting is afgevinkt als ontvangen/betaald; telt dan niet meer mee in de vooruitblik.
+    public var realizedAt: Date?
+    public var createdAt: Date
+
+    public static let databaseTableName = "forecastItem"
+    public init(id: Int64? = nil, potId: Int64, day: Day, amount: Money, label: String = "",
+                realizedEntryId: Int64? = nil, realizedAt: Date? = nil, createdAt: Date = Date()) {
+        self.id = id; self.potId = potId; self.day = day; self.amount = amount; self.label = label
+        self.realizedEntryId = realizedEntryId; self.realizedAt = realizedAt; self.createdAt = createdAt
+    }
+    public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
+    public var isRealized: Bool { realizedAt != nil }
+}
+
 /// Losse instelling (sleutel/waarde), voor alles wat geen eigen tabel verdient.
 public struct Setting: Codable, Equatable, Sendable, FetchableRecord, PersistableRecord {
     public var key: String
