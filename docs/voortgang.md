@@ -11,6 +11,19 @@
 - "Tijdelijk anti-rood" volgt uit boekingen met de markering *tijdelijk geleend van spaar*.
 - Back-up naar iCloud Drive; dashboard voor de telefoon als bestand in een cloudmap (geen hosting).
 
+## Stand op 14 november 2026, einde van de dag
+
+- De gebruiker is gestart: 2 rekeningen, 31 posten, 35 potten met beginbedrag en een vaste storting staan in zijn
+  administratie; de eerste bankimport sloot aan op het beginsaldo (betaal: 13 nieuw; spaar: 4 nieuw).
+- Gebouwd en getest (435 tests): vaste storting met herkenning, pot met beginbedrag, spaardoel (ook uit
+  onderdelen), vooruitblik met projecten, potten in de min, afvinken, begrotingsmaand, verrekenen per tag,
+  verrekenen met spaar (twee richtingen, boekt bij afvinken), totalen per omschrijving met aanvullen en
+  samenvoegen, maandbalans met wat-als, export naar Excel, rekenen in bedragvelden, telefoondashboard.
+- Nog te doen: de 6 reserveringsregels die niet aan een pot gekoppeld zijn (door de gebruiker); de knop "Leer
+  regels uit bankhistorie" (module klaar, scherm niet; hangt aan de historie-import); de historie-import zelf
+  (in de wacht, oplossing hieronder); de tijdlijn als HTML-pagina; voorbeelddata uitbreiden met de nieuwe
+  onderdelen; handmatig testen van alle schermen.
+
 ## Koerswijziging 14 november 2026
 
 - **Start met alleen beginstanden**, geen historie. De gebruiker richt zelf in (posten, potten met beginbedrag)

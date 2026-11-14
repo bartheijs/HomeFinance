@@ -532,10 +532,17 @@ public enum TagService {
         }
     }
 
-    /// Verwijdert een tag; hij verdwijnt ook van alle boekingen.
+    /// Verwijdert een tag; hij verdwijnt ook van alle boekingen. Geweigerd als de tag verrekeningen heeft
+    /// (echte verrekeningen, of een beginstand met boekingen): anders zou die historie stil verdwijnen.
+    /// Een lege beginstand (verrekenen aangezet zonder dat er iets verrekend is) houdt het verwijderen niet tegen.
     public static func delete(_ db: Database, tagId: Int64) throws {
         try atomic(db) {
-            _ = try Check.tag(db, tagId)
+            let tag = try Check.tag(db, tagId)
+            let settlements = try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM settlement
+                WHERE tagId = ? AND (isOpening = 0 OR EXISTS (SELECT 1 FROM entry WHERE entry.settlementId = settlement.id))
+                """, arguments: [tagId]) ?? 0
+            guard settlements == 0 else { throw BudgetError.tagHasSettlements(tag: tag.name, count: settlements) }
             try db.execute(sql: "DELETE FROM tag WHERE id = ?", arguments: [tagId])
         }
     }

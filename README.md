@@ -44,7 +44,11 @@ administratie beginnen**. Je kunt later altijd wisselen via Instellingen › Ove
 | Anti-rood | Buffer die altijd op de betaalrekening moet blijven staan. |
 | Besteedbaar | Saldo betaalrekening − anti-rood − wat je tijdelijk van spaar hebt geleend. Geld met een bestemming staat in potten op de spaarrekening. |
 | Tijdelijk geleend van spaar | Geld dat je even naar de betaalrekening haalt en later terugboekt. Je markeert beide overboekingen; de app houdt bij wat er uitstaat. |
-| Vergoeden uit spaar | Een uitgave van de betaalrekening die je later terugboekt vanaf de spaarrekening. |
+| Verrekenen met spaar | Een uitgave die uit een pot hoort te komen, of geld dat binnenkomt en naar een pot moet. Je maakt het saldo in één keer over en vinkt het af. |
+| Vaste storting | Een bedrag dat regelmatig naar de spaarrekening gaat, met de verdeling over potten. |
+| Spaardoel | Doelbedrag en doeldatum bij een pot; de app rekent uit wat er per maand bij moet. |
+| Vooruitblik | Wat het saldo van een pot naar verwachting doet, met de bedragen die je nog verwacht. Telt nergens in mee. |
+| Telt mee in | De maand waarin een boeking voor de begroting meetelt, als dat een andere is dan de maand van de datum. |
 | Tag | Label om uitgaven te volgen (tanken, uit eten). Telt niet als extra uitgave. |
 
 ## Waar staan je gegevens?

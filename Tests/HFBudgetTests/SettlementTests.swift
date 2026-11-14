@@ -256,11 +256,28 @@ import Testing
             #expect(try EntryService.update(db, entryId: manual.id!, draft).label == "Tankstation")
             #expect(try Entry.fetchOne(db, key: manual.id!)!.settlementId == result.settlement.id)
 
-            // Na het verwijderen van de verrekening is alles weer vrij.
+            // Een tag met verrekeningen kan niet verwijderd worden; de historie blijft staan.
+            #expect(throws: BudgetError.tagHasSettlements(tag: "Tanken", count: 1)) {
+                try TagService.delete(db, tagId: tag.id!)
+            }
+            #expect(try SettlementService.history(db, tagId: tag.id!).count == 2)
+            #expect(BudgetError.tagHasSettlements(tag: "Tanken", count: 1).localizedDescription.contains("historie"))
+
+            // Na het verwijderen van de verrekening is alles weer vrij, ook de tag (de beginstand is leeg).
             try SettlementService.delete(db, settlementId: result.settlement.id!)
             try EntryService.setTags(db, entryId: manual.id!, tagIds: [])
             try BookingService.unbook(db, bankTransactionId: t.id!)
             try BookingService.unbook(db, bankTransactionId: stortingTx.id!)
+            try TagService.delete(db, tagId: tag.id!)
+            #expect(try Tag.fetchOne(db, key: tag.id!) == nil)
+
+            // Een beginstand met boekingen houdt het verwijderen ook tegen.
+            let parkeren = try TagService.create(db, name: "Parkeren")
+            try entry(db, fx, "2027-01-10", -500, "Garage", tags: [parkeren.id!])
+            try SettlementService.enable(db, tagId: parkeren.id!, from: d("2027-02-01"))
+            #expect(throws: BudgetError.tagHasSettlements(tag: "Parkeren", count: 1)) {
+                try TagService.delete(db, tagId: parkeren.id!)
+            }
         }
     }
 }

@@ -1,12 +1,16 @@
 # HomeFinance voor macOS — ontwerp v1
 
-*13 november 2026. Bron: `bron/Family_Budget_App_Specification.md` (geanonimiseerd) en het technische vooronderzoek.*
+*13 november 2026, bijgewerkt op 14 november 2026. Bron: `bron/Family_Budget_App_Specification.md` (geanonimiseerd) en het technische vooronderzoek.*
 
 ## Doel
 
 Een native macOS-app voor één gebruiker die twee Excel-werkmappen vervangt: de gezinsbegroting op de
 betaalrekening (maandoverzicht IN/UIT sinds 2006) en de administratie van de spaarrekening (reserveringspotten
-en spaarpotten). Start op 1-1-2027. De financiële logica van de Excel blijft gelijk; het typewerk verdwijnt.
+en spaarpotten). De financiële logica van de Excel blijft gelijk; het typewerk verdwijnt.
+
+**Start:** op 8 november 2026 met alleen beginstanden (saldo per rekening, beginbedrag per pot), zonder
+historie. De gebruiker richt zelf in en draait schaduw in zijn Excel. De Excel-historie importeren staat in de
+wacht (zie `docs/voortgang.md`).
 
 **Klaar is:** een maand bijhouden kost alleen nog een CSV importeren en nakijken; het berekende saldo sluit op
 € 0,00 met de bank; besteedbaar klopt met de Excel-formule; elke pot heeft een saldo.
@@ -19,12 +23,14 @@ en spaarpotten). Start op 1-1-2027. De financiële logica van de Excel blijft ge
 | Opslag | `~/Library/Application Support/HomeFinance/homefinance.sqlite`. Nooit in een cloudmap. |
 | Geld | `Money` in hele centen. Uitgaven negatief, inkomsten positief. Nooit `Double`. |
 | Datums | `Day` (jaar-maand-dag, zonder tijdzone), in de database als `yyyy-MM-dd`. |
-| Rekeningen | Meerdere: betaalrekening(en) en spaarrekening(en). Elke rekening heeft een eigen CSV-import. |
-| Import | Bank-CSV per rekening, met controle van de saldoketen en herkenning van dubbelen. |
+| Rekeningen | Meerdere: betaalrekening(en) en spaarrekening(en). Alle potten staan op één spaarrekening. |
+| Import | De zip van de bank (één CSV per rekening, 19 kolommen zonder kop; bevestigd met echte bestanden), ook los CSV of PDF. Saldoketen, dubbelen, en bij de eerste import aansluiting op het beginsaldo. |
 | Categorisatie | Regels, die bijleren van elke correctie. Geen AI in v1. |
 | Login | Geen. De Mac is de beveiliging. |
 | Taal | Interface Nederlands. Code, commentaar in code mag Nederlands; identifiers Engels. |
-| Later | Webdashboard (alleen lezen), Excel-historie 2006–2026, export naar Excel/PDF, AI-suggesties. |
+| Telefoon | Geen hosting: de app schrijft een pagina (HTML zonder scripts en PDF) naar een cloudmap. |
+| Back-up | Het databasebestand naar een map naar keuze (iCloud Drive), optioneel een tweede map. Een export naar Excel is een leesbare kopie, geen back-up. |
+| Later | Excel-historie 2006–2026 (gebouwd, in de wacht), PDF-rapporten, AI-suggesties. |
 | Privacy | Geen echte gegevens in de repo, tests of prompts. Testdata is verzonnen. |
 
 ## Modules
@@ -36,7 +42,9 @@ en spaarpotten). Start op 1-1-2027. De financiële logica van de Excel blijft ge
 | `HFRules` | Regels toepassen op banktransacties, voorstellen met zekerheid, leren van correcties | HFCore |
 | `HFBudget` | Schrijven: boeken, splitsen, potten, overboekingen, afstemming, jaar en posten beheren | HFCore |
 | `HFInsight` | Lezen: maandgrid, status vaste posten, saldo, besteedbaar, potsaldi, rapportcijfers, zoeken | HFCore |
-| `HFBackup` | Back-up en herstel van de database, voorbeelddata | HFCore |
+| `HFBackup` | Back-up en herstel, voorbeelddata, export als CSV en als Excel-bestand per jaar | HFCore |
+| `HFHistory` | Eenmalige import van de Excel-historie (in de wacht) | HFCore |
+| `HFPublish` | Het dashboard voor de telefoon als bestand | HFCore, HFInsight |
 | `HomeFinance` | De SwiftUI-app. Geen rekenlogica in views. | alles |
 
 Modules kennen elkaar niet onderling (`HFInsight` leest alleen en rekent zelf met SQL); alleen de app verbindt ze. Elke module beschrijft zijn publieke API in
@@ -50,10 +58,17 @@ Zie `Sources/HFCore/Records.swift` (records met uitleg) en `Schema.swift` (tabel
 - **BudgetYear**: jaar, `antiRood`, `closed`.
 - **BudgetItem**: vaste post in één jaar (rij in het grid): label, richting IN/UIT/RES, planbedrag met teken,
   frequentie, verwachte maanden en dag. Eén post per jaar is `isReserveTotal` (de regel RESERVERINGEN).
-- **Pot**: deel van het saldo van een spaarrekening; soort reservering of spaar; maandbedrag.
+- **Pot**: deel van het saldo van een spaarrekening; soort reservering of spaar; optioneel een spaardoel
+  (`targetAmount`, `targetDate`, eventueel opgebouwd uit **GoalPart**-regels). Mag negatief staan.
+- **Distribution** + **DistributionLine**: een vaste storting van een betaalrekening naar een spaarrekening,
+  met de verdeling over potten.
+- **ForecastItem**: een verwacht bedrag voor een pot op een datum, optioneel binnen een project.
+- **ItemCheck**: een post die voor een maand met de hand is afgevinkt.
+- **Settlement**: een verrekening van een tag (bv. Tanken).
 - **BankTransaction**: regel van de bank, onveranderlijk. Status nieuw, verwerkt of overgeslagen.
 - **Entry** (boeking): bedrag op een rekening, toegewezen aan post of pot. Eén of meer per banktransactie
   (splitsen); zonder banktransactie = handinvoer. `reviewed = false` betekent "nog nakijken".
+  `period` = de maand waarin de boeking meetelt als dat een andere is dan de maand van de datum.
 - **Tag**: trackingcategorie (tanken, uit eten), n-op-m met Entry.
 - **Rule**, **Reconciliation**, **SavingsTransfer**, **ImportBatch**, **Setting**.
 
@@ -101,17 +116,63 @@ Zie `Sources/HFCore/Records.swift` (records met uitleg) en `Schema.swift` (tabel
 ### Potten en spaarrekening
 - Saldo van een pot = som van de boekingen op de spaarrekening met dat `potId`.
 - Saldo spaarrekening = beginsaldo + som boekingen; **niet toegewezen** = saldo − som van alle potten.
-- **Verdelen**: een storting die gelijk is aan de som van de maandbedragen van de reserveringspotten wordt
-  gesplitst in één boeking per pot (elk zijn `monthlyAmount`).
+- Een pot mag in de min staan: hij leent dan van de andere potten. De app toont wanneer hij met de huidige
+  stortingen weer op nul staat, en het totaal dat geleend is uit andere potten.
+- **Beginbedrag**: een pot krijgt bij het aanmaken een beginbedrag (standaard € 0,00), geboekt als handmatige
+  boeking "Beginsaldo …" op de spaarrekening. Beginsaldo rekening = potten + niet toegewezen.
+- **Vaste storting**: naam, herkomstrekening (betaal), doelrekening (spaar) en per pot een bedrag. Het totaal is
+  de som van de regels. Een post op de betaalrekening kan aan een vaste storting gekoppeld zijn; zijn plan is
+  dan altijd min het totaal. Er kunnen meer vaste stortingen zijn. Dit vervangt het maandbedrag per pot en de
+  RES-regels als bron van de verdeling.
+- **Herkennen**: een banktransactie tussen de herkomst- en doelrekening van een vaste storting wordt aan beide
+  kanten herkend aan de tegenrekening. Op de spaarrekening is het voorstel de verdeling over de potten; op de
+  betaalrekening de gekoppelde post. Wijkt het bedrag af, dan toont de app het verschil en kiest de gebruiker.
+- **Spaardoel**: doelbedrag en doeldatum. Nodig per maand = (doel − saldo − verwachte losse bedragen) gedeeld
+  door het aantal stortmomenten tot de doeldatum. Daarnaast: wat er nu per maand gestort wordt, of het doel
+  gehaald wordt, en op welke datum.
+- **Vooruitblik**: het verwachte saldo van een pot in de tijd = het echte saldo + de terugkerende stortingen uit
+  de vaste stortingen + de losse verwachtingen (`ForecastItem`). De storting van de lopende maand telt alleen
+  mee als hij nog niet binnen is. Een losse verwachting wordt afgevinkt als hij is uitgekomen. Verwachtingen
+  tellen nergens anders in mee. Verwachtingen met hetzelfde project vormen een begroting: gepland, betaald,
+  nog te komen.
 - **Overboeking tussen eigen rekeningen**: twee banktransacties met tegengesteld bedrag, waarvan de
   tegenrekening de andere eigen rekening is, binnen 3 dagen. De boekingen worden aan elkaar gekoppeld
   (`counterEntryId`). Ze tellen op elke rekening gewoon mee in het saldo.
 
-### Spaaroverboekingen (vergoeden uit spaar)
-- Een uitgave op de betaalrekening kan `reimburse` krijgen, met optioneel de pot die betaalt.
-- Openstaand = alle `reimburse`-boekingen zonder `savingsTransferId`; het totaal is het over te boeken bedrag.
-- "Overboeking maken" legt een `SavingsTransfer` vast met die boekingen; "gedaan" markeert hem.
-- Voorschieten en terugkrijgen blijven twee losse boekingen (één UIT, één IN).
+### Verrekenen met spaar
+- Een boeking op de betaalrekening kan gemarkeerd worden om met een pot verrekend te worden (`reimburse` +
+  `potId`): een uitgave "komt uit de pot", een bijschrijving "gaat naar de pot".
+- Openstaand = alle gemarkeerde boekingen die nog niet in een verrekening zitten. Het saldo is netto: uit potten
+  min naar potten. Positief = over te maken van spaar naar betaal; negatief = van betaal naar spaar; nul = alleen
+  verschuiven tussen potten.
+- **Afvinken boekt meteen**: per pot een boeking op de spaarrekening en één tegenboeking op de betaalrekening,
+  aan elkaar gekoppeld. De administratie klopt dus zodra de gebruiker heeft overgemaakt.
+- **Bij een latere import** wordt de bankregel herkend (bedrag, tegenrekening, binnen 7 dagen) en aan de
+  bestaande verrekening gehangen. Er komt geen nieuwe boeking bij en het saldo verandert niet.
+- Een afgevinkte verrekening die na 5 dagen nog niet in een bankbestand is gezien, wordt gemeld.
+- Volgorde van herkennen bij nieuwe banktransacties: verrekeningen, dan vaste stortingen, dan regels.
+
+### Verrekenen per tag
+- Een tag kan "verrekenen" hebben (bv. Tanken): uitgaven met die tag stort de gebruiker later terug op de
+  betaalrekening. Openstaand = − de som van de boekingen met die tag zonder verrekening, vanaf de startdatum.
+- Een verrekening legt vast welke boekingen zijn afgerekend en koppelt optioneel de terugstorting.
+
+### Begrotingsmaand en afvinken
+- Een boeking telt voor de begroting in de maand van zijn `period`, of anders in de maand van zijn datum. De
+  periode mag hoogstens twee maanden van de datum afliggen. Het saldo van de rekening volgt altijd de datum.
+- Een vaste post kan voor een maand met de hand worden afgevinkt. Zonder boeking is de status dan `afgevinkt`:
+  hij telt als voldaan, niet als open of te laat, en niet in "nog verwacht deze maand".
+
+### Maandbalans en wat-als
+- Maandbalans = geplande inkomsten per maand min geplande uitgaven per maand; kwartaal- en jaarposten naar rato.
+- Per post kan een wat-als-bedrag worden ingevuld. De wat-als-balans gebruikt dat bedrag waar het is ingevuld en
+  anders het plan. Er verandert niets aan de begroting tot de gebruiker er het nieuwe plan van maakt.
+
+### Omschrijvingen
+- De omschrijving van een boeking komt uit de regel of van de gebruiker; de tekst van de bank blijft bewaard.
+- Totalen per omschrijving: losse boekingen gegroepeerd op genormaliseerde omschrijving.
+- Bij het typen vult de app bestaande omschrijvingen aan en meldt hij een bijna-gelijke schrijfwijze. Dubbele
+  schrijfwijzen kunnen worden samengevoegd.
 
 ### Import (uit de werkwijze van de Excel)
 1. Bestand lezen; elke regel wordt een `BankTransaction` of een gemelde fout. Geen regel verdwijnt stil.
@@ -123,6 +184,11 @@ Zie `Sources/HFCore/Records.swift` (records met uitleg) en `Schema.swift` (tabel
 6. Nieuwe boekingen krijgen `reviewed = false` tot de gebruiker ze heeft nagekeken.
 7. Controle achteraf: elke geïmporteerde regel is verwerkt of overgeslagen; het berekende saldo is gelijk aan
    het eindsaldo van het bestand.
+8. **Eerste import van een rekening** (nog geen banktransacties): de app zoekt de regel waarvan het saldo vóór
+   de mutatie gelijk is aan het saldo in de administratie. Alles ervoor wordt overgeslagen en telt als "al
+   bekend". Wordt geen regel gevonden, dan valt de app terug op de begindatum en kiest de gebruiker per regel.
+9. Geïmporteerde transacties blijven in de wachtrij staan tot ze geboekt of overgeslagen zijn, ook na het
+   sluiten van de app.
 
 ### Regels
 Zekerheid en volgorde:
@@ -138,17 +204,21 @@ alleen een bedrag wordt nooit automatisch geleerd.
 
 ## Schermen
 
-Zijbalk: Dashboard · Importeren en nakijken · Maandgrid · Transacties · Potten en sparen · Spaaroverboekingen ·
-Rapporten · Regels · Instellingen (jaar en posten, rekeningen, tags, back-up).
+Zijbalk: Transacties (startscherm, als een bank-app) · Importeren en nakijken · Dashboard · Maandgrid · Potten en
+sparen · Verrekenen met spaar · Rapporten · Regels · Instellingen (jaar en posten, rekeningen, tags, back-up,
+telefoon, over).
+
+Uitgangspunt: de eerste aanblik van elk scherm is rustig; details staan achter een klik. Alleen het maandgrid is
+compact. Bedragvelden accepteren ook een som (249*4).
 
 ## Testen
 
 Swift Testing, per module een eigen testtarget, met een database in het geheugen (`AppDatabase.inMemory()`).
 Rekenregels krijgen tests met uitgewerkte, verzonnen voorbeelden.
 
-## Aannames (te bevestigen door Bart)
+## Aannames en beperkingen
 
-- Het CSV-formaat van de bank is het bekende formaat zonder kopregel met 19 kolommen, waaronder "saldo vóór
-  mutatie". Er is nog geen voorbeeldbestand; de kolomindeling is daarom instelbaar.
 - De uitleg van "t.o.v. maandbudget" hierboven.
 - De app draait alleen op de eigen Mac, zonder App Store en zonder sandbox.
+- De schermen zijn gebouwd en op schermafbeeldingen bekeken, maar niet systematisch met de hand getest.
+- Een developer reviewt de code voordat de app de enige administratie wordt; tot dan draait de Excel mee.

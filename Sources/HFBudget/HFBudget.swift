@@ -58,6 +58,8 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
     /// De boeking is als terugstorting aan een verrekening gekoppeld.
     case depositLinked
     case tagNotSettling(tag: String)
+    /// De tag heeft verrekeningen en kan daarom niet verwijderd worden.
+    case tagHasSettlements(tag: String, count: Int)
     case notSettleable(entry: String, tag: String)
     case depositInvalid(String)
     /// De boeking hoort bij het afvinken van een verrekening met spaar en wordt daar beheerd.
@@ -146,6 +148,9 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
                 + "verwijder eerst de verrekening."
         case .depositLinked:
             return "Deze bijschrijving is als terugstorting aan een verrekening gekoppeld. Ontkoppel haar eerst."
+        case let .tagHasSettlements(tag, count):
+            return "De tag \(tag) heeft \(count) verrekening(en) en kan niet verwijderd worden; de historie zou "
+                + "verloren gaan. Zet verrekenen voor deze tag uit als je hem niet meer gebruikt."
         case let .tagNotSettling(tag):
             return "Voor de tag \(tag) staat verrekenen niet aan."
         case let .notSettleable(entry, tag):

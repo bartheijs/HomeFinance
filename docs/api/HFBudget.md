@@ -430,7 +430,7 @@ handmatige boeking tegenover staat.
 | `AccountService.setArchived(db, accountId:, Bool)` / `reorder(db, orderedIds:)` | Archiveren en volgorde. |
 | `AccountService.normalizeIBAN(String)` | De normalisatie zelf. |
 | `AccountService.setOpeningFromPots(db, accountId:, totalOpening:)` | Zet het beginsaldo op het niet toegewezen deel; zie PotService. |
-| `TagService.create(db, name:, color:)` / `update` / `delete` / `reorder` | Naam uniek (hoofdletterongevoelig), kleur `#RRGGBB`. `update` laat `settles` ongemoeid (dat loopt via `SettlementService`). `delete` verwijdert ook de verrekeningen van de tag. |
+| `TagService.create(db, name:, color:)` / `update` / `delete` / `reorder` | Naam uniek (hoofdletterongevoelig), kleur `#RRGGBB`. `update` laat `settles` ongemoeid (dat loopt via `SettlementService`). `delete` wordt geweigerd met `tagHasSettlements` als de tag verrekeningen heeft (echte, of een beginstand met boekingen), zodat de historie niet stil verdwijnt; een lege beginstand houdt het niet tegen. |
 
 ## Aannames
 
