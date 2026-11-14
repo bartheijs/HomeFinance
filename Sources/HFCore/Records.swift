@@ -91,13 +91,17 @@ public struct BudgetItem: Codable, Identifiable, Equatable, Sendable, FetchableR
     public var sortOrder: Int
     /// De vaste storting waar deze post bij hoort. Het plan van de post is dan min het totaal van die storting.
     public var distributionId: Int64?
+    /// Wat-als-bedrag (met teken, zoals `planAmount`): een bedrag om uit te proberen naast het plan, bv. een
+    /// ander loon. nil = geen afwijking van het plan. Telt nergens in mee behalve in de wat-als-vergelijking.
+    public var scenarioAmount: Money?
 
     public static let databaseTableName = "budgetItem"
     public init(id: Int64? = nil, yearId: Int64, label: String, direction: Direction, planAmount: Money,
                 frequency: Frequency = .maand, expectedMonths: String = "", expectedDay: Int? = nil,
                 isReserveTotal: Bool = false, reducesReserve: Bool = false, potId: Int64? = nil, sortOrder: Int = 0,
-                distributionId: Int64? = nil) {
+                distributionId: Int64? = nil, scenarioAmount: Money? = nil) {
         self.distributionId = distributionId
+        self.scenarioAmount = scenarioAmount
         self.id = id; self.yearId = yearId; self.label = label; self.direction = direction
         self.planAmount = planAmount; self.frequency = frequency; self.expectedMonths = expectedMonths
         self.expectedDay = expectedDay; self.isReserveTotal = isReserveTotal
@@ -509,15 +513,39 @@ public struct ForecastItem: Codable, Identifiable, Equatable, Sendable, Fetchabl
     /// Gezet zodra de verwachting is afgevinkt als ontvangen/betaald; telt dan niet meer mee in de vooruitblik.
     public var realizedAt: Date?
     public var createdAt: Date
+    /// Naam van het project waar deze verwachting bij hoort (bv. een vakantie), of leeg.
+    /// Verwachtingen met hetzelfde project vormen samen een begroting: gepland, betaald, nog te komen.
+    public var project: String
 
     public static let databaseTableName = "forecastItem"
     public init(id: Int64? = nil, potId: Int64, day: Day, amount: Money, label: String = "",
-                realizedEntryId: Int64? = nil, realizedAt: Date? = nil, createdAt: Date = Date()) {
+                realizedEntryId: Int64? = nil, realizedAt: Date? = nil, createdAt: Date = Date(),
+                project: String = "") {
+        self.project = project
         self.id = id; self.potId = potId; self.day = day; self.amount = amount; self.label = label
         self.realizedEntryId = realizedEntryId; self.realizedAt = realizedAt; self.createdAt = createdAt
     }
     public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
     public var isRealized: Bool { realizedAt != nil }
+}
+
+/// Een onderdeel van een spaardoel: aantal × bedrag per stuk (bv. 40 lessen × € 65), of één los bedrag
+/// (aantal 1). Heeft een pot onderdelen, dan is `Pot.targetAmount` altijd de som ervan.
+public struct GoalPart: Codable, Identifiable, Equatable, Sendable, FetchableRecord, MutablePersistableRecord {
+    public var id: Int64?
+    public var potId: Int64
+    public var label: String
+    public var quantity: Int
+    public var unitAmount: Money
+    public var sortOrder: Int
+
+    public static let databaseTableName = "goalPart"
+    public init(id: Int64? = nil, potId: Int64, label: String, quantity: Int = 1, unitAmount: Money, sortOrder: Int = 0) {
+        self.id = id; self.potId = potId; self.label = label; self.quantity = quantity
+        self.unitAmount = unitAmount; self.sortOrder = sortOrder
+    }
+    public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
+    public var amount: Money { Money(cents: unitAmount.cents * Int64(quantity)) }
 }
 
 /// Losse instelling (sleutel/waarde), voor alles wat geen eigen tabel verdient.

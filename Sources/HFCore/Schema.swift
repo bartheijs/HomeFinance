@@ -291,6 +291,24 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Wat-als-bedrag per post, een spaardoel opgebouwd uit onderdelen, en verwachtingen gegroepeerd per project.
+        m.registerMigration("v8-scenario-goalparts-project") { db in
+            try db.alter(table: "budgetItem") { t in
+                t.add(column: "scenarioAmount", .integer)
+            }
+            try db.create(table: "goalPart") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("potId", .integer).notNull().indexed().references("pot", onDelete: .cascade)
+                t.column("label", .text).notNull().defaults(to: "")
+                t.column("quantity", .integer).notNull().defaults(to: 1)
+                t.column("unitAmount", .integer).notNull().defaults(to: 0)
+                t.column("sortOrder", .integer).notNull().defaults(to: 0)
+            }
+            try db.alter(table: "forecastItem") { t in
+                t.add(column: "project", .text).notNull().defaults(to: "")
+            }
+        }
+
         return m
     }
 }
