@@ -40,10 +40,20 @@ enum Q {
     /// Bovengrens voor tekstvergelijking; "-31" werkt ook voor kortere maanden.
     static func monthEnd(_ y: Int, _ m: Int) -> String { String(format: "%04d-%02d-31", y, m) }
 
-    /// Begin en eind (ISO) van een jaar of van één maand daarin.
-    static func range(_ year: Int, _ month: Int?) -> (String, String) {
-        if let month { return (monthStart(year, month), monthEnd(year, month)) }
-        return (yearStart(year), yearEnd(year))
+    /// De begrotingsmaand van een boeking als "yyyy-MM": `period` als die gezet is, anders de maand van `day`.
+    /// Alles wat een boeking aan een maand of jaar van de begroting toerekent, gebruikt deze expressie;
+    /// saldi blijven `day` volgen.
+    static let period = "COALESCE(e.period, substr(e.day, 1, 7))"
+    /// Maandnummer (1–12) en jaar van de begrotingsmaand.
+    static let periodMonth = "CAST(substr(\(period), 6, 2) AS INTEGER)"
+    static let periodYear = "CAST(substr(\(period), 1, 4) AS INTEGER)"
+
+    static func periodKey(_ y: Int, _ m: Int) -> String { String(format: "%04d-%02d", y, m) }
+
+    /// SQL-voorwaarde en argumenten: de boeking telt mee in dit begrotingsjaar, of in één maand daarvan.
+    static func inPeriod(_ year: Int, _ month: Int? = nil) -> (sql: String, args: [(any DatabaseValueConvertible)?]) {
+        if let month { return ("\(period) = ?", [periodKey(year, month)]) }
+        return ("(\(period) >= ? AND \(period) <= ?)", [periodKey(year, 1), periodKey(year, 12)])
     }
 
     static func lastDay(_ y: Int, _ m: Int) -> Day {
@@ -87,6 +97,13 @@ enum Q {
         try BudgetItem.filter(Column("yearId") == yearId).order(Column("sortOrder"), Column("id")).fetchAll(db)
     }
 
+    /// De afgevinkte (post, maand)-paren van een begrotingsjaar.
+    static func checks(_ db: Database, yearId: Int64) throws -> Set<ItemMonth> {
+        Set(try Row.fetchAll(db, sql: """
+            SELECT c.budgetItemId, c.month FROM itemCheck c JOIN budgetItem i ON i.id = c.budgetItemId WHERE i.yearId = ?
+            """, arguments: [yearId]).map { ItemMonth($0["budgetItemId"], $0["month"]) })
+    }
+
     /// Loopt (dag, bedrag)-rijen op volgorde van dag af en geeft per peildag het cumulatief t/m die dag.
     static func cumulative(_ rows: [(Day, Money)], at points: [Day], start: Money = .zero) -> [Money] {
         var result: [Money] = []
@@ -98,6 +115,13 @@ enum Q {
         }
         return result
     }
+}
+
+/// Een vaste post in één maand (sleutel voor afvinken).
+struct ItemMonth: Hashable {
+    let itemId: Int64
+    let month: Int
+    init(_ itemId: Int64, _ month: Int) { self.itemId = itemId; self.month = month }
 }
 
 extension BudgetItem {

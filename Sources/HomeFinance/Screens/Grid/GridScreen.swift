@@ -1,4 +1,5 @@
 import SwiftUI
+import GRDB
 import HFCore
 import HFInsight
 
@@ -9,6 +10,8 @@ struct GridScreen: View {
     @State private var grid: MonthGrid?
     @State private var summary: YearSummary?
     @State private var loaded = false
+    /// Per post-id: naam en verdeling van de gekoppelde vaste storting, voor de tooltip van het label.
+    @State private var distributionHelp: [Int64: String] = [:]
     @State private var showDifference = false
     @State private var showLegend = false
     @State private var showOverview = false
@@ -46,7 +49,21 @@ struct GridScreen: View {
         // Een jaar dat nog niet bestaat is geen fout: dan tonen we de uitleg.
         grid = try? model.db.read { try Insight.monthGrid($0, year: model.year, today: model.today) }
         summary = try? model.db.read { try Insight.yearSummary($0, year: model.year, today: model.today) }
+        distributionHelp = (try? model.db.read { db in try Self.distributionHelp(db, today: model.today) }) ?? [:]
         loaded = true
+    }
+
+    /// Tekst per gekoppelde post: "Vaste storting <naam>: <totaal>" en daaronder potnaam en bedrag.
+    private static func distributionHelp(_ db: Database, today: Day) throws -> [Int64: String] {
+        let summaries = Dictionary(uniqueKeysWithValues: try Insight.distributions(db, today: today).map { ($0.id, $0) })
+        var result: [Int64: String] = [:]
+        for item in try BudgetItem.filter(Column("distributionId") != nil).fetchAll(db) {
+            guard let id = item.id, let distributionId = item.distributionId, let summary = summaries[distributionId] else { continue }
+            let lines = summary.lines.map { "• \($0.potName): \($0.amount.formatted())" }
+            result[id] = (["Gekoppeld aan de vaste storting \(summary.name) naar \(summary.accountName): \(summary.total.formatted())"]
+                + lines).joined(separator: "\n")
+        }
+        return result
     }
 
     private var options: GridOptions {
@@ -114,7 +131,7 @@ struct GridScreen: View {
         let lines = GridLine.build(from: grid, showReserveLines: showReserveLines)
         return VStack(alignment: .leading, spacing: 0) {
             GridTable(grid: grid, lines: lines, density: density, options: options,
-                      reserveExpanded: showReserveLines,
+                      reserveExpanded: showReserveLines, distributionHelp: distributionHelp,
                       onToggleReserve: { withAnimation(.easeInOut(duration: 0.15)) { showReserveLines.toggle() } })
                 .frame(maxHeight: GridTable.contentHeight(lineCount: lines.count, density: density))
                 .background(GridPalette.surface)
@@ -178,6 +195,9 @@ struct GridLegend: View {
             row("Geen kleur", "Geboekt en gelijk aan het plan.") { swatch(nil) }
             row("Geel", "Geboekt, maar een ander bedrag dan gepland.") { swatch(CellStatus.afwijkend.gridTint) }
             row("Rood", "Te laat: verwacht, maar nog niet geboekt.") { swatch(CellStatus.teLaat.gridTint) }
+            row("Vinkje", "Met de hand afgevinkt als voldaan, zonder boeking.") {
+                Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)).foregroundStyle(.secondary)
+            }
             row("Grijs puntje", "Wordt deze maand nog verwacht.") {
                 Circle().fill(Color.secondary.opacity(0.6)).frame(width: 5, height: 5)
             }
@@ -188,7 +208,7 @@ struct GridLegend: View {
                 GridCornerMark().fill(Color.secondary.opacity(0.7)).frame(width: 6, height: 6)
             }
             Divider()
-            Text(editable ? "Klik op een cel voor de boekingen. Dubbelklik om een boeking toe te voegen."
+            Text(editable ? "Klik op een cel voor de boekingen en om af te vinken. Dubbelklik om een boeking toe te voegen. Rechtsklik voor alle keuzes."
                  : "Klik op een cel voor de boekingen.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }

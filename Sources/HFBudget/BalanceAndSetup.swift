@@ -145,7 +145,8 @@ public enum YearService {
     }
 
     /// Maakt een nieuw jaar als kopie van een bestaand jaar: de buffers en alle posten (label, richting, plan,
-    /// frequentie, verwachte maanden en dag, vlaggen, potkoppeling, volgorde). Boekingen gaan niet mee.
+    /// frequentie, verwachte maanden en dag, vlaggen, potkoppeling, koppeling met een vaste storting, volgorde).
+    /// Boekingen en vinkjes gaan niet mee. Het plan van gekoppelde posten volgt het huidige totaal van de storting.
     @discardableResult
     public static func createYear(_ db: Database, year: Int, copyingFrom sourceYear: Int) throws -> BudgetYear {
         try atomic(db) {
@@ -201,7 +202,9 @@ public enum YearService {
         }
     }
 
-    /// Werkt een vaste post bij (niet het jaar of de volgorde).
+    /// Werkt een vaste post bij (niet het jaar of de volgorde). Is de post aan een vaste storting gekoppeld
+    /// (`distributionId`), dan wordt een zelf ingevuld plan niet geweigerd maar overschreven met − het totaal
+    /// van de storting.
     @discardableResult
     public static func updateItem(_ db: Database, _ item: BudgetItem) throws -> BudgetItem {
         try atomic(db) {
@@ -279,6 +282,13 @@ public enum YearService {
                 """, arguments: [item.yearId, item.id])
             guard other == nil else { throw BudgetError.reserveTotalExists(year: year.year) }
         }
+        if let distributionId = item.distributionId {
+            guard item.direction == .UIT else {
+                throw BudgetError.validation("Alleen een UIT-post kan aan een vaste storting gekoppeld zijn.")
+            }
+            // Het plan van een gekoppelde post volgt de storting; een zelf ingevuld plan wordt overschreven.
+            item.planAmount = -(try DistributionService.total(db, distributionId: distributionId))
+        }
         switch item.direction {
         case .IN: guard !item.planAmount.isNegative else { throw BudgetError.signMismatch(direction: .IN) }
         case .UIT, .RES:
@@ -301,13 +311,15 @@ public enum YearService {
         if let potId = item.potId { _ = try Check.pot(db, potId) }
     }
 
-    /// Houdt het plan van de regel RESERVERINGEN gelijk aan de som van het plan van alle RES-regels.
+    /// Houdt het plan van de regel RESERVERINGEN gelijk aan de som van het plan van alle RES-regels, en het
+    /// plan van posten met een vaste storting gelijk aan − het totaal van die storting (de storting gaat voor).
     static func syncReserveTotal(_ db: Database, yearId: Int64) throws {
         try db.execute(sql: """
             UPDATE budgetItem SET planAmount =
                 (SELECT COALESCE(SUM(planAmount), 0) FROM budgetItem WHERE yearId = ? AND direction = ?)
-            WHERE yearId = ? AND isReserveTotal = 1
+            WHERE yearId = ? AND isReserveTotal = 1 AND distributionId IS NULL
             """, arguments: [yearId, Direction.RES, yearId])
+        try DistributionService.syncLinkedPlans(db, yearId: yearId)
     }
 }
 
@@ -365,6 +377,20 @@ public enum AccountService {
                 throw BudgetError.accountInUse(account: account.name)
             }
             try db.execute(sql: "DELETE FROM account WHERE id = ?", arguments: [accountId])
+        }
+    }
+
+    /// Zet het beginsaldo van een spaarrekening op het NIET toegewezen deel: het werkelijke beginsaldo van de
+    /// bank (`totalOpening`) min de beginboekingen van de potten. Die beginboekingen tellen zelf al mee in het
+    /// rekeningsaldo, dus zo blijft het saldo gelijk aan de bank. Zie `PotService.openingSummary`.
+    @discardableResult
+    public static func setOpeningFromPots(_ db: Database, accountId: Int64, totalOpening: Money) throws -> Account {
+        try atomic(db) {
+            var account = try Check.account(db, accountId)
+            let summary = try PotService.openingSummary(db, accountId: accountId)
+            account.openingBalance = totalOpening - summary.potTotal
+            try account.update(db)
+            return account
         }
     }
 

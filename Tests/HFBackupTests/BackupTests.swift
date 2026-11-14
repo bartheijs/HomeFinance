@@ -390,7 +390,8 @@ func dump(_ db: AppDatabase) throws -> [String] {
 
         let files = try Backup.exportAllAsCSV(db, to: temp.sub("export"))
 
-        #expect(Set(files.map(\.table)) == Set(Backup.requiredTables))
+        // Latere migraties voegen tabellen toe; de verplichte tabellen moeten er in elk geval bij zijn.
+        #expect(Set(files.map(\.table)).isSuperset(of: Backup.requiredTables))
         #expect(files.first { $0.table == "entry" }?.rowCount == 1)
         #expect(files.first { $0.table == "tag" }?.rowCount == 0)
 
@@ -407,8 +408,9 @@ func dump(_ db: AppDatabase) throws -> [String] {
         #expect(entry[0].hasPrefix("id;accountId;bankTransactionId;day;amount;label;"))
         #expect(entry[1].hasPrefix("1;1;;2027-02-03;-0,05;Kleine uitgave;;;0;"))
         // Lege tabel: alleen de kopregel. Lege optionele bedragen blijven leeg.
-        #expect(try lines("tag") == ["id;name;color;sortOrder"])
-        #expect(try lines("pot")[1] == "1;1;Pot;spaar;;0,00;;0;0")
+        let tag = try lines("tag")
+        #expect(tag.count == 1 && tag[0].hasPrefix("id;name;color;sortOrder"))
+        #expect(try lines("pot")[1].hasPrefix("1;1;Pot;spaar;;0,00;;0;0"))
     }
 
     @Test func moneyAndFieldFormatting() {

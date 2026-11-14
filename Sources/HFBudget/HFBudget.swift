@@ -59,6 +59,12 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
     case tagNotSettling(tag: String)
     case notSettleable(entry: String, tag: String)
     case depositInvalid(String)
+    /// De periode is geen geldige "yyyy-MM".
+    case periodInvalid(String)
+    /// De periode ligt meer dan 2 maanden van de datum van de boeking.
+    case periodTooFar(period: String, day: Day)
+    /// De vaste post bestaat niet (onder hetzelfde label) in het jaar van de periode.
+    case itemMissingInYear(item: String, year: Int)
 
     public var errorDescription: String? {
         switch self {
@@ -144,6 +150,13 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
                 + "staat niet op een betaalrekening of is al verrekend."
         case let .depositInvalid(message):
             return message
+        case let .periodInvalid(period):
+            return "'\(period)' is geen geldige maand. Gebruik de vorm jjjj-mm, bv. 2027-12."
+        case let .periodTooFar(period, day):
+            return "De maand \(period) ligt meer dan 2 maanden van de datum van de boeking (\(day.dutch)). "
+                + "Een boeking kan hoogstens 2 maanden eerder of later meetellen."
+        case let .itemMissingInYear(item, year):
+            return "De post \(item) bestaat niet in \(year). Maak de post in dat jaar aan of kies een andere maand."
         case let .accountInUse(account):
             return "De rekening \(account) heeft boekingen, transacties of potten en kan niet verwijderd worden. "
                 + "Archiveer de rekening."
@@ -194,6 +207,29 @@ enum Check {
         if closed { throw BudgetError.yearClosed(day.year) }
     }
 
+    /// Weigert als dit kalenderjaar een afgesloten begrotingsjaar is.
+    static func yearOpen(_ db: Database, year: Int) throws {
+        let closed = try Bool.fetchOne(db, sql: "SELECT closed FROM budgetYear WHERE year = ?",
+                                       arguments: [year]) ?? false
+        if closed { throw BudgetError.yearClosed(year) }
+    }
+
+    /// "yyyy-MM" voor een jaar en maand.
+    static func periodString(year: Int, month: Int) -> String { String(format: "%04d-%02d", year, month) }
+
+    /// Controleert een periode ("yyyy-MM", hoogstens 2 maanden van `day`). Geeft nil als het de maand van `day` is.
+    static func normalizedPeriod(_ period: String?, day: Day) throws -> (text: String, year: Int)? {
+        guard let period else { return nil }
+        let parts = period.split(separator: "-", omittingEmptySubsequences: false)
+        guard period.count == 7, parts.count == 2, parts[0].count == 4, let year = Int(parts[0]),
+              let month = Int(parts[1]), (1...12).contains(month), (1900...2200).contains(year) else {
+            throw BudgetError.periodInvalid(period)
+        }
+        let distance = (year * 12 + month) - (day.year * 12 + day.month)
+        guard abs(distance) <= 2 else { throw BudgetError.periodTooFar(period: period, day: day) }
+        return distance == 0 ? nil : (periodString(year: year, month: month), year)
+    }
+
     /// Haalt het jaar op en weigert als het afgesloten is.
     @discardableResult
     static func yearOpen(_ db: Database, yearId: Int64) throws -> BudgetYear {
@@ -209,18 +245,40 @@ enum Check {
     }
 
     /// De regels voor waar een boeking aan toegewezen mag worden (post, pot, vergoeden).
+    ///
+    /// Met een `period` in een ander jaar dan `day` (december ↔ januari) moet de post in het jaar van de periode
+    /// bestaan; een post uit het andere jaar wordt vervangen door de post met hetzelfde label in dat jaar.
+    /// Geeft de te bewaren post en periode terug (periode nil = de maand van `day`).
+    @discardableResult
     static func assignment(_ db: Database, account: Account, day: Day, amount: Money,
-                           budgetItemId: Int64?, potId: Int64?, reimburse: Bool) throws {
+                           budgetItemId: Int64?, potId: Int64?, reimburse: Bool, period: String? = nil,
+                           allowYearSwitch: Bool = false) throws -> (budgetItemId: Int64?, period: String?) {
         guard day >= account.openingDate else {
             throw BudgetError.beforeOpeningDate(account: account.name, openingDate: account.openingDate)
         }
         try yearOpen(db, day: day)
+        let normalized = try normalizedPeriod(period, day: day)
+        let targetYear = normalized?.year ?? day.year
+        if targetYear != day.year { try yearOpen(db, year: targetYear) }
+        var resolvedItemId = budgetItemId
         switch account.kind {
         case .betaal:
             if let budgetItemId {
-                let item = try item(db, budgetItemId)
+                var item = try item(db, budgetItemId)
                 let year = try budgetYear(db, id: item.yearId)
-                guard year.year == day.year else { throw BudgetError.itemWrongYear(item: item.label, day: day) }
+                if year.year != targetYear {
+                    guard allowYearSwitch || normalized != nil else {
+                        throw BudgetError.itemWrongYear(item: item.label, day: day)
+                    }
+                    guard let other = try BudgetItem.fetchOne(db, sql: """
+                        SELECT budgetItem.* FROM budgetItem JOIN budgetYear ON budgetYear.id = budgetItem.yearId
+                        WHERE budgetYear.year = ? AND budgetItem.label = ? ORDER BY budgetItem.sortOrder LIMIT 1
+                        """, arguments: [targetYear, item.label]) else {
+                        throw BudgetError.itemMissingInYear(item: item.label, year: targetYear)
+                    }
+                    item = other
+                    resolvedItemId = other.id
+                }
                 guard item.direction != .RES else { throw BudgetError.resItemNoEntries(item: item.label) }
             }
             if reimburse, !amount.isNegative { throw BudgetError.reimburseNotExpense }
@@ -236,6 +294,7 @@ enum Check {
                 guard pot.accountId == account.id else { throw BudgetError.potWrongAccount(pot: pot.name) }
             }
         }
+        return (resolvedItemId, normalized?.text)
     }
 
     static func tagsExist(_ db: Database, _ tagIds: [Int64]) throws {

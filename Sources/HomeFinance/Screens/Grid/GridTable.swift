@@ -1,6 +1,7 @@
 import SwiftUI
 import HFCore
 import HFInsight
+import HFBudget
 
 /// Het grid zelf: één schuifvlak in twee richtingen, met een vaste eerste kolom, een vaste koprij
 /// en de totaalrijen vast onderaan. De vaste lagen schuiven tegen de scrollpositie in.
@@ -12,6 +13,7 @@ struct GridTable: View {
     var density: GridDensity
     var options: GridOptions
     var reserveExpanded: Bool
+    var distributionHelp: [Int64: String] = [:]
     var onToggleReserve: () -> Void
 
     @State private var scroll: CGPoint = .zero
@@ -63,12 +65,14 @@ struct GridTable: View {
                                                               y: layout.headerHeight + CGFloat(index) * layout.rowHeight - y,
                                                               width: layout.columnWidth, height: layout.rowHeight))
                                   },
-                                  onDoubleClick: { target in startForm(target) })
+                                  onDoubleClick: { target in startForm(target) },
+                                  onSetChecked: { target, checked in setChecked(target, checked) })
                         .equatable()
                         .offset(x: layout.labelWidth, y: layout.headerHeight)
 
                     GridLabelLayer(lines: lines, layout: layout, reserveExpanded: reserveExpanded,
-                                   hasReserveLines: hasReserveLines, onToggleReserve: onToggleReserve)
+                                   hasReserveLines: hasReserveLines, distributionHelp: distributionHelp,
+                                   onToggleReserve: onToggleReserve)
                         .equatable()
                         .offset(x: x, y: layout.headerHeight)
 
@@ -102,9 +106,12 @@ struct GridTable: View {
                 // Een open venstertje hoort bij een cel; na schuiven klopt de plek niet meer.
                 if old.offset != new.offset, popover != nil { popover = nil }
             }
-            .popover(item: $popover, attachmentAnchor: .rect(.rect(popoverRect)), arrowEdge: .bottom) { target in
+            .popover(item: $popover, attachmentAnchor: .rect(.rect(popoverRect)), arrowEdge: .bottom) { clicked in
+                // Het venstertje blijft open na een wijziging; toon dan de verse cel uit het grid.
+                let target = current(clicked)
                 GridCellPopover(target: target, options: options, total: total(of: target),
                                 onAdd: { popover = nil; startForm(target) },
+                                onSetChecked: { checked in setChecked(target, checked) },
                                 onShowTransactions: { popover = nil; model.selection = .transactions })
                     .environment(model)
             }
@@ -135,6 +142,22 @@ struct GridTable: View {
         case .divers(let positive):
             guard let totals = grid.monthTotals.first(where: { $0.month == target.month }) else { return .zero }
             return positive ? totals.inDivers : totals.uitDivers
+        }
+    }
+
+    /// Dezelfde cel, met de gegevens van het grid zoals het nu is.
+    private func current(_ target: GridTarget) -> GridTarget {
+        guard case .item(let old) = target.kind, let row = grid.rows.first(where: { $0.id == old.id }) else { return target }
+        return GridTarget(kind: .item(row), month: target.month)
+    }
+
+    private func setChecked(_ target: GridTarget, _ checked: Bool) {
+        guard case .item(let row) = target.kind, row.kind != .reserveLine else { return }
+        let month = Day.monthNames[target.month - 1]
+        model.perform(checked ? "\(row.label) afgevinkt voor \(month)" : "Vinkje weggehaald bij \(row.label) in \(month)") {
+            try model.db.write { db in
+                try ItemCheckService.setChecked(db, budgetItemId: row.id, month: target.month, checked)
+            }
         }
     }
 

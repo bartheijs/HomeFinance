@@ -98,10 +98,10 @@ extension Insight {
     public static func tagYear(_ db: Database, year: Int, today: Day) throws -> [TagYearRow] {
         let asOf = Q.asOf(year, today)
         let rows = try Row.fetchAll(db, sql: """
-            SELECT et.tagId, \(Q.month("e.day")) AS m, SUM(e.amount) AS s, COUNT(*) AS c
+            SELECT et.tagId, \(Q.periodMonth) AS m, SUM(e.amount) AS s, COUNT(*) AS c
             FROM entryTag et JOIN entry e ON e.id = et.entryId
-            WHERE e.day >= ? AND e.day <= ? GROUP BY et.tagId, m
-            """, arguments: [Q.yearStart(year), asOf])
+            WHERE \(Q.inPeriod(year).sql) AND e.day <= ? GROUP BY et.tagId, m
+            """, arguments: StatementArguments(Q.inPeriod(year).args + [today]))
         var months: [Int64: [Money]] = [:]
         var counts: [Int64: Int] = [:]
         for r in rows {
@@ -110,14 +110,18 @@ extension Insight {
             months[id, default: [Money](repeating: .zero, count: 12)][m - 1] = r["s"]
             counts[id, default: 0] += r["c"] as Int
         }
-        let monthDay = String(asOf.iso.dropFirst(5))
+        // "T/m dezelfde datum": eerdere begrotingsmaanden helemaal; in de maand van de peildag alleen t/m die dag
+        // (een boeking die naar die maand verschoven is, telt helemaal).
+        let dayOfMonth = String(format: "%02d", asOf.day)
         var previous: [Int64: (Money, Money)] = [:]
         for r in try Row.fetchAll(db, sql: """
             SELECT et.tagId, SUM(e.amount) AS full,
-                   SUM(CASE WHEN substr(e.day, 6) <= ? THEN e.amount ELSE 0 END) AS toDate
+                   SUM(CASE WHEN \(Q.periodMonth) < ? OR (\(Q.periodMonth) = ?
+                                 AND (e.period IS NOT NULL OR substr(e.day, 9, 2) <= ?))
+                            THEN e.amount ELSE 0 END) AS toDate
             FROM entryTag et JOIN entry e ON e.id = et.entryId
-            WHERE e.day >= ? AND e.day <= ? GROUP BY et.tagId
-            """, arguments: [monthDay, Q.yearStart(year - 1), Q.yearEnd(year - 1)]) {
+            WHERE \(Q.inPeriod(year - 1).sql) GROUP BY et.tagId
+            """, arguments: StatementArguments([asOf.month, asOf.month, dayOfMonth] + Q.inPeriod(year - 1).args)) {
             previous[r["tagId"]] = (r["toDate"], r["full"])
         }
         let n = Q.elapsedMonths(year, today)
@@ -132,10 +136,10 @@ extension Insight {
 
     /// De boekingen met een tag in een jaar, of in één maand daarvan (oudste eerst).
     public static func tagEntries(_ db: Database, tagId: Int64, year: Int, month: Int? = nil) throws -> [EntryRow] {
-        let (a, b) = Q.range(year, month)
+        let p = Q.inPeriod(year, month)
         return try entryRows(db, where: """
-            EXISTS (SELECT 1 FROM entryTag et WHERE et.entryId = e.id AND et.tagId = ?) AND e.day >= ? AND e.day <= ?
-            """, arguments: [tagId, a, b], order: "e.day ASC, e.id ASC")
+            EXISTS (SELECT 1 FROM entryTag et WHERE et.entryId = e.id AND et.tagId = ?) AND \(p.sql)
+            """, arguments: [tagId] + p.args, order: "e.day ASC, e.id ASC")
     }
 
     /// Bedrag per tag in één maand, grootste eerst (voor het dashboard).
@@ -143,9 +147,9 @@ extension Insight {
         try Row.fetchAll(db, sql: """
             SELECT t.id, t.name, t.color, SUM(e.amount) AS s, COUNT(*) AS c
             FROM entryTag et JOIN entry e ON e.id = et.entryId JOIN tag t ON t.id = et.tagId
-            WHERE e.day >= ? AND e.day <= ?
+            WHERE \(Q.period) = ?
             GROUP BY t.id ORDER BY abs(SUM(e.amount)) DESC, t.name LIMIT ?
-            """, arguments: [Q.monthStart(year, month), Q.monthEnd(year, month), limit]).map {
+            """, arguments: [Q.periodKey(year, month), limit]).map {
             TagAmount(id: $0["id"], name: $0["name"], color: $0["color"], total: $0["s"], count: $0["c"])
         }
     }
@@ -154,11 +158,11 @@ extension Insight {
     public static func monthlyResults(_ db: Database, year: Int) throws -> [MonthResult] {
         var pos = [Money](repeating: .zero, count: 13), neg = pos
         for r in try Row.fetchAll(db, sql: """
-            SELECT \(Q.month("e.day")) AS m,
+            SELECT \(Q.periodMonth) AS m,
                    SUM(CASE WHEN e.amount > 0 THEN e.amount ELSE 0 END) AS pos,
                    SUM(CASE WHEN e.amount < 0 THEN e.amount ELSE 0 END) AS neg
-            FROM entry e WHERE e.accountId IN \(Q.betaal) AND e.day >= ? AND e.day <= ? GROUP BY m
-            """, arguments: [Q.yearStart(year), Q.yearEnd(year)]) {
+            FROM entry e WHERE e.accountId IN \(Q.betaal) AND \(Q.inPeriod(year).sql) GROUP BY m
+            """, arguments: StatementArguments(Q.inPeriod(year).args)) {
             let m: Int = r["m"]
             guard (1...12).contains(m) else { continue }
             pos[m] = r["pos"]; neg[m] = r["neg"]
@@ -170,15 +174,15 @@ extension Insight {
     public static func budgetVsActual(_ db: Database, year: Int, today: Day) throws -> [BudgetVsActualRow] {
         let budgetYear = try Q.budgetYear(db, year)
         let plans = PlanSet(try Q.items(db, yearId: budgetYear.id!))
-        let asOf = Q.asOf(year, today)
+        let checks = try Q.checks(db, yearId: budgetYear.id!)
         let elapsed = Q.elapsedMonths(year, today)
         var actual: [Int64: [Int: Money]] = [:]
         for r in try Row.fetchAll(db, sql: """
-            SELECT e.budgetItemId AS itemId, \(Q.month("e.day")) AS m, SUM(e.amount) AS s
+            SELECT e.budgetItemId AS itemId, \(Q.periodMonth) AS m, SUM(e.amount) AS s
             FROM entry e
-            WHERE e.accountId IN \(Q.betaal) AND e.budgetItemId IS NOT NULL AND e.day >= ? AND e.day <= ?
+            WHERE e.accountId IN \(Q.betaal) AND e.budgetItemId IS NOT NULL AND \(Q.inPeriod(year).sql) AND e.day <= ?
             GROUP BY e.budgetItemId, m
-            """, arguments: [Q.yearStart(year), asOf]) {
+            """, arguments: StatementArguments(Q.inPeriod(year).args + [today])) {
             actual[r["itemId"], default: [:]][r["m"]] = r["s"]
         }
         return plans.items.filter { !$0.isReserveLine }.map { item in
@@ -192,7 +196,9 @@ extension Insight {
                 let plan = expected ?? .zero
                 guard let sum = sums[m] else {
                     // Niets geboekt: alleen een voorbije, verwachte maand telt als "minder dan gepland".
-                    if !plan.isZero, !(today.year == year && m == today.month) { under += 1 }
+                    // Een afgevinkte maand geldt als voldaan.
+                    if !plan.isZero, !(today.year == year && m == today.month),
+                       !checks.contains(ItemMonth(item.id!, m)) { under += 1 }
                     continue
                 }
                 let more = item.direction == .IN ? sum > plan : sum < plan
@@ -209,32 +215,33 @@ extension Insight {
 
     /// De grootste diverse uitgaven van een jaar of van één maand (grootste uitgave eerst).
     public static func topDiversExpenses(_ db: Database, year: Int, month: Int? = nil, limit: Int = 10) throws -> [EntryRow] {
-        let (a, b) = Q.range(year, month)
-        return try entryRows(db, where: "a.kind = 'betaal' AND e.budgetItemId IS NULL AND e.amount < 0 AND e.day >= ? AND e.day <= ?",
-                             arguments: [a, b], order: "e.amount ASC, e.day ASC, e.id ASC", limit: limit)
+        let p = Q.inPeriod(year, month)
+        return try entryRows(db, where: "a.kind = 'betaal' AND e.budgetItemId IS NULL AND e.amount < 0 AND \(p.sql)",
+                             arguments: p.args, order: "e.amount ASC, e.day ASC, e.id ASC", limit: limit)
     }
 
     /// UIT divers van een jaar of maand verdeeld over tags (grootste eerst); zonder tag is een eigen groep.
     public static func diversByTag(_ db: Database, year: Int, month: Int? = nil) throws -> DiversBreakdown {
-        let (a, b) = Q.range(year, month)
-        let base = "e.accountId IN \(Q.betaal) AND e.budgetItemId IS NULL AND e.amount < 0 AND e.day >= ? AND e.day <= ?"
+        let p = Q.inPeriod(year, month)
+        let pArgs = StatementArguments(p.args)
+        let base = "e.accountId IN \(Q.betaal) AND e.budgetItemId IS NULL AND e.amount < 0 AND \(p.sql)"
         var buckets = try Row.fetchAll(db, sql: """
             SELECT t.id, t.name, t.color, SUM(e.amount) AS s, COUNT(*) AS c
             FROM entry e JOIN entryTag et ON et.entryId = e.id JOIN tag t ON t.id = et.tagId
             WHERE \(base) GROUP BY t.id
-            """, arguments: [a, b]).map {
+            """, arguments: pArgs).map {
             DiversTagBucket(tagId: $0["id"] as Int64, name: $0["name"], color: $0["color"] as String, total: $0["s"], count: $0["c"])
         }
         let untagged = try Row.fetchOne(db, sql: """
             SELECT COALESCE(SUM(e.amount), 0) AS s, COUNT(*) AS c FROM entry e
             WHERE \(base) AND NOT EXISTS (SELECT 1 FROM entryTag et WHERE et.entryId = e.id)
-            """, arguments: [a, b])!
+            """, arguments: pArgs)!
         if (untagged["c"] as Int) > 0 {
             buckets.append(DiversTagBucket(tagId: nil, name: "Zonder tag", color: nil, total: untagged["s"], count: untagged["c"]))
         }
         buckets.sort { ($0.total, $0.name) < ($1.total, $1.name) }
         let total = try Money.fetchOne(db, sql: "SELECT COALESCE(SUM(e.amount), 0) FROM entry e WHERE \(base)",
-                                       arguments: [a, b]) ?? .zero
+                                       arguments: pArgs) ?? .zero
         return DiversBreakdown(buckets: buckets, total: total)
     }
 
@@ -242,7 +249,7 @@ extension Insight {
     public static func yearOverYear(_ db: Database) throws -> [YearTotals] {
         let budgetYears = Set(try Int.fetchAll(db, sql: "SELECT year FROM budgetYear"))
         return try Row.fetchAll(db, sql: """
-            SELECT CAST(substr(e.day, 1, 4) AS INTEGER) AS y,
+            SELECT \(Q.periodYear) AS y,
                    SUM(CASE WHEN e.amount > 0 THEN e.amount ELSE 0 END) AS pos,
                    SUM(CASE WHEN e.amount < 0 THEN e.amount ELSE 0 END) AS neg,
                    SUM(CASE WHEN e.amount > 0 AND e.budgetItemId IS NULL THEN e.amount ELSE 0 END) AS posD,

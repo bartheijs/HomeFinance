@@ -19,7 +19,7 @@ struct GridNumberCell: View {
             .minimumScaleFactor(0.82)
             .foregroundStyle(color)
             .padding(.trailing, 6)
-            .padding(.leading, content.dot == nil ? 4 : 10)
+            .padding(.leading, content.dot == nil && !content.check ? 4 : 12)
             .frame(width: width, height: height, alignment: .trailing)
             .background {
                 if let tint = content.tint {
@@ -29,6 +29,12 @@ struct GridNumberCell: View {
             .overlay(alignment: .leading) {
                 if let dot = content.dot {
                     Circle().fill(dot).frame(width: 4.5, height: 4.5).padding(.leading, 4)
+                }
+            }
+            .overlay(alignment: .leading) {
+                if content.check {
+                    Image(systemName: "checkmark").font(.system(size: 7.5, weight: .bold))
+                        .foregroundStyle(.secondary).padding(.leading, 4)
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -108,6 +114,7 @@ struct GridBodyLayer: View, Equatable {
     var selectedId: String?
     var onClick: (GridTarget, Int) -> Void
     var onDoubleClick: (GridTarget) -> Void
+    var onSetChecked: (GridTarget, Bool) -> Void
 
     nonisolated static func == (a: GridBodyLayer, b: GridBodyLayer) -> Bool {
         a.lines == b.lines && a.layout == b.layout && a.options == b.options && a.selectedId == b.selectedId
@@ -146,6 +153,11 @@ struct GridBodyLayer: View, Equatable {
                         if row.kind != .reserveLine {
                             Button("Toon boekingen") { onClick(target, index) }
                             Button("Boeking toevoegen…") { onDoubleClick(target) }.disabled(!options.editable)
+                            Divider()
+                            Button(cell.isChecked ? "Vinkje weghalen" : "Afvinken als voldaan") {
+                                onSetChecked(target, !cell.isChecked)
+                            }
+                            .disabled(!options.editable)
                         }
                     }
             }
@@ -218,10 +230,12 @@ struct GridLabelLayer: View, Equatable {
     var layout: GridLayout
     var reserveExpanded: Bool
     var hasReserveLines: Bool
+    /// Per post-id: de uitleg van de gekoppelde vaste storting (naam en verdeling over potten).
+    var distributionHelp: [Int64: String] = [:]
     var onToggleReserve: () -> Void
 
     nonisolated static func == (a: GridLabelLayer, b: GridLabelLayer) -> Bool {
-        a.lines == b.lines && a.layout == b.layout && a.reserveExpanded == b.reserveExpanded && a.hasReserveLines == b.hasReserveLines
+        a.distributionHelp == b.distributionHelp && a.lines == b.lines && a.layout == b.layout && a.reserveExpanded == b.reserveExpanded && a.hasReserveLines == b.hasReserveLines
     }
 
     var body: some View {
@@ -281,7 +295,8 @@ struct GridLabelLayer: View, Equatable {
             }
             .buttonStyle(.plain)
             .disabled(!hasReserveLines)
-            .help("De ene maandelijkse overboeking naar de spaarrekening. Het plan is de som van de RES-regels. Klik om de opbouw te tonen of te verbergen.")
+            .help(distributionHelp[row.id].map { "\(row.label)\n\($0)" }
+                  ?? "De ene maandelijkse overboeking naar de spaarrekening. Het plan is de som van de RES-regels. Klik om de opbouw te tonen of te verbergen.")
         case .item:
             HStack(spacing: 5) {
                 Text(row.label).lineLimit(1).truncationMode(.tail)
@@ -289,6 +304,9 @@ struct GridLabelLayer: View, Equatable {
                 if row.frequency != .maand {
                     Text(row.frequency == .kwartaal ? "kwartaal" : "jaar")
                         .font(.system(size: 9)).foregroundStyle(.tertiary)
+                }
+                if distributionHelp[row.id] != nil {
+                    Image(systemName: "arrow.triangle.branch").font(.system(size: 8.5)).foregroundStyle(.tertiary)
                 }
             }
             .font(.system(size: layout.fontSize + 0.5))
@@ -306,6 +324,7 @@ struct GridLabelLayer: View, Equatable {
         case .jaar: text += "\nPer jaar: " + row.expectedMonths.map { Day.monthNamesShort[$0 - 1] }.joined(separator: ", ")
         }
         if let day = row.expectedDay { text += ", rond dag \(day)" }
+        if let distribution = distributionHelp[row.id] { text += "\n" + distribution }
         return text
     }
 }

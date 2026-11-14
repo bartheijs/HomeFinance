@@ -98,7 +98,10 @@ public struct YearSummary: Equatable, Sendable {
     public let income: Money
     /// Alle uitgaven t/m de peildag (negatief).
     public let expenses: Money
-    /// Op de rekening = begin + IN + UIT.
+    /// IN + UIT (begrotingsjaar) − wat er volgens de datum in het jaar is geboekt: boekingen die via `period`
+    /// over de jaargrens (of voorbij de peildag) zijn verschoven. Meestal € 0,00.
+    public let shiftedAcrossYear: Money
+    /// Op de rekening (volgt de datum) = begin + IN + UIT − `shiftedAcrossYear`.
     public let balance: Money
     public let antiRood: Money
     public let tijdelijkAntiRood: Money
@@ -256,11 +259,13 @@ extension Insight {
         var expected: [ExpectedItem] = []
         if today.year == year {
             let plans = PlanSet(try Q.items(db, yearId: budgetYear.id!))
+            // "Geboekt" volgt de begrotingsmaand; een afgevinkte post geldt ook als voldaan.
             let booked = Set(try Int64.fetchAll(db, sql: """
                 SELECT DISTINCT e.budgetItemId FROM entry e
-                WHERE e.budgetItemId IS NOT NULL AND e.accountId IN \(Q.betaal) AND e.day >= ? AND e.day <= ?
-                """, arguments: [Q.monthStart(year, today.month), today]))
-            for item in plans.items where !booked.contains(item.id!) {
+                WHERE e.budgetItemId IS NOT NULL AND e.accountId IN \(Q.betaal) AND \(Q.period) = ? AND e.day <= ?
+                """, arguments: [Q.periodKey(year, today.month), today]))
+            let checks = try Q.checks(db, yearId: budgetYear.id!)
+            for item in plans.items where !booked.contains(item.id!) && !checks.contains(ItemMonth(item.id!, today.month)) {
                 guard let plan = plans.expected(item, month: today.month), !plan.isZero else { continue }
                 expected.append(ExpectedItem(id: item.id!, label: item.label, direction: item.direction, plan: plan,
                                              expectedDay: item.expectedDay,
@@ -283,12 +288,18 @@ extension Insight {
                    COALESCE(SUM(CASE WHEN e.amount < 0 THEN e.amount ELSE 0 END), 0) AS neg,
                    COALESCE(SUM(CASE WHEN e.amount > 0 AND e.budgetItemId IS NULL THEN e.amount ELSE 0 END), 0) AS posD,
                    COALESCE(SUM(CASE WHEN e.amount < 0 AND e.budgetItemId IS NULL THEN e.amount ELSE 0 END), 0) AS negD
-            FROM entry e WHERE e.accountId IN \(Q.betaal) AND e.day >= ? AND e.day <= ?
-            """, arguments: [Q.yearStart(year), s.asOf])!
+            FROM entry e WHERE e.accountId IN \(Q.betaal) AND \(Q.inPeriod(year).sql) AND e.day <= ?
+            """, arguments: StatementArguments(Q.inPeriod(year).args + [today]))!
         let income: Money = r["pos"], expenses: Money = r["neg"], inD: Money = r["posD"], uitD: Money = r["negD"]
+        // Wat er volgens de echte datum in het jaar is bij- en afgeschreven; bepaalt "op de rekening op 1-1".
+        let byDate = try Money.fetchOne(db, sql: """
+            SELECT COALESCE(SUM(e.amount), 0) FROM entry e
+            WHERE e.accountId IN \(Q.betaal) AND e.day >= ? AND e.day <= ?
+            """, arguments: [Q.yearStart(year), s.asOf]) ?? .zero
         let n = Q.elapsedMonths(year, today)
-        return YearSummary(year: year, asOf: s.asOf, openingBalance: s.balance - income - expenses,
-                           income: income, expenses: expenses, balance: s.balance,
+        return YearSummary(year: year, asOf: s.asOf, openingBalance: s.balance - byDate,
+                           income: income, expenses: expenses, shiftedAcrossYear: income + expenses - byDate,
+                           balance: s.balance,
                            antiRood: s.antiRood, tijdelijkAntiRood: s.tijdelijkAntiRood, spendable: s.spendable,
                            inDivers: inD, uitDivers: uitD, elapsedMonths: n,
                            averageIncome: Q.average(income, n), averageExpenses: Q.average(expenses, n),

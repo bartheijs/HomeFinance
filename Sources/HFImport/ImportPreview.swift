@@ -189,7 +189,7 @@ extension ImportPreview {
     /// in de database staan. Raakt de database niet aan; `BankImporter.preview` doet dat erbij.
     public static func build(file: CSVFile, fileName: String, account: Account, profile: BankProfile,
                              existingFingerprints: Set<String> = [], skipThrough: Day? = nil,
-                             resumeFromBalance: Money? = nil) throws -> ImportPreview {
+                             resumeFromBalance: Money? = nil, hasExcelHistory: Bool = true) throws -> ImportPreview {
         var file = file
         let wanted = CSVDialect(delimiter: profile.delimiter ?? file.dialect.delimiter,
                                 quote: profile.quote ?? file.dialect.quote)
@@ -232,7 +232,8 @@ extension ImportPreview {
             chainOK: chain.ok, chainBreaks: chain.breaks,
             openingBalance: chain.opening, closingBalance: chain.closing,
             firstDay: rows.map(\.day).min(), lastDay: rows.map(\.day).max(), warnings: warnings)
-        preview.applySeam(resumeFromBalance: resumeFromBalance, skipThrough: skipThrough)
+        preview.applySeam(resumeFromBalance: resumeFromBalance, skipThrough: skipThrough,
+                          hasExcelHistory: hasExcelHistory)
         return preview
     }
 }

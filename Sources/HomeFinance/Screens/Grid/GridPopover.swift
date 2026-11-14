@@ -13,6 +13,7 @@ struct GridCellPopover: View {
     /// Maandtotaal uit het grid (HFInsight).
     var total: Money
     var onAdd: () -> Void
+    var onSetChecked: (Bool) -> Void = { _ in }
     var onShowTransactions: () -> Void
 
     @State private var entries: [EntryRow] = []
@@ -46,6 +47,18 @@ struct GridCellPopover: View {
                 }
             }
 
+            if let cell {
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("Voldaan (afvinken)", isOn: Binding(get: { cell.isChecked }, set: { onSetChecked($0) }))
+                        .toggleStyle(.checkbox)
+                        .disabled(!options.editable)
+                    Text("Gebruik dit als de post betaald is maar de boeking niet in de app staat, of als hij deze maand vervalt.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 20)
+                }
+            }
+
             Divider()
 
             if entries.isEmpty {
@@ -58,12 +71,14 @@ struct GridCellPopover: View {
                     VStack(spacing: 0) {
                         ForEach(entries) { entry in
                             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                Text(entry.day.short())
+                                Text(dateText(entry))
                                     .monospacedDigit().foregroundStyle(.secondary)
-                                    .frame(width: 46, alignment: .leading)
+                                    .lineLimit(1).fixedSize()
+                                    .frame(minWidth: 46, alignment: .leading)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(entry.label.isEmpty ? "(zonder omschrijving)" : entry.label).lineLimit(1)
                                     Text(detail(entry)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                    periodMenu(entry)
                                 }
                                 Spacer(minLength: 8)
                                 MoneyText(entry.amount, colored: true, symbol: false)
@@ -111,6 +126,42 @@ struct GridCellPopover: View {
         }
     }
 
+    /// "28 nov", of "28 nov · telt in dec" als de boeking in een andere maand meetelt dan zijn datum.
+    private func dateText(_ entry: EntryRow) -> String {
+        let movesMonth = entry.budgetMonth != entry.day.month || entry.budgetYear != entry.day.year
+        return entry.day.short() + (movesMonth ? " · telt in \(Day.monthNamesShort[entry.budgetMonth - 1])" : "")
+    }
+
+    /// Keuze van de maand waarin de boeking meetelt: de drie maanden rond de datum.
+    private func periodMenu(_ entry: EntryRow) -> some View {
+        Menu {
+            ForEach(GridPeriod.around(entry.day), id: \.month) { choice in
+                let isDateMonth = choice.year == entry.day.year && choice.month == entry.day.month
+                let isCurrent = choice.year == entry.budgetYear && choice.month == entry.budgetMonth
+                Button {
+                    setPeriod(entry, year: isDateMonth ? nil : choice.year, month: isDateMonth ? nil : choice.month,
+                              name: Day.monthNames[choice.month - 1])
+                } label: {
+                    let title = "\(Day.monthNames[choice.month - 1].capitalized) \(String(choice.year))" + (isDateMonth ? " (maand van de datum)" : "")
+                    if isCurrent { Label(title, systemImage: "checkmark") } else { Text(title) }
+                }
+                .disabled(isCurrent)
+            }
+        } label: {
+            Text("Telt mee in: \(Day.monthNames[entry.budgetMonth - 1])").font(.caption)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .disabled(!options.editable)
+        .help("Laat deze boeking in een andere maand meetellen voor de begroting, bijvoorbeeld als de hypotheek van december al eind november is afgeschreven. Het saldo volgt altijd de datum.")
+    }
+
+    private func setPeriod(_ entry: EntryRow, year: Int?, month: Int?, name: String) {
+        model.perform("Boeking telt nu mee in \(name)") {
+            _ = try model.db.write { db in try EntryService.setPeriod(db, entryId: entry.id, year: year, month: month) }
+        }
+    }
+
     private func detail(_ entry: EntryRow) -> String {
         var parts = [entry.accountName]
         if entry.bank == nil { parts.append("handinvoer") }
@@ -132,7 +183,7 @@ struct GridCellPopover: View {
         case .afwijkend: Theme.warning
         case .teLaat: Theme.negative
         case .open: Theme.info
-        case .nietVerwacht: .secondary
+        case .nietVerwacht, .afgevinkt: .secondary
         }
     }
 
@@ -159,7 +210,7 @@ struct GridEntryForm: View {
     var month: Int
 
     @State private var amount: Money?
-    @State private var day = 1
+    @State private var date = Date()
     @State private var label = ""
     @State private var accountId: Int64?
     @State private var accounts: [Account] = []
@@ -167,6 +218,19 @@ struct GridEntryForm: View {
 
     private var lastDay: Int {
         (28...31).reversed().first { Day(year: year, month: month, day: $0) != nil } ?? 28
+    }
+
+    private var chosenDay: Day { Day(date: date) }
+    /// De datum valt in een andere maand dan de aangeklikte kolom.
+    private var otherMonth: Bool { chosenDay.year != year || chosenDay.month != month }
+
+    /// De periode mag hoogstens 2 maanden van de datum af liggen.
+    private var dateRange: ClosedRange<Date> {
+        let first = Day(year: year, month: month, day: 1)?.date ?? Date()
+        let calendar = Calendar.current
+        let from = calendar.date(byAdding: .month, value: -2, to: first) ?? first
+        let afterEnd = calendar.date(byAdding: .month, value: 3, to: first) ?? first
+        return from...(calendar.date(byAdding: .day, value: -1, to: afterEnd) ?? first)
     }
 
     private var canSave: Bool {
@@ -196,13 +260,16 @@ struct GridEntryForm: View {
                         }
                     }
                     SwiftUI.GridRow {
-                        Text("Dag")
-                        HStack(spacing: 6) {
-                            Picker("Dag", selection: $day) {
-                                ForEach(1...lastDay, id: \.self) { Text(String($0)).tag($0) }
+                        Text("Datum")
+                        VStack(alignment: .leading, spacing: 3) {
+                            DatePicker("Datum", selection: $date, in: dateRange, displayedComponents: .date)
+                                .labelsHidden().fixedSize()
+                                .environment(\.locale, Locale(identifier: "nl_NL"))
+                            if otherMonth {
+                                Text("De datum valt in \(Day.monthNames[chosenDay.month - 1]); de boeking telt mee in \(Day.monthNames[month - 1]).")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
-                            .labelsHidden().frame(width: 64)
-                            Text("\(Day.monthNames[month - 1]) \(String(year))").foregroundStyle(.secondary)
                         }
                     }
                     SwiftUI.GridRow {
@@ -247,14 +314,16 @@ struct GridEntryForm: View {
         amount = row.cells.first { $0.month == month }?.expected ?? row.plan
         label = row.label
         let wanted = row.expectedDay ?? ((model.today.year == year && model.today.month == month) ? model.today.day : 1)
-        day = min(max(wanted, 1), lastDay)
+        date = Day(year: year, month: month, day: min(max(wanted, 1), lastDay))?.date ?? Date()
         ready = true
     }
 
     private func save() {
-        guard let amount, let accountId, let date = Day(year: year, month: month, day: day) else { return }
-        let draft = EntryDraft(accountId: accountId, day: date, amount: amount,
-                               label: label.trimmingCharacters(in: .whitespaces), budgetItemId: row.id)
+        guard let amount, let accountId else { return }
+        // Valt de datum buiten de aangeklikte maand, dan telt de boeking toch in die maand mee.
+        let draft = EntryDraft(accountId: accountId, day: chosenDay, amount: amount,
+                               label: label.trimmingCharacters(in: .whitespaces), budgetItemId: row.id,
+                               period: otherMonth ? GridPeriod.key(year: year, month: month) : nil)
         let ok = model.perform("Boeking toegevoegd aan \(row.label)") {
             _ = try model.db.write { db in try EntryService.create(db, draft) }
         }

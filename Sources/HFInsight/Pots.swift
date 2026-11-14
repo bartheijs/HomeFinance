@@ -15,7 +15,13 @@ public struct PotSummary: Identifiable, Equatable, Sendable {
     /// Som van de boekingen op de spaarrekening met deze pot, t/m de peildag.
     public let balance: Money
     public let monthlyAmount: Money
+    /// Som van de regels van deze pot in alle niet-gearchiveerde vaste stortingen.
+    public let distributionAmount: Money
     public let targetAmount: Money?
+    /// Doeldatum van het spaardoel, of nil.
+    public let targetDate: Day?
+    /// Het spaardoel uitgewerkt (status, nodig per maand, tekort), of nil zonder doelbedrag.
+    public let goal: PotGoal?
     /// Saldo ÷ doel (0…1 en hoger), of nil zonder doel. Alleen voor weergave.
     public let progress: Double?
     /// Nog te sparen tot het doel (nooit negatief), of nil zonder doel.
@@ -25,6 +31,8 @@ public struct PotSummary: Identifiable, Equatable, Sendable {
     /// Opnames dit jaar (negatief).
     public let withdrawalsThisYear: Money
     public let lastMovement: Day?
+    /// Aantal losse verwachtingen (`ForecastItem`) die nog niet zijn uitgekomen.
+    public let openForecastCount: Int
 }
 
 /// Een spaarrekening met zijn potten.
@@ -131,12 +139,18 @@ extension Insight {
             SELECT p.*, COALESCE(SUM(e.amount), 0) AS bal,
                    COALESCE(SUM(CASE WHEN e.amount > 0 AND e.day >= ? THEN e.amount ELSE 0 END), 0) AS dep,
                    COALESCE(SUM(CASE WHEN e.amount < 0 AND e.day >= ? THEN e.amount ELSE 0 END), 0) AS wd,
-                   MAX(e.day) AS lastDay
+                   MAX(e.day) AS lastDay,
+                   (SELECT COALESCE(SUM(l.amount), 0) FROM distributionLine l
+                    JOIN distribution d ON d.id = l.distributionId
+                    WHERE l.potId = p.id AND d.archived = 0) AS distributed,
+                   (SELECT COUNT(*) FROM forecastItem f WHERE f.potId = p.id AND f.realizedAt IS NULL) AS openForecasts
             FROM pot p
             LEFT JOIN entry e ON e.potId = p.id AND e.accountId = p.accountId AND e.day <= ?
             GROUP BY p.id ORDER BY p.sortOrder, p.id
             """, arguments: [yearStart, yearStart, today])
         let accountIds = Set(accountRows.map { $0["id"] as Int64 })
+        // Eén keer laden voor alle potten; het spaardoel per pot rekent daarna zonder verdere queries.
+        let forecast = try ForecastContext(db, today: today)
         let pots = try potRows.compactMap { r -> PotSummary? in
             let pot = try Pot(row: r)
             guard accountIds.contains(pot.accountId) else { return nil }
@@ -144,10 +158,12 @@ extension Insight {
             let target = pot.targetAmount.flatMap { $0 > .zero ? $0 : nil }
             return PotSummary(id: pot.id!, accountId: pot.accountId, name: pot.name, kind: pot.kind, owner: pot.owner,
                               archived: pot.archived, balance: balance, monthlyAmount: pot.monthlyAmount,
-                              targetAmount: pot.targetAmount,
+                              distributionAmount: r["distributed"], targetAmount: pot.targetAmount,
+                              targetDate: pot.targetDate, goal: forecast.goal(pot: pot, balance: balance),
                               progress: target.map { max(0, balance.doubleValue / $0.doubleValue) },
                               remainingToTarget: target.map { max(.zero, $0 - balance) },
-                              depositsThisYear: r["dep"], withdrawalsThisYear: r["wd"], lastMovement: r["lastDay"])
+                              depositsThisYear: r["dep"], withdrawalsThisYear: r["wd"], lastMovement: r["lastDay"],
+                              openForecastCount: r["openForecasts"])
         }
 
         let accounts = accountRows.map { r -> SavingsAccountPots in

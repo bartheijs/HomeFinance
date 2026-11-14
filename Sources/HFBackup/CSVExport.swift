@@ -24,6 +24,9 @@ extension Backup {
         "rule": ["amount"],
         "reconciliation": ["actualBalance", "calculatedBalance"],
         "savingsTransfer": ["amount"],
+        "settlement": ["amount"],
+        "distributionLine": ["amount"],
+        "forecastItem": ["amount"],
     ]
 
     /// Exporteert de complete dataset: één CSV per tabel (`<tabel>.csv`) in `folder`, met kopregel.

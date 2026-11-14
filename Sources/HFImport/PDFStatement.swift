@@ -218,7 +218,7 @@ extension ImportPreview {
     /// vanaf het beginsaldo; de keten sluit als beginsaldo + som van de regels gelijk is aan het eindsaldo.
     static func build(statement: BankStatement, fileName: String, account: Account,
                       existingFingerprints: Set<String> = [], skipThrough: Day? = nil,
-                      resumeFromBalance: Money? = nil) -> ImportPreview {
+                      resumeFromBalance: Money? = nil, hasExcelHistory: Bool = true) -> ImportPreview {
         let accountId = account.id ?? 0
         var rows = statement.lines.map { line -> ImportRow in
             let party = StatementParser.counterparty(in: line.description, ownIban: statement.ownIban)
@@ -266,7 +266,8 @@ extension ImportPreview {
             chronologicalIndices: order, chainOK: chainOK, chainBreaks: [],
             openingBalance: statement.openingBalance, closingBalance: statement.closingBalance,
             firstDay: rows.map(\.day).min(), lastDay: rows.map(\.day).max(), warnings: warnings)
-        preview.applySeam(resumeFromBalance: resumeFromBalance, skipThrough: skipThrough)
+        preview.applySeam(resumeFromBalance: resumeFromBalance, skipThrough: skipThrough,
+                          hasExcelHistory: hasExcelHistory)
         return preview
     }
 }

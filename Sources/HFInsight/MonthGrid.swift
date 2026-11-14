@@ -16,6 +16,8 @@ public enum CellStatus: String, Sendable, CaseIterable {
     case open
     /// Verwacht, niet geboekt en de verwachte dag of de maand is voorbij.
     case teLaat
+    /// Niet geboekt, maar met de hand afgevinkt: telt als voldaan.
+    case afgevinkt
 }
 
 /// Soort rij in het maandgrid.
@@ -39,6 +41,8 @@ public struct GridCell: Equatable, Sendable {
     public let expected: Money?
     /// `sum` − verwacht bedrag (0 als er niets verwacht wordt).
     public let difference: Money
+    /// De post is voor deze maand met de hand afgevinkt (`ItemCheck`), met of zonder boeking.
+    public let isChecked: Bool
 }
 
 /// Eén rij van het maandgrid.
@@ -114,6 +118,8 @@ public struct FixedItemStatus: Identifiable, Equatable, Sendable {
     public let day: Day?
     public let expectedDay: Int?
     public let entryCount: Int
+    /// Met de hand afgevinkt; zonder boeking is de stand dan `voldaan` met `actual` € 0,00.
+    public let isChecked: Bool
 }
 
 /// Overzicht van de vaste posten van één maand.
@@ -136,8 +142,9 @@ public struct FixedItemsOverview: Equatable, Sendable {
 
 extension Insight {
     static func cellStatus(count: Int, sum: Money, expected: Money?, year: Int, month: Int,
-                           expectedDay: Int?, today: Day) -> CellStatus {
+                           expectedDay: Int?, today: Day, checked: Bool = false) -> CellStatus {
         if count > 0 { return expected == sum ? .gelijk : .afwijkend }
+        if checked { return .afgevinkt }
         guard let expected, !expected.isZero else { return .nietVerwacht }
         if (year, month) > (today.year, today.month) { return .nietVerwacht }
         if (year, month) < (today.year, today.month) { return .teLaat }
@@ -154,13 +161,14 @@ extension Insight {
 
         // Eén query: per post (NULL = divers) en maand de som, het aantal en de plus- en minkant.
         let rows = try Row.fetchAll(db, sql: """
-            SELECT e.budgetItemId AS itemId, \(Q.month("e.day")) AS m, SUM(e.amount) AS s, COUNT(*) AS c,
+            SELECT e.budgetItemId AS itemId, \(Q.periodMonth) AS m, SUM(e.amount) AS s, COUNT(*) AS c,
                    SUM(CASE WHEN e.amount > 0 THEN e.amount ELSE 0 END) AS pos,
                    SUM(CASE WHEN e.amount < 0 THEN e.amount ELSE 0 END) AS neg
             FROM entry e
-            WHERE e.accountId IN \(Q.betaal) AND e.day >= ? AND e.day <= ?
+            WHERE e.accountId IN \(Q.betaal) AND \(Q.inPeriod(year).sql)
             GROUP BY e.budgetItemId, m
-            """, arguments: [Q.yearStart(year), Q.yearEnd(year)])
+            """, arguments: StatementArguments(Q.inPeriod(year).args))
+        let checks = try Q.checks(db, yearId: budgetYear.id!)
 
         var cellSums: [Int64: [Int: (Money, Int)]] = [:]
         var fixed = [Money](repeating: .zero, count: 13)
@@ -185,11 +193,12 @@ extension Insight {
             let cells = (1...12).map { m -> GridCell in
                 let (sum, count) = sums[m] ?? (.zero, 0)
                 let expected = plans.expected(item, month: m)
+                let checked = checks.contains(ItemMonth(item.id!, m))
                 if let expected { planExpected[m] += expected }
                 return GridCell(month: m, sum: sum, entryCount: count,
                                 status: cellStatus(count: count, sum: sum, expected: expected, year: year, month: m,
-                                                   expectedDay: item.expectedDay, today: today),
-                                expected: expected, difference: sum - (expected ?? .zero))
+                                                   expectedDay: item.expectedDay, today: today, checked: checked),
+                                expected: expected, difference: sum - (expected ?? .zero), isChecked: checked)
             }
             return GridRow(id: item.id!, label: item.label, direction: item.direction,
                            kind: item.isReserveTotal ? .reserveTotal : (item.isReserveLine ? .reserveLine : .item),
@@ -210,16 +219,16 @@ extension Insight {
 
     /// De boekingen achter één cel van het grid (oudste eerst).
     public static func cellEntries(_ db: Database, itemId: Int64, year: Int, month: Int) throws -> [EntryRow] {
-        try entryRows(db, where: "e.budgetItemId = ? AND a.kind = 'betaal' AND e.day >= ? AND e.day <= ?",
-                      arguments: [itemId, Q.monthStart(year, month), Q.monthEnd(year, month)],
+        try entryRows(db, where: "e.budgetItemId = ? AND a.kind = 'betaal' AND \(Q.period) = ?",
+                      arguments: [itemId, Q.periodKey(year, month)],
                       order: "e.day ASC, e.id ASC")
     }
 
     /// De diverse boekingen van een maand: `positive` true = IN divers, false = UIT divers (oudste eerst).
     public static func diversEntries(_ db: Database, year: Int, month: Int, positive: Bool) throws -> [EntryRow] {
         try entryRows(db, where: """
-            e.budgetItemId IS NULL AND a.kind = 'betaal' AND e.day >= ? AND e.day <= ? AND e.amount \(positive ? ">" : "<") 0
-            """, arguments: [Q.monthStart(year, month), Q.monthEnd(year, month)], order: "e.day ASC, e.id ASC")
+            e.budgetItemId IS NULL AND a.kind = 'betaal' AND \(Q.period) = ? AND e.amount \(positive ? ">" : "<") 0
+            """, arguments: [Q.periodKey(year, month)], order: "e.day ASC, e.id ASC")
     }
 
     /// Per vaste post die in deze maand verwacht wordt: voldaan (met werkelijk bedrag, verschil en dag),
@@ -230,9 +239,10 @@ extension Insight {
         let rows = try Row.fetchAll(db, sql: """
             SELECT e.budgetItemId AS itemId, SUM(e.amount) AS s, COUNT(*) AS c, MAX(e.day) AS d
             FROM entry e
-            WHERE e.accountId IN \(Q.betaal) AND e.budgetItemId IS NOT NULL AND e.day >= ? AND e.day <= ?
+            WHERE e.accountId IN \(Q.betaal) AND e.budgetItemId IS NOT NULL AND \(Q.period) = ?
             GROUP BY e.budgetItemId
-            """, arguments: [Q.monthStart(year, month), Q.monthEnd(year, month)])
+            """, arguments: [Q.periodKey(year, month)])
+        let checks = try Q.checks(db, yearId: budgetYear.id!)
         var booked: [Int64: (Money, Int, Day?)] = [:]
         for r in rows { booked[r["itemId"]] = (r["s"], r["c"], r["d"]) }
 
@@ -240,8 +250,9 @@ extension Insight {
         for item in plans.items {
             guard let plan = plans.expected(item, month: month) else { continue }
             let (actual, count, day) = booked[item.id!] ?? (.zero, 0, nil)
+            let checked = checks.contains(ItemMonth(item.id!, month))
             let state: FixedItemState
-            if count > 0 {
+            if count > 0 || checked {
                 state = .voldaan
             } else {
                 if plan.isZero { continue }
@@ -253,7 +264,7 @@ extension Insight {
             }
             items.append(FixedItemStatus(id: item.id!, label: item.label, direction: item.direction, state: state,
                                          plan: plan, actual: actual, difference: actual - plan, day: day,
-                                         expectedDay: item.expectedDay, entryCount: count))
+                                         expectedDay: item.expectedDay, entryCount: count, isChecked: checked))
         }
         return FixedItemsOverview(
             year: year, month: month, items: items,

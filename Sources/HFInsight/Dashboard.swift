@@ -116,8 +116,8 @@ extension Insight {
         let month = try Row.fetchOne(db, sql: """
             SELECT COALESCE(SUM(CASE WHEN e.amount > 0 THEN e.amount ELSE 0 END), 0) AS pos,
                    COALESCE(SUM(CASE WHEN e.amount < 0 THEN e.amount ELSE 0 END), 0) AS neg
-            FROM entry e WHERE e.accountId IN \(Q.betaal) AND e.day >= ? AND e.day <= ?
-            """, arguments: [Q.monthStart(today.year, today.month), Q.monthEnd(today.year, today.month)])!
+            FROM entry e WHERE e.accountId IN \(Q.betaal) AND \(Q.period) = ?
+            """, arguments: [Q.periodKey(today.year, today.month)])!
         let plans = fixed?.items.map(\.plan) ?? []
         return Dashboard(today: today, spendable: spendable, accounts: accounts, fixedItems: fixed,
                          attention: attention, recentEntries: try recentEntries(db, limit: recentLimit),

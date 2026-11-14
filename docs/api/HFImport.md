@@ -67,19 +67,19 @@ let results2 = try importer.commitArchive(archive, skipFaultyRows: true)
 results[0].account; results[0].fileName; results[0].result   // result is een ImportResult
 ```
 
-### Eerste import na de Excel-historie: de naad zoeken
+### Eerste bankimport van een rekening: de naad zoeken
 
-Alles tot de overgang staat al als Excel-historie in de app (boekingen met `note == "Excel-historie"`,
-zonder banktransactie). De vingerafdruk herkent die regels niet. De volgorde is: **eerst op saldo, dan op
-datum, dan met de hand.**
+Een rekening start met een beginsaldo en een begindatum, of met Excel-historie (boekingen met
+`note == "Excel-historie"`, zonder banktransactie). Wat vóór dat startpunt ligt, herkent de vingerafdruk
+niet. De volgorde is: **eerst op saldo, dan op datum, dan met de hand.**
 
 ```swift
 guard try importer.needsSeam(accountId: id) else { /* gewone import; de vingerafdruk doet het werk */ }
 
 let preview = try importer.preview(
     url: fileURL, accountId: id,
-    skipThrough: try importer.historyCutover(accountId: id),   // terugval op datum
-    resumeFromBalance: saldoVanDeAdministratie)                // Money: het berekende saldo in de app
+    skipThrough: try importer.defaultSkipThrough(accountId: id),   // terugval op datum
+    resumeFromBalance: try importer.resumeBalance(accountId: id))  // saldo van de rekening in de app
 
 if let seam = preview.seam {
     seam.method          // .foundByBalance, .alreadyProcessed, .byDate, .notFound, .manual
@@ -162,7 +162,7 @@ let json = String(decoding: try JSONEncoder().encode(profile), as: UTF8.self)
 | `BankImporter` | `init(database:)`, `preview(data:fileName:accountId:profile:skipThrough:)`, `preview(url:accountId:profile:skipThrough:)`, `commit(_:skipFaultyRows:)`, `importFile(data:…)`, `importFile(url:…)` (beide met `skipThrough:`), `historyCutover(accountId:)`, `previewArchive(url:skipThrough:skipThroughByAccount:)`, `previewArchive(data:fileName:skipThrough:skipThroughByAccount:)`, `commitArchive(_:skipFaultyRows:)`, `matchAccount(forFileNamed:rows:)`, `matchAccount(data:fileName:)` |
 | `ImportSeam` | `method`, `soughtBalance`, `lineNumber`, `day`, `balance`, `skippedCount`, `seamCandidates`, `closingBalanceMatches`, `isAmbiguous`, `balanceNotFound`, `fileOpeningBalance`, `fileClosingBalance` |
 | `ImportPreview` (naad) | `seam`, `overriding(includeLineNumbers:excludeLineNumbers:)`; `preview(…)`, `importFile(…)` en `ImportPreview.build(…)` hebben `resumeFromBalance: Money?`, `previewArchive(…)` heeft `resumeFromBalance: [Int64: Money]` |
-| `BankImporter` (naad) | `needsSeam(accountId:)`, `historyCutover(accountId:)` |
+| `BankImporter` (naad) | `needsSeam(accountId:)`, `resumeBalance(accountId:)`, `defaultSkipThrough(accountId:)`, `historyCutover(accountId:)` |
 | `ArchivePreview` | `fileName`, `items`, `importableItems`, `skippedItems`, `newCount`, `duplicateCount`, `cutoverSkippedCount`, `errorCount`, `canCommit` |
 | `ArchiveItem` | `fileName`, `iban`, `account`, `preview`, `message`, `isImportable` |
 | `ArchiveImportResult` | `fileName`, `account`, `result` |
@@ -234,9 +234,20 @@ eindsaldo vastliggen. `ImportBatch.rowCount` telt goede en foute regels samen.
 
 ## De naad met de Excel-historie
 
-Alleen nodig bij de eerste bankimport van een rekening na de Excel-historie; `needsSeam(accountId:)` is true
-als de rekening boekingen met `note = 'Excel-historie'` heeft en nog geen enkele `bankTransaction`. Daarna
-herkent de vingerafdruk wat al geïmporteerd is en geef je niets mee.
+Alleen nodig bij de eerste bankimport van een rekening. Dat geldt voor een rekening die met alleen een
+beginsaldo start én voor een rekening met Excel-historie.
+
+- **`needsSeam(accountId:)`** is true zolang de rekening nog geen enkele `bankTransaction` heeft, met of
+  zonder Excel-historie. Daarna herkent de vingerafdruk wat al geïmporteerd is en geef je niets mee.
+- **`resumeBalance(accountId:)`** is het saldo van de rekening in de app: `Account.openingBalance` plus alle
+  boekingen op die rekening (handmatige boekingen en Excel-historie tellen mee). Gebruik dit als
+  `resumeFromBalance`, zodat elke aanroeper hetzelfde bedrag gebruikt.
+- **`defaultSkipThrough(accountId:)`** is de dag voor de terugval op datum: de laatste dag van de
+  Excel-historie als die er is, anders de dag vóór `Account.openingDate`. Regels óp de begindatum gaan dan
+  mee; regels van daarvoor niet. `historyCutover(accountId:)` blijft bestaan en geeft nil zonder historie.
+- **Tekst van de waarschuwing bij overslaan op datum:** met Excel-historie "… die periode staat al in je
+  Excel-historie.", zonder "… die vallen vóór je beginsaldo." De andere teksten spreken van "je
+  administratie" en gelden voor beide.
 
 **1. Op saldo (`resumeFromBalance`).** Het bestand moet voor elke regel een saldo hebben (CSV met saldokolom,
 of PDF met beginsaldo). In tijdsvolgorde wordt de regel gezocht waarvan het saldo vóór mutatie gelijk is aan

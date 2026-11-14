@@ -72,7 +72,7 @@ private func count(_ importer: BankImporter, _ table: String) throws -> Int {
         #expect(preview.firstDay == newYear && preview.lastDay == Day(year: 2027, month: 1, day: 2))
         #expect(preview.warnings.map(\.kind) == [.beforeCutover])
         #expect(preview.warnings[0].message
-                == "2 regels van 31-12-2026 of eerder zijn overgeslagen: die periode staat al in je Excel-historie.")
+                == "2 regels van 31-12-2026 of eerder zijn overgeslagen: die vallen vóór je beginsaldo.")
         #expect(preview.canCommit)
 
         let result = try importer.commit(preview)
@@ -140,6 +140,11 @@ private func count(_ importer: BankImporter, _ table: String) throws -> Int {
         #expect(try importer.historyCutover(accountId: account) == cutover)
         #expect(try importer.historyCutover(accountId: savings) == Day(year: 2026, month: 10, day: 1))
 
+        // Met Excel-historie noemt de waarschuwing die historie.
+        let preview = try importer.preview(data: csv(aroundNewYear), fileName: "a.csv", accountId: account,
+                                           skipThrough: try importer.defaultSkipThrough(accountId: account))
+        #expect(preview.warnings.map(\.message)
+                == ["2 regels van 31-12-2026 of eerder zijn overgeslagen: die periode staat al in je Excel-historie."])
         let result = try importer.importFile(data: csv(aroundNewYear), fileName: "a.csv", accountId: account,
                                              skipThrough: try importer.historyCutover(accountId: account))
         #expect(result.transactions.map(\.day) == [newYear, Day(year: 2027, month: 1, day: 2)!])

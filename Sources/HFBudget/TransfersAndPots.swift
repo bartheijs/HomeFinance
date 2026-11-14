@@ -136,11 +136,35 @@ public enum TransferService {
 
 // MARK: - Potten
 
+/// Het beginbedrag van één pot.
+public struct PotOpening: Equatable, Sendable {
+    public var pot: Pot
+    public var amount: Money
+}
+
+/// Beginsaldo van een spaarrekening, uitgesplitst: potten + niet toegewezen = totaal.
+public struct PotOpeningSummary: Equatable, Sendable {
+    /// `Account.openingBalance`: het deel dat aan geen pot is toegewezen.
+    public var accountOpening: Money
+    /// Het beginbedrag per pot (nul als de pot geen beginboeking heeft), op volgorde.
+    public var potOpenings: [PotOpening]
+    /// Som van de beginbedragen van de potten.
+    public var potTotal: Money { potOpenings.map(\.amount).sum() }
+    /// Het werkelijke beginsaldo van de rekening bij de bank: niet toegewezen + potten.
+    public var total: Money { accountOpening + potTotal }
+}
+
 /// Potten op een spaarrekening beheren, stortingen verdelen en geld tussen potten verplaatsen.
 public enum PotService {
-    /// Maakt een pot op een spaarrekening; komt achteraan in de volgorde.
+    /// De notitie waaraan de beginboeking van een pot herkend wordt.
+    public static let openingNote = "Beginsaldo"
+
+    /// Maakt een pot op een spaarrekening; komt achteraan in de volgorde. Met een beginbedrag (niet nul) komt er
+    /// een handmatige boeking "Beginsaldo <potnaam>" op de spaarrekening, op `day` (standaard de begindatum
+    /// van de rekening). Die boeking telt mee in het rekeningsaldo; zie `openingSummary`.
     @discardableResult
-    public static func create(_ db: Database, _ pot: Pot) throws -> Pot {
+    public static func create(_ db: Database, _ pot: Pot, openingBalance: Money = .zero,
+                              on day: Day? = nil) throws -> Pot {
         try atomic(db) {
             var pot = pot
             try validate(db, &pot)
@@ -148,8 +172,53 @@ public enum PotService {
             pot.sortOrder = try Check.nextSortOrder(db, table: "pot", whereSQL: "accountId = ?",
                                                     arguments: [pot.accountId])
             try pot.insert(db)
+            try setOpeningBalance(db, potId: pot.id!, amount: openingBalance, on: day)
             return pot
         }
+    }
+
+    /// Zet het beginbedrag van een pot: past de beginboeking aan of maakt hem, en verwijdert hem bij nul.
+    /// `day` nil = de dag van de bestaande beginboeking, anders de begindatum van de rekening.
+    /// Geeft de beginboeking terug (nil bij nul).
+    @discardableResult
+    public static func setOpeningBalance(_ db: Database, potId: Int64, amount: Money,
+                                         on day: Day? = nil) throws -> Entry? {
+        try atomic(db) {
+            let pot = try Check.pot(db, potId)
+            let account = try Check.account(db, pot.accountId)
+            let existing = try openingEntry(db, pot: pot)
+            guard !amount.isZero else {
+                if let existing { try EntryService.delete(db, entryId: existing.id!) }
+                return nil
+            }
+            if let existing {
+                var draft = try EntryService.draft(db, entryId: existing.id!)
+                draft.amount = amount
+                draft.label = "Beginsaldo \(pot.name)"
+                if let day { draft.day = day }
+                return try EntryService.update(db, entryId: existing.id!, draft)
+            }
+            return try EntryService.create(db, EntryDraft(accountId: pot.accountId, day: day ?? account.openingDate,
+                                                          amount: amount, label: "Beginsaldo \(pot.name)",
+                                                          potId: potId, note: openingNote))
+        }
+    }
+
+    /// Overzicht voor "beginsaldo rekening = potten + niet toegewezen": het beginsaldo van de rekening
+    /// (`Account.openingBalance`, het niet toegewezen deel), de beginbedragen per pot en het totaal.
+    public static func openingSummary(_ db: Database, accountId: Int64) throws -> PotOpeningSummary {
+        let account = try Check.account(db, accountId)
+        let pots = try Pot.fetchAll(db, sql: "SELECT * FROM pot WHERE accountId = ? ORDER BY sortOrder, id",
+                                    arguments: [accountId])
+        let openings = try pots.map { PotOpening(pot: $0, amount: try openingEntry(db, pot: $0)?.amount ?? .zero) }
+        return PotOpeningSummary(accountOpening: account.openingBalance, potOpenings: openings)
+    }
+
+    private static func openingEntry(_ db: Database, pot: Pot) throws -> Entry? {
+        try Entry.fetchOne(db, sql: """
+            SELECT * FROM entry WHERE potId = ? AND accountId = ? AND bankTransactionId IS NULL AND note = ?
+            ORDER BY id LIMIT 1
+            """, arguments: [pot.id, pot.accountId, openingNote])
     }
 
     /// Werkt naam, soort, eigenaar, maandbedrag en doel bij. Rekening, volgorde en archivering blijven gelijk.
@@ -177,6 +246,8 @@ public enum PotService {
             let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entry WHERE potId = ?", arguments: [potId]) ?? 0
             guard count == 0 else { throw BudgetError.potHasEntries(pot: pot.name) }
             try db.execute(sql: "DELETE FROM pot WHERE id = ?", arguments: [potId])
+            // De pot verdwijnt ook uit vaste stortingen; het plan van gekoppelde posten volgt het nieuwe totaal.
+            try DistributionService.syncLinkedPlans(db)
         }
     }
 
@@ -214,6 +285,7 @@ public enum PotService {
             """, arguments: [potId, pot.accountId]) ?? .zero
     }
 
+    /// Oude weg (op basis van `Pot.monthlyAmount`); nieuwe code gebruikt `DistributionService`.
     /// Voorstel om een storting te verdelen: als `amount` gelijk is aan de som van de maandbedragen van de
     /// (niet-gearchiveerde) reserveringspotten van de rekening, één regel per pot. Anders nil.
     public static func distribution(_ db: Database, for amount: Money, accountId: Int64) throws -> [Allocation]? {

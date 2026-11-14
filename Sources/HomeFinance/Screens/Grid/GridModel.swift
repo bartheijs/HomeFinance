@@ -172,6 +172,7 @@ extension CellStatus {
         case .open: "Verwacht, nog niet geboekt"
         case .teLaat: "Te laat"
         case .nietVerwacht: "Niet verwacht"
+        case .afgevinkt: "Afgevinkt"
         }
     }
 
@@ -182,6 +183,7 @@ extension CellStatus {
         case .open: "Deze post wordt deze maand nog verwacht."
         case .teLaat: "Verwacht, maar niet geboekt terwijl de verwachte dag of de maand al voorbij is."
         case .nietVerwacht: "De post komt deze maand niet voor, of de maand ligt in de toekomst."
+        case .afgevinkt: "Met de hand afgevinkt als voldaan, zonder boeking."
         }
     }
 
@@ -190,7 +192,7 @@ extension CellStatus {
         switch self {
         case .afwijkend: Theme.warning.opacity(0.16)
         case .teLaat: Theme.negative.opacity(0.10)
-        case .gelijk, .open, .nietVerwacht: nil
+        case .gelijk, .open, .nietVerwacht, .afgevinkt: nil
         }
     }
 }
@@ -206,6 +208,8 @@ struct GridCellContent: Equatable {
     var strong = false
     /// Meer dan één boeking in de cel (hoekje, zoals een opmerking in Excel).
     var multiple = false
+    /// Met de hand afgevinkt zonder boeking: een klein vinkje voor het planbedrag.
+    var check = false
 
     static let empty = GridCellContent()
 
@@ -244,6 +248,9 @@ struct GridCellContent: Equatable {
             if !options.showDifference { c.text = planned; c.tone = .late; c.italic = true }
         case .nietVerwacht:
             if !options.showDifference && options.isFuture(cell.month) { c.text = planned; c.tone = .ghost; c.italic = true }
+        case .afgevinkt:
+            c.check = true
+            if !options.showDifference { c.text = planned; c.tone = .secondary }
         case .gelijk, .afwijkend:
             break
         }
@@ -272,11 +279,14 @@ struct GridCellContent: Equatable {
         } else {
             lines.append("Geboekt: nog niets")
         }
-        if options.isFuture(cell.month) && cell.entryCount == 0 && cell.expected != nil {
+        if cell.status == .afgevinkt {
+            lines.append("Met de hand afgevinkt als voldaan.")
+        } else if options.isFuture(cell.month) && cell.entryCount == 0 && cell.expected != nil {
             lines.append("Deze maand moet nog komen; het schuine bedrag is het plan.")
         } else {
             lines.append("\(cell.status.gridTitle). \(cell.status.gridExplanation)")
         }
+        if cell.isChecked && cell.status != .afgevinkt { lines.append("Ook met de hand afgevinkt als voldaan.") }
         if options.editable { lines.append("Klik voor de boekingen, dubbelklik om een boeking toe te voegen.") }
         return lines.joined(separator: "\n")
     }
@@ -284,3 +294,16 @@ struct GridCellContent: Equatable {
 
 /// De rij uit HFInsight; `GridRow` zonder voorvoegsel botst met die van SwiftUI.
 typealias GridItemRow = HFInsight.GridRow
+
+/// De begrotingsmaand als "yyyy-MM", zoals `Entry.period`.
+enum GridPeriod {
+    static func key(year: Int, month: Int) -> String { String(format: "%04d-%02d", year, month) }
+
+    /// De maand vóór, de maand van en de maand na een datum.
+    static func around(_ day: Day) -> [(year: Int, month: Int)] {
+        [-1, 0, 1].map { shift in
+            let index = day.year * 12 + (day.month - 1) + shift
+            return (year: index / 12, month: index % 12 + 1)
+        }
+    }
+}

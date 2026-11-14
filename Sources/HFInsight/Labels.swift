@@ -74,13 +74,13 @@ extension Insight {
     /// Hoofdletters en extra spaties maken geen verschil. Gesorteerd op grootste absolute totaal.
     public static func labelTotals(_ db: Database, year: Int, today: Day,
                                    filter: LabelFilter = LabelFilter()) throws -> [LabelTotal] {
-        var clause = "\(diversBase) AND e.day >= ? AND e.day <= ?"
+        var clause = "\(diversBase) AND \(Q.inPeriod(year).sql) AND e.day <= ?"
         switch filter.kind {
         case .expenses: clause += " AND e.amount < 0"
         case .income: clause += " AND e.amount > 0"
         case .both: break
         }
-        let args: StatementArguments = [Q.yearStart(year), Q.asOf(year, today)]
+        let args = StatementArguments(Q.inPeriod(year).args + [today])
 
         struct Group {
             var spellings: [String: Int] = [:]
@@ -91,7 +91,7 @@ extension Insight {
             var first: Day, last: Day
         }
         var groups: [String: Group] = [:]
-        for r in try Row.fetchAll(db, sql: "SELECT e.id, e.day, e.amount, e.label FROM entry e WHERE \(clause) ORDER BY e.day, e.id",
+        for r in try Row.fetchAll(db, sql: "SELECT e.id, e.day, e.amount, e.label, \(Q.periodMonth) AS m FROM entry e WHERE \(clause) ORDER BY e.day, e.id",
                                   arguments: args) {
             let clean = cleanLabel(r["label"]), key = clean.lowercased()
             let day: Day = r["day"], amount: Money = r["amount"]
@@ -99,8 +99,10 @@ extension Insight {
             g.spellings[clean, default: 0] += 1
             g.ids.append(r["id"])
             g.total += amount
-            g.months[day.month - 1] += amount
-            g.active.insert(day.month)
+            let month: Int = r["m"]
+            guard (1...12).contains(month) else { continue }
+            g.months[month - 1] += amount
+            g.active.insert(month)
             g.last = day
             groups[key] = g
         }
@@ -146,7 +148,7 @@ extension Insight {
         let key = normalizedLabel(label)
         var clause = diversBase
         var args: [(any DatabaseValueConvertible)?] = []
-        if let year { clause += " AND e.day >= ? AND e.day <= ?"; args += [Q.yearStart(year), Q.yearEnd(year)] }
+        if let year { clause += " AND \(Q.inPeriod(year).sql)"; args += Q.inPeriod(year).args }
         let ids = try Row.fetchAll(db, sql: "SELECT e.id, e.label FROM entry e WHERE \(clause)",
                                    arguments: StatementArguments(args))
             .filter { normalizedLabel($0["label"]) == key }.map { $0["id"] as Int64 }
@@ -157,9 +159,9 @@ extension Insight {
     public static func labelYears(_ db: Database, label: String) throws -> [LabelYear] {
         let key = normalizedLabel(label)
         var years: [Int: (Int, Money)] = [:]
-        for r in try Row.fetchAll(db, sql: "SELECT e.day, e.amount, e.label FROM entry e WHERE \(diversBase)")
+        for r in try Row.fetchAll(db, sql: "SELECT \(Q.periodYear) AS y, e.amount, e.label FROM entry e WHERE \(diversBase)")
         where normalizedLabel(r["label"]) == key {
-            let year = (r["day"] as Day).year
+            let year: Int = r["y"]
             let y = years[year] ?? (0, .zero)
             years[year] = (y.0 + 1, y.1 + (r["amount"] as Money))
         }

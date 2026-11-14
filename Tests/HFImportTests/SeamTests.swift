@@ -232,14 +232,103 @@ private func makeDatabase() throws -> (BankImporter, checking: Int64, savings: I
 
     @Test func needsSeamOnlyBeforeFirstBankImport() throws {
         let (importer, account, savings) = try makeDatabase()
-        #expect(try importer.needsSeam(accountId: account) == false)   // geen Excel-historie
+        // Ook zonder Excel-historie: zolang er geen banktransacties zijn, is de naad nodig.
+        #expect(try importer.needsSeam(accountId: account) == true)
         try importer.database.write { db in
             var entry = Entry(accountId: account, day: cutover, amount: Money(euros: -1), label: "Test", note: "Excel-historie")
             try entry.insert(db)
         }
         #expect(try importer.needsSeam(accountId: account) == true)
-        #expect(try importer.needsSeam(accountId: savings) == false)
+        #expect(try importer.needsSeam(accountId: savings) == true)
         try importer.importFile(data: csv(seamFile), fileName: "a.csv", accountId: account, resumeFromBalance: Money(euros: 940))
         #expect(try importer.needsSeam(accountId: account) == false)   // daarna werkt de vingerafdruk
+        #expect(try importer.needsSeam(accountId: savings) == true)    // de andere rekening nog niet
+    }
+}
+
+/// Starten zonder Excel-historie: alleen een beginsaldo en een begindatum per rekening.
+@Suite struct OpeningBalanceStartTests {
+    private func makeAccount(openingBalance: Money, openingDate: Day) throws -> (BankImporter, Int64) {
+        let db = try AppDatabase.inMemory()
+        let id = try db.write { db -> Int64 in
+            var account = Account(name: "Betaalrekening", iban: checkingIban, kind: .betaal,
+                                  openingBalance: openingBalance, openingDate: openingDate)
+            try account.insert(db)
+            return account.id!
+        }
+        return (BankImporter(database: db), id)
+    }
+
+    @Test func fileStartsBeforeTheOpeningBalance() throws {
+        // Beginsaldo € 940 op 31-12, na twee regels van die dag; het bestand begint een dag eerder.
+        let (importer, account) = try makeAccount(openingBalance: Money(euros: 940), openingDate: cutover)
+        #expect(try importer.needsSeam(accountId: account))
+        #expect(try importer.resumeBalance(accountId: account) == Money(euros: 940))
+        #expect(try importer.defaultSkipThrough(accountId: account) == Day(year: 2026, month: 12, day: 30))
+        #expect(try importer.historyCutover(accountId: account) == nil)
+
+        let preview = try importer.preview(data: csv(seamFile), fileName: "a.csv", accountId: account,
+                                           skipThrough: try importer.defaultSkipThrough(accountId: account),
+                                           resumeFromBalance: try importer.resumeBalance(accountId: account))
+        #expect(preview.seam?.method == .foundByBalance)
+        #expect(preview.seam?.lineNumber == 4 && preview.seam?.skippedCount == 3)
+        #expect(preview.openingBalance == Money(euros: 940) && preview.newCount == 2)
+        #expect(preview.warnings.map(\.kind) == [.beforeCutover])
+        #expect(!preview.warnings[0].message.contains("Excel"))
+
+        try importer.commit(preview)
+        #expect(try importer.needsSeam(accountId: account) == false)
+    }
+
+    @Test func fileStartsExactlyAtTheOpeningBalance() throws {
+        let (importer, account) = try makeAccount(openingBalance: Money(euros: 1000),
+                                                  openingDate: Day(year: 2026, month: 12, day: 30)!)
+        let preview = try importer.preview(data: csv(seamFile), fileName: "a.csv", accountId: account,
+                                           skipThrough: try importer.defaultSkipThrough(accountId: account),
+                                           resumeFromBalance: try importer.resumeBalance(accountId: account))
+        #expect(preview.seam?.method == .foundByBalance && preview.seam?.skippedCount == 0)
+        #expect(preview.newCount == 5 && preview.warnings.isEmpty)
+    }
+
+    @Test func openingBalanceNotInFileFallsBackToOpeningDate() throws {
+        let (importer, account) = try makeAccount(openingBalance: Money(euros: 123), openingDate: cutover)
+        let preview = try importer.preview(data: csv(seamFile), fileName: "a.csv", accountId: account,
+                                           skipThrough: try importer.defaultSkipThrough(accountId: account),
+                                           resumeFromBalance: try importer.resumeBalance(accountId: account))
+        #expect(preview.seam?.method == .byDate && preview.seam?.balanceNotFound == true)
+        // Alleen de regel van vóór de begindatum (30-12) valt af; de regels óp de begindatum gaan mee.
+        #expect(preview.rows.map(\.isBeforeCutover) == [true, false, false, false, false])
+        #expect(preview.warnings.map(\.kind) == [.seamNotFound, .beforeCutover])
+        #expect(preview.warnings[1].message == "1 regel van 30-12-2026 of eerder is overgeslagen: die valt vóór je beginsaldo.")
+
+        // Zonder datum: niet gevonden, alles gaat mee.
+        let noDate = try importer.preview(data: csv(seamFile), fileName: "a.csv", accountId: account,
+                                          resumeFromBalance: Money(euros: 123))
+        #expect(noDate.seam?.method == .notFound && noDate.newCount == 5)
+    }
+
+    @Test func resumeBalanceCountsAllEntries() throws {
+        let (importer, account) = try makeAccount(openingBalance: Money(euros: 1000),
+                                                  openingDate: Day(year: 2026, month: 12, day: 1)!)
+        try importer.database.write { db in
+            var manual = Entry(accountId: account, day: cutover, amount: Money(euros: -60), label: "Handmatig")
+            var history = Entry(accountId: account, day: cutover, amount: Money(cents: 1050), label: "Oud", note: "Excel-historie")
+            try manual.insert(db)
+            try history.insert(db)
+        }
+        #expect(try importer.resumeBalance(accountId: account) == Money(cents: 95050))
+        #expect(try importer.defaultSkipThrough(accountId: account) == cutover)   // historie gaat voor de begindatum
+        #expect(throws: ImportError.accountNotFound) { try importer.resumeBalance(accountId: 999) }
+        #expect(throws: ImportError.accountNotFound) { try importer.defaultSkipThrough(accountId: 999) }
+    }
+
+    @Test func accountWithBankTransactionsNeedsNoSeam() throws {
+        let (importer, account) = try makeAccount(openingBalance: Money(euros: 1000),
+                                                  openingDate: Day(year: 2026, month: 12, day: 30)!)
+        try importer.importFile(data: csv(Array(seamFile.prefix(3))), fileName: "a.csv", accountId: account)
+        #expect(try importer.needsSeam(accountId: account) == false)
+        // Gewone import zonder naad: de vingerafdruk slaat over wat er al is.
+        let next = try importer.preview(data: csv(seamFile), fileName: "b.csv", accountId: account)
+        #expect(next.seam == nil && next.newCount == 2 && next.duplicateCount == 3)
     }
 }

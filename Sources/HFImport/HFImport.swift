@@ -25,9 +25,9 @@ public struct BankImporter: Sendable {
     /// Leest het bestand en toont wat er geïmporteerd zou worden. Schrijft niets.
     /// Een PDF-rekeningafschrift wordt herkend aan de inhoud of de extensie; `profile` telt dan niet mee.
     /// Zonder `profile` wordt het profiel geraden; lukt dat niet, dan volgt `ImportError.noProfile`.
-    /// Met `skipThrough` blijven regels van die dag of eerder buiten de import (zie `historyCutover`).
+    /// Met `skipThrough` blijven regels van die dag of eerder buiten de import (zie `defaultSkipThrough`).
     /// Met `resumeFromBalance` (het saldo van de administratie) wordt eerst op saldo gezocht waar het bestand
-    /// aansluit; zie `ImportPreview.seam`. Alleen nodig bij de eerste import na de Excel-historie (`needsSeam`).
+    /// aansluit; zie `ImportPreview.seam`. Alleen nodig bij de eerste bankimport van een rekening (`needsSeam`).
     public func preview(data: Data, fileName: String, accountId: Int64, profile: BankProfile? = nil,
                         skipThrough: Day? = nil, resumeFromBalance: Money? = nil) throws -> ImportPreview {
         if PDFStatement.isPDF(data: data, fileName: fileName) {
@@ -35,7 +35,8 @@ public struct BankImporter: Sendable {
             return try database.read { db in
                 guard let account = try Account.fetchOne(db, key: accountId) else { throw ImportError.accountNotFound }
                 var preview = ImportPreview.build(statement: statement, fileName: fileName, account: account,
-                                                  skipThrough: skipThrough, resumeFromBalance: resumeFromBalance)
+                                                  skipThrough: skipThrough, resumeFromBalance: resumeFromBalance,
+                                                  hasExcelHistory: try Self.hasExcelHistory(db, accountId))
                 try Self.markDuplicates(db, &preview)
                 try Self.addSuggestion(db, &preview)
                 return preview
@@ -48,7 +49,8 @@ public struct BankImporter: Sendable {
         return try database.read { db in
             guard let account = try Account.fetchOne(db, key: accountId) else { throw ImportError.accountNotFound }
             var preview = try ImportPreview.build(file: file, fileName: fileName, account: account, profile: profile,
-                                                  skipThrough: skipThrough, resumeFromBalance: resumeFromBalance)
+                                                  skipThrough: skipThrough, resumeFromBalance: resumeFromBalance,
+                                                  hasExcelHistory: try Self.hasExcelHistory(db, accountId))
             try Self.markDuplicates(db, &preview)
             try Self.addSuggestion(db, &preview)
             return preview
@@ -62,16 +64,42 @@ public struct BankImporter: Sendable {
                     profile: profile, skipThrough: skipThrough, resumeFromBalance: resumeFromBalance)
     }
 
-    /// De naad hoeft alleen gezocht te worden bij de eerste bankimport na de Excel-historie: true als de
-    /// rekening boekingen met `note == "Excel-historie"` heeft en nog geen enkele banktransactie.
-    /// Daarna herkent de vingerafdruk wat al geïmporteerd is.
+    /// De naad hoeft alleen gezocht te worden bij de eerste bankimport van een rekening: true zolang de
+    /// rekening nog geen enkele banktransactie heeft, met of zonder Excel-historie. Daarna herkent de
+    /// vingerafdruk wat al geïmporteerd is.
     public func needsSeam(accountId: Int64) throws -> Bool {
         try database.read { db in
-            try Bool.fetchOne(db, sql: """
-                SELECT EXISTS (SELECT 1 FROM entry WHERE accountId = ? AND note = 'Excel-historie')
-                   AND NOT EXISTS (SELECT 1 FROM bankTransaction WHERE accountId = ?)
-                """, arguments: [accountId, accountId]) ?? false
+            try Bool.fetchOne(db, sql: "SELECT NOT EXISTS (SELECT 1 FROM bankTransaction WHERE accountId = ?)",
+                              arguments: [accountId]) ?? true
         }
+    }
+
+    /// Het saldo van de rekening in de app: beginsaldo plus alle boekingen (ook handmatige en Excel-historie).
+    /// Geef dit door als `resumeFromBalance`, zodat elke aanroeper hetzelfde bedrag gebruikt.
+    public func resumeBalance(accountId: Int64) throws -> Money {
+        try database.read { db in
+            guard let account = try Account.fetchOne(db, key: accountId) else { throw ImportError.accountNotFound }
+            let entries = try Money.fetchOne(db, sql: "SELECT COALESCE(SUM(amount), 0) FROM entry WHERE accountId = ?",
+                                             arguments: [accountId]) ?? .zero
+            return account.openingBalance + entries
+        }
+    }
+
+    /// De dag om als `skipThrough` (terugval op datum) te gebruiken: de laatste dag van de Excel-historie als
+    /// die er is, anders de dag vóór de begindatum van de rekening (regels van vóór de start horen er niet in).
+    public func defaultSkipThrough(accountId: Int64) throws -> Day {
+        try database.read { db in
+            guard let account = try Account.fetchOne(db, key: accountId) else { throw ImportError.accountNotFound }
+            let history = try Day.fetchOne(db, sql: """
+                SELECT MAX(day) FROM entry WHERE accountId = ? AND note = 'Excel-historie'
+                """, arguments: [accountId])
+            return history ?? account.openingDate.adding(days: -1)
+        }
+    }
+
+    static func hasExcelHistory(_ db: Database, _ accountId: Int64) throws -> Bool {
+        try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM entry WHERE accountId = ? AND note = 'Excel-historie')",
+                          arguments: [accountId]) ?? false
     }
 
     /// De overgangsdag van een rekening: de laatste dag met een boeking uit de Excel-historie

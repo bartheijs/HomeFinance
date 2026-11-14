@@ -1,7 +1,7 @@
 import Foundation
 import HFCore
 
-/// De naad tussen wat al in de administratie staat (Excel-historie) en wat uit het bankbestand komt.
+/// De naad tussen wat al in de administratie staat (beginsaldo of Excel-historie) en wat uit het bankbestand komt.
 public struct ImportSeam: Equatable, Sendable {
     public enum Method: Equatable, Sendable {
         /// Een regel gevonden waarvan het saldo vóór mutatie gelijk is aan het gezochte saldo.
@@ -48,7 +48,8 @@ public struct ImportSeam: Equatable, Sendable {
 extension ImportPreview {
     /// Bepaalt welke regels al in de administratie staan. Volgorde: eerst op saldo (`resumeFromBalance`),
     /// lukt dat niet dan op datum (`skipThrough`), anders gaat alles mee.
-    mutating func applySeam(resumeFromBalance: Money?, skipThrough: Day?) {
+    /// `hasExcelHistory` bepaalt alleen de tekst van de waarschuwing bij overslaan op datum.
+    mutating func applySeam(resumeFromBalance: Money?, skipThrough: Day?, hasExcelHistory: Bool = true) {
         self.skipThrough = skipThrough
         fileOpeningBalance = openingBalance
         guard resumeFromBalance != nil || skipThrough != nil else { return }
@@ -112,7 +113,9 @@ extension ImportPreview {
             if skipped > 0 {
                 warnings.append(ImportWarning(kind: .beforeCutover, message:
                     "\(skipped) \(skipped == 1 ? "regel" : "regels") van \(day.dutch) of eerder "
-                    + "\(skipped == 1 ? "is" : "zijn") overgeslagen: die periode staat al in je Excel-historie."))
+                    + "\(skipped == 1 ? "is" : "zijn") overgeslagen: "
+                    + (hasExcelHistory ? "die periode staat al in je Excel-historie."
+                                       : "die \(skipped == 1 ? "valt" : "vallen") vóór je beginsaldo.")))
             }
         }
 

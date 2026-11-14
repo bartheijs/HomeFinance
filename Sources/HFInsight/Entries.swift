@@ -42,6 +42,8 @@ public struct EntryRow: Identifiable, Equatable, Sendable {
     public let savingsTransferId: Int64?
     /// De verrekening (per tag) waarin deze boeking is meegenomen, of nil.
     public let settlementId: Int64?
+    /// Afwijkende begrotingsmaand "yyyy-MM", of nil als de boeking in de maand van `day` meetelt.
+    public let period: String?
     public let counterEntryId: Int64?
     public let reviewed: Bool
     public let confidence: Confidence?
@@ -49,6 +51,17 @@ public struct EntryRow: Identifiable, Equatable, Sendable {
     /// nil bij handinvoer.
     public let bank: BankFields?
     public internal(set) var tags: [TagRef]
+
+    /// Jaar waarin de boeking meetelt voor de begroting (uit `period`, anders uit `day`).
+    public var budgetYear: Int { Self.parse(period)?.0 ?? day.year }
+    /// Maand (1–12) waarin de boeking meetelt voor de begroting (uit `period`, anders uit `day`).
+    public var budgetMonth: Int { Self.parse(period)?.1 ?? day.month }
+
+    private static func parse(_ period: String?) -> (Int, Int)? {
+        guard let parts = period?.split(separator: "-"), parts.count == 2,
+              let y = Int(parts[0]), let m = Int(parts[1]), (1...12).contains(m) else { return nil }
+        return (y, m)
+    }
 
     /// Boeking op een betaalrekening zonder vaste post.
     public var isDivers: Bool { accountKind == .betaal && budgetItemId == nil }
@@ -71,7 +84,8 @@ public enum AmountSign: String, Sendable, CaseIterable {
 public struct EntryFilter: Equatable, Sendable {
     public var accountId: Int64?
     public var year: Int?
-    /// Maand 1–12; werkt alleen samen met `year`.
+    /// Maand 1–12; werkt alleen samen met `year`. Jaar en maand filteren op de begrotingsmaand (`period`),
+    /// `from`/`to` op de echte datum.
     public var month: Int?
     public var from: Day?
     public var to: Day?
@@ -140,7 +154,7 @@ extension Insight {
 
     static let entrySelect = """
         SELECT e.id, e.accountId, a.name AS accountName, a.kind AS accountKind, e.day, e.amount, e.label, e.note,
-               e.budgetItemId, i.label AS itemLabel, e.potId, p.name AS potName, e.reimburse, e.temporaryLoan, e.savingsTransferId, e.settlementId,
+               e.budgetItemId, i.label AS itemLabel, e.potId, p.name AS potName, e.reimburse, e.temporaryLoan, e.savingsTransferId, e.settlementId, e.period,
                e.counterEntryId, e.reviewed, e.confidence, e.bankTransactionId,
                b.counterpartyName AS bName, b.counterpartyIban AS bIban, b.descriptionText AS bDesc,
                b.reference AS bRef, b.transactionCode AS bCode, b.amount AS bAmount
@@ -187,7 +201,7 @@ extension Insight {
                             accountKind: r["accountKind"], day: r["day"], amount: r["amount"], label: r["label"],
                             note: r["note"], budgetItemId: r["budgetItemId"], itemLabel: r["itemLabel"],
                             potId: r["potId"], potName: r["potName"], reimburse: r["reimburse"],
-                            temporaryLoan: r["temporaryLoan"], savingsTransferId: r["savingsTransferId"], settlementId: r["settlementId"], counterEntryId: r["counterEntryId"],
+                            temporaryLoan: r["temporaryLoan"], savingsTransferId: r["savingsTransferId"], settlementId: r["settlementId"], period: r["period"], counterEntryId: r["counterEntryId"],
                             reviewed: r["reviewed"], confidence: r["confidence"], bankTransactionId: bankId,
                             bank: bank, tags: [])
         }
@@ -223,8 +237,8 @@ extension Insight {
         var args: [(any DatabaseValueConvertible)?] = []
         if let v = filter.accountId { parts.append("e.accountId = ?"); args.append(v) }
         if let y = filter.year {
-            let (a, b) = Q.range(y, filter.month)
-            parts.append("e.day >= ? AND e.day <= ?"); args.append(a); args.append(b)
+            let p = Q.inPeriod(y, filter.month)
+            parts.append(p.sql); args += p.args
         }
         if let v = filter.from { parts.append("e.day >= ?"); args.append(v) }
         if let v = filter.to { parts.append("e.day <= ?"); args.append(v) }
