@@ -33,13 +33,18 @@ struct PotsAccountStrip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             if showName { Text(account.name).font(.headline) }
-            HStack(alignment: .top, spacing: 48) {
+            HStack(alignment: .top, spacing: 40) {
                 figure("Op de spaarrekening", amount: account.balance, caption: "t/m \(asOf.short())",
                        help: "Het saldo van de spaarrekening: het beginsaldo plus alle boekingen tot en met vandaag.")
                 figure("In potten", amount: account.potTotal,
                        caption: activeCount == 1 ? "1 pot" : "\(activeCount) potten",
                        help: "De som van alle potten op deze rekening.")
                 unallocated
+                if account.negativePotCount > 0 {
+                    figure("Geleend uit andere potten", amount: account.borrowedFromOtherPots,
+                           caption: account.negativePotCount == 1 ? "1 pot in de min" : "\(account.negativePotCount) potten in de min",
+                           help: "Potten die in de min staan lenen van je andere potten. Het geld staat nog op de spaarrekening, maar met een ander doel.")
+                }
                 Spacer(minLength: 0)
             }
             Button {
@@ -260,7 +265,13 @@ struct PotsRowView: View {
                         Text(pot.name).lineLimit(1).truncationMode(.tail)
                         if pot.archived { Text("gearchiveerd").font(.callout).foregroundStyle(.tertiary) }
                     }
-                    if let goal = pot.goal {
+                    if let recovery = pot.recovery {
+                        Text(PotsRecoveryText.line(recovery))
+                            .font(.callout)
+                            .foregroundStyle(recovery.status == .herstelt ? Color.secondary : Theme.warning)
+                            .lineLimit(1)
+                            .help("Deze pot staat in de min: het geld is geleend van je andere potten.")
+                    } else if let goal = pot.goal {
                         HStack(spacing: 10) {
                             PotsTargetBar(pot: pot, barOnly: true).frame(width: 140)
                             Text(PotsGoalText.line(goal))
@@ -271,13 +282,9 @@ struct PotsRowView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                if pot.balance.isNegative {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.negative)
-                        .help("Deze pot staat negatief: er is meer uitgehaald dan erin zat. Vul hem aan vanuit een andere pot.")
-                }
                 Text(pot.balance.formatted())
                     .monospacedDigit()
-                    .foregroundStyle(pot.balance.isNegative ? Theme.negative : Color.primary)
+                    .foregroundStyle(pot.balance.isNegative ? Theme.warning : Color.primary)
                 Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.quaternary)
             }
             .font(.body)

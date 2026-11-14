@@ -21,6 +21,7 @@ iCloud Drive of Google Drive synchroniseert.
 | `Backup.backupUsingSettings(_:now:) -> BackupInfo?` | Back-up in de ingestelde map plus opruimen volgens `keepCount`; `nil` als er geen map is ingesteld. Bedoeld voor "back-up bij afsluiten". |
 | `Backup.counts(_ db: Database) -> BackupCounts` | Aantallen van de geopende database. |
 | `Backup.exportAllAsCSV(_:to:) -> [CSVExportFile]` | Eén `<tabel>.csv` per tabel, zie onder. |
+| `Backup.exportYearAsExcel(_:year:to:now:) -> URL` | Eén leesbaar Excel-bestand van een jaar, zie onder. |
 
 ### Herstellen
 
@@ -100,6 +101,63 @@ puntkomma, aanhalingsteken of regeleinde staat tussen dubbele aanhalingstekens.
 ```swift
 let files = try Backup.exportAllAsCSV(db, to: exportFolder)   // [CSVExportFile(table:url:rowCount:)]
 ```
+
+## Jaarexport naar Excel (`Backup.exportYearAsExcel`)
+
+Een leesbare kopie van één begrotingsjaar in één bestand, voor Excel, Numbers of Google Sheets.
+
+| Functie | Doet |
+|---|---|
+| `Backup.exportYearAsExcel(_:year:to:now:) -> URL` | Schrijft `HomeFinance <jaar>.xlsx` in de map (maakt de map zo nodig aan; een bestaand bestand met die naam wordt vervangen). `now` bepaalt de exportdag. |
+| `Backup.excelFileName(year:)` | `HomeFinance <jaar>.xlsx` |
+| `ExportError` (`LocalizedError`) | `yearNotFound(Int)`: het jaar heeft geen begroting. `writeFailed(String)`: inpakken of schrijven mislukte. Een onbruikbare map geeft `BackupError.folderUnavailable`. |
+
+```swift
+do {
+    let url = try Backup.exportYearAsExcel(db, year: 2027, to: exportFolder)
+    NSWorkspace.shared.activateFileViewerSelecting([url])
+} catch {
+    print(error.localizedDescription)     // bv. "Er is geen begroting voor het jaar 2031. …"
+}
+```
+
+Tabbladen:
+
+- **Maandgrid**: `Post | Plan | jan … dec | Jaar`. De vaste posten op volgorde onder de kopjes Inkomsten en
+  Uitgaven; RES-regels ingesprongen met alleen hun plan. Een maand zonder boeking is leeg; een met de hand
+  afgevinkte maand zonder boeking toont "afgevinkt". Daaronder Vaste posten, IN divers, UIT divers, Netto divers
+  en Resultaat, en het jaaroverzicht op de peildag (op de rekening op 1-1, IN, UIT, op de rekening, anti-rood,
+  tijdelijk geleend, besteedbaar).
+- **Transacties**: één regel per boeking van het begrotingsjaar, op alle rekeningen: datum, telt mee in
+  (`jjjj-mm`), rekening, omschrijving, post of pot, divers, tags, bedrag, vergoeden uit spaar, tijdelijk geleend,
+  nagekeken, notitie, tegenpartij en bankomschrijving. Met autofilter.
+- **Potten**: per spaarrekening de potten met soort, eigenaar, saldo op de peildag, gestort en opgenomen in het
+  jaar, doelbedrag en doeldatum; daaronder Totaal potten, Niet toegewezen en het saldo van de rekening. Een
+  gearchiveerde pot zonder saldo of beweging staat er niet in.
+- **Vaste stortingen**: per storting de regels (pot, bedrag) en het totaal.
+- **Toelichting**: exportdatum, jaar, en dat dit een leesbare kopie is en geen back-up.
+
+Rekenregels: dezelfde als het maandgrid in de app. Een boeking telt mee in de begrotingsmaand
+`COALESCE(period, maand van day)`; saldi volgen `day`. De peildag is de exportdag, of 31-12 voor een voorbij
+jaar. Staat er (tegen de regels in) een boeking op een RES-regel, dan toont die regel het bedrag en telt het mee
+in Vaste posten, zodat Resultaat blijft aansluiten op de rekening.
+
+Techniek: de xlsx wordt zonder bibliotheek geschreven (eigen XML, ingepakt met `/usr/bin/zip`). Bedragen zijn
+echte getallen met opmaak `#.##0,00`, datums echte datumcellen (`dd-mm-jjjj`), koppen en totalen vet, eerste rij
+en kolom bevroren. Totalen zijn `SUM`-formules met de uitkomst erbij bewaard, zodat het bestand ook klopt in een
+programma dat niet herberekent.
+
+## Back-up, CSV-export of Excel-export?
+
+| | Back-up | CSV-export | Excel-export |
+|---|---|---|---|
+| Functie | `createBackup` | `exportAllAsCSV` | `exportYearAsExcel` |
+| Wat | het databasebestand, compleet | elke tabel ruw, één bestand per tabel | één jaar, opgemaakt in vijf tabbladen |
+| Voor | terugzetten met `restore` | de gegevens meenemen naar iets anders | lezen en doorrekenen |
+| Terugzetten in de app | ja | nee | nee |
+| Volledig | ja, alle jaren en instellingen | ja, alle tabellen (id's en centen als `1234,56`) | nee: alleen wat op de tabbladen staat |
+
+Alleen de back-up is een back-up. De twee exports zijn kopieën om te lezen; de app kan ze niet inlezen.
 
 ## Voorbeelddata (`DemoData`)
 

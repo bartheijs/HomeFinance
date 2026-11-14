@@ -243,6 +243,24 @@ struct ForecastContext {
         return raw.sorted { ($0.day, $1.amount, $0.id) < ($1.day, $0.amount, $1.id) }
     }
 
+    /// De dag 10 jaar na vandaag: zo ver kijkt de vooruitblik voor doel en herstel.
+    var horizon: Day { Day(year: today.year + 10, month: today.month, day: min(today.day, 28))! }
+
+    /// Voor een pot met een negatief saldo: wanneer de vooruitblik weer op of boven nul komt.
+    func recovery(potId: Int64, balance: Money) -> PotRecovery? {
+        guard balance < .zero else { return nil }
+        let perMonth = (lines[potId] ?? []).map(\.amount).sum()
+        var running = balance
+        var date: Day?
+        for e in events(potId: potId, until: horizon) {
+            running += e.amount
+            if running >= .zero { date = e.day; break }
+        }
+        let status: PotRecoveryStatus = date != nil ? .herstelt
+            : (perMonth > .zero ? .duurtLangerDan10Jaar : .wordtNietAangevuld)
+        return PotRecovery(shortfall: -balance, perMonth: perMonth, recoveryDate: date, status: status)
+    }
+
     /// Het spaardoel van een pot, of nil zonder doelbedrag.
     func goal(pot: Pot, balance: Money) -> PotGoal? {
         guard let target = pot.targetAmount, target > .zero, let potId = pot.id else { return nil }

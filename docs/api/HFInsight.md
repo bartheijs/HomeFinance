@@ -289,6 +289,23 @@ for pot in overview.accounts.flatMap(\.pots) {
   `overdueCount`, `firstDay` en `lastDay`. Het project met de laatste dag het verst weg staat eerst.
 - `ForecastEvent.project`: het project van een losse gebeurtenis in `PotForecast.events`, of nil.
 
+## Potten die in de min staan
+
+Een pot mag bewust negatief staan (iets vooruit betaald); het geld is dan geleend van de andere potten op dezelfde
+spaarrekening.
+
+- `PotSummary.recovery: PotRecovery?`: alleen bij een negatief saldo, anders nil.
+  - `shortfall`: het bedrag onder nul (positief).
+  - `perMonth`: wat er per maand bij komt via niet-gearchiveerde vaste stortingen.
+  - `recoveryDate`: de eerste dag waarop de vooruitblik (vaste stortingen en open losse verwachtingen) op of boven
+    nul komt, tot 10 jaar vooruit.
+  - `status` (`PotRecoveryStatus`): `herstelt` (met datum), `wordtNietAangevuld` (geen vaste storting en geen
+    verwachting die het oplost) of `duurtLangerDan10Jaar` (er komt wel geld bij, maar niet genoeg).
+- `SavingsAccountPots.borrowedFromOtherPots` en `negativePotCount`, en dezelfde twee als totaal in `PotOverview`:
+  de som van de negatieve potsaldi als positief bedrag, en het aantal van die potten.
+
+Het herstel gebruikt dezelfde gedeelde gegevens als het spaardoel: geen extra queries per pot.
+
 ## Maandbalans met wat-als
 
 `planBalance(db, year:)` geeft één `PlanBalance`: wat er per maand overblijft van de vaste posten, voor het plan en

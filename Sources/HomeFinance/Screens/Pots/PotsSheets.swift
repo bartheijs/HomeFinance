@@ -24,6 +24,16 @@ enum PotsSheet: Identifiable {
 
 // MARK: - Pot maken of bewerken
 
+/// Eén regel van een spaardoel dat uit onderdelen is opgebouwd.
+private struct PotsGoalPartDraft: Identifiable, Equatable {
+    let id = UUID()
+    var label = ""
+    var quantity = 1
+    var unit: Money?
+
+    var amount: Money { Money(cents: (unit ?? .zero).cents * Int64(max(1, quantity))) }
+}
+
 struct PotsEditSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -44,6 +54,10 @@ struct PotsEditSheet: View {
     @State private var openingDateTouched = false
     @State private var target: Money?
     @State private var hasTargetDate: Bool
+    /// Het doel is opgebouwd uit onderdelen in plaats van één bedrag.
+    @State private var goalFromParts = false
+    @State private var parts: [PotsGoalPartDraft] = []
+    @State private var hadParts = false
     @State private var targetDate: Date
     /// Het beginbedrag zoals het was bij openen (om te zien of het gewijzigd is).
     @State private var originalOpening: Money = .zero
@@ -108,8 +122,18 @@ struct PotsEditSheet: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Section("Spaardoel (mag leeg)") {
-                    MoneyField("Doelbedrag", value: $target)
-                        .help("Het bedrag dat je in deze pot wilt hebben. Laat leeg als de pot geen doel heeft.")
+                    Picker("Doel", selection: $goalFromParts) {
+                        Text("Eén bedrag").tag(false)
+                        Text("Opbouwen uit onderdelen").tag(true)
+                    }
+                    .pickerStyle(.segmented).labelsHidden()
+                    .help("Eén bedrag: je vult het doel zelf in. Onderdelen: je telt het doel op uit losse posten, zoals lessen en examens.")
+                    if goalFromParts {
+                        goalParts
+                    } else {
+                        MoneyField("Doelbedrag", value: $target)
+                            .help("Het bedrag dat je in deze pot wilt hebben. Laat leeg als de pot geen doel heeft. Een som zoals 40*65 mag ook.")
+                    }
                     Toggle("Met doeldatum", isOn: $hasTargetDate)
                     if hasTargetDate {
                         DatePicker("Doel halen op", selection: $targetDate, displayedComponents: .date)
@@ -142,12 +166,47 @@ struct PotsEditSheet: View {
             }
             .padding(16)
         }
-        .frame(width: 480, height: pot == nil ? 560 : 660)
+        .frame(width: 520, height: pot == nil ? 600 : 700)
         .onAppear(perform: load)
         .onChange(of: accountId) { _, _ in
             if pot == nil, !openingDateTouched, let account { openingDate = account.openingDate.date }
         }
     }
+
+    /// De onderdelen van het doel: omschrijving, aantal × bedrag per stuk, met het totaal eronder.
+    @ViewBuilder private var goalParts: some View {
+        if parts.isEmpty {
+            Text("Nog geen onderdelen. Bijvoorbeeld: 40 lessen × € 65, theorie-examen, praktijkexamen.")
+                .font(.callout).foregroundStyle(.secondary)
+        }
+        ForEach($parts) { $part in
+            HStack(spacing: 6) {
+                TextField("Omschrijving", text: $part.label, prompt: Text("bijv. lessen"))
+                    .labelsHidden()
+                TextField("Aantal", value: $part.quantity, format: .number)
+                    .labelsHidden().multilineTextAlignment(.trailing).frame(width: 44)
+                    .help("Hoe vaak. Laat op 1 staan voor een los bedrag.")
+                Text("×").foregroundStyle(.secondary)
+                MoneyField("Per stuk", value: $part.unit)
+                    .labelsHidden().frame(width: 90)
+                    .help("Het bedrag per stuk.")
+                Button { parts.removeAll { $0.id == part.id } } label: {
+                    Image(systemName: "minus.circle").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Haal dit onderdeel weg.")
+            }
+        }
+        HStack {
+            Button { parts.append(PotsGoalPartDraft()) } label: { Label("Onderdeel toevoegen", systemImage: "plus") }
+            Spacer()
+            Text("Doelbedrag").foregroundStyle(.secondary)
+            Text(partsTotal.formatted()).monospacedDigit().fontWeight(.semibold)
+        }
+    }
+
+    private var validParts: [PotsGoalPartDraft] { parts.filter { $0.unit != nil && $0.quantity >= 1 } }
+    private var partsTotal: Money { validParts.map(\.amount).sum() }
 
     /// Haalt het huidige beginbedrag en de datum ervan op.
     private func load() {
@@ -155,6 +214,12 @@ struct PotsEditSheet: View {
         loaded = true
         if let account { openingDate = account.openingDate.date }
         guard let pot else { return }
+        let existingParts = model.read([GoalPart]()) { try PotService.goalParts($0, potId: pot.id) }
+        if !existingParts.isEmpty {
+            hadParts = true
+            goalFromParts = true
+            parts = existingParts.map { PotsGoalPartDraft(label: $0.label, quantity: $0.quantity, unit: $0.unitAmount) }
+        }
         let entry = model.read(Entry?.none) { db in
             try Entry.filter(Column("potId") == pot.id && Column("accountId") == pot.accountId
                              && Column("note") == PotService.openingNote).fetchOne(db)
@@ -169,7 +234,9 @@ struct PotsEditSheet: View {
     private func save() {
         guard let opening, let accountId else { return }
         let ownerValue = owner.trimmingCharacters(in: .whitespacesAndNewlines)
-        let targetValue = target.flatMap { $0 > .zero ? $0 : nil }
+        let useParts = goalFromParts && !validParts.isEmpty
+        let targetValue = useParts ? partsTotal : (goalFromParts ? nil : target.flatMap { $0 > .zero ? $0 : nil })
+        let partDrafts = validParts
         let targetDay: Day? = (targetValue != nil && hasTargetDate) ? Day(date: targetDate) : nil
         let openingDay = Day(date: openingDate)
         var savedId: Int64?
@@ -186,7 +253,15 @@ struct PotsEditSheet: View {
                     record.owner = ownerValue.isEmpty ? nil : ownerValue
                     record.targetAmount = targetValue
                     record.targetDate = targetDay
+                    // Eerst de oude onderdelen weg, anders overschrijven ze het zelf ingevulde bedrag.
+                    if hadParts && !useParts { _ = try PotService.setGoalParts(db, potId: existing.id, []) }
                     savedId = try PotService.update(db, record).id
+                    if useParts {
+                        _ = try PotService.setGoalParts(db, potId: existing.id, partDrafts.map {
+                            GoalPart(potId: existing.id, label: $0.label.trimmingCharacters(in: .whitespacesAndNewlines),
+                                     quantity: $0.quantity, unitAmount: $0.unit ?? .zero)
+                        })
+                    }
                     if opening != originalOpening || (openingDateTouched && !opening.isZero) {
                         _ = try PotService.setOpeningBalance(db, potId: existing.id, amount: opening, on: openingDay)
                         _ = try AccountService.setOpeningFromPots(db, accountId: accountId, totalOpening: bankOpening)
@@ -196,6 +271,12 @@ struct PotsEditSheet: View {
                                      owner: ownerValue.isEmpty ? nil : ownerValue,
                                      targetAmount: targetValue, targetDate: targetDay)
                     savedId = try PotService.create(db, record, openingBalance: opening, on: openingDay).id
+                    if useParts, let newId = savedId {
+                        _ = try PotService.setGoalParts(db, potId: newId, partDrafts.map {
+                            GoalPart(potId: newId, label: $0.label.trimmingCharacters(in: .whitespacesAndNewlines),
+                                     quantity: $0.quantity, unitAmount: $0.unit ?? .zero)
+                        })
+                    }
                     if !opening.isZero {
                         _ = try AccountService.setOpeningFromPots(db, accountId: accountId, totalOpening: bankOpening)
                     }

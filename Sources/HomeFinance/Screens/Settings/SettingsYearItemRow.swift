@@ -1,5 +1,6 @@
 import SwiftUI
 import HFCore
+import HFInsight
 
 /// Eén vaste post. Dicht: alleen naam en planbedrag. Open: alle instellingen van de post.
 /// Tekstvelden bewaren bij Enter of zodra je het veld verlaat.
@@ -11,6 +12,12 @@ struct SettingsYearItemRow: View {
     let reserveLineCount: Int
     let entryCount: Int
     let isExpanded: Bool
+    /// De kolom "Wat als" is zichtbaar.
+    var showScenario = false
+    /// De post in de maandbalans (bedrag per maand); nil voor RES-regels.
+    var balanceRow: PlanBalanceRow?
+    /// Wat-als-bedrag zetten (met teken) of wissen (nil).
+    var onScenario: (Money?) -> Void = { _ in }
     let isFirst: Bool
     let isLast: Bool
     var onToggle: () -> Void
@@ -21,10 +28,11 @@ struct SettingsYearItemRow: View {
     var onMove: (Int) -> Void
     var onDelete: () -> Void
 
-    private enum Field: Hashable { case label, plan, day }
+    private enum Field: Hashable { case label, plan, day, scenario }
 
     @State private var draft: BudgetItem
     @State private var plan: Money?
+    @State private var scenario: Money?
     @State private var showMonths = false
     @FocusState private var focus: Field?
 
@@ -38,6 +46,7 @@ struct SettingsYearItemRow: View {
         self.onToggle = onToggle; self.onSave = onSave; self.onMove = onMove; self.onDelete = onDelete
         _draft = State(initialValue: item)
         _plan = State(initialValue: item.planAmount.magnitude)
+        _scenario = State(initialValue: item.scenarioAmount?.magnitude)
     }
 
     var body: some View {
@@ -48,38 +57,68 @@ struct SettingsYearItemRow: View {
         .onChange(of: item) { _, new in
             draft = new
             plan = new.planAmount.magnitude
+            scenario = new.scenarioAmount?.magnitude
         }
         .onChange(of: focus) { old, new in
-            if old != nil && old != new { commit() }
+            guard old != nil, old != new else { return }
+            if old == .scenario { commitScenario() } else { commit() }
         }
     }
 
     // MARK: Dicht
 
     private var summary: some View {
-        Button(action: onToggle) {
-            HStack(spacing: 10) {
-                Text(item.label).font(.title3)
-                if let name = distributionName {
-                    Label(name, systemImage: "arrow.triangle.branch")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(Color.primary.opacity(0.06), in: Capsule())
-                        .help("Het planbedrag volgt de vaste storting ‘\(name)’")
-                } else if item.isReserveTotal {
-                    Text("som van de reserveringen").font(.callout).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 8)
-                Text(item.planAmount.magnitude.formatted()).font(.title3).monospacedDigit()
-                Image(systemName: "chevron.right").font(.callout).foregroundStyle(.tertiary)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+        HStack(spacing: 10) {
+            Text(item.label).font(.title3)
+            if let name = distributionName {
+                Label(name, systemImage: "arrow.triangle.branch")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(Color.primary.opacity(0.06), in: Capsule())
+                    .help("Het planbedrag volgt de vaste storting ‘\(name)’")
+            } else if item.isReserveTotal {
+                Text("som van de reserveringen").font(.callout).foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 18).padding(.vertical, 10)
-            .contentShape(Rectangle())
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(item.planAmount.magnitude.formatted()).font(.title3).monospacedDigit()
+                if let row = balanceRow, row.frequency != .maand {
+                    Text("\(row.planPerMonth.magnitude.formatted()) per maand")
+                        .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                }
+            }
+            if showScenario { scenarioColumn }
+            Image(systemName: "chevron.right").font(.callout).foregroundStyle(.tertiary)
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 18).padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onToggle)
         .help(isExpanded ? "Klik om te sluiten" : "Klik om naam, bedrag, frequentie en dag te wijzigen")
     }
+
+    /// Het wat-als-bedrag van de post: leeg = gelijk aan het plan.
+    @ViewBuilder private var scenarioColumn: some View {
+        if item.direction == .RES {
+            Color.clear.frame(width: SettingsYearItemRow.scenarioWidth, height: 1)
+        } else {
+            VStack(alignment: .trailing, spacing: 1) {
+                MoneyField("= plan", value: $scenario)
+                    .id(item.scenarioAmount)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($focus, equals: .scenario)
+                    .onSubmit { commitScenario() }
+                    .help("Wat als dit bedrag anders was? Leeg = gelijk aan het plan. Een som als 3150+200 mag ook.")
+                if let row = balanceRow, row.frequency != .maand, let perMonth = row.scenarioPerMonth {
+                    Text("\(perMonth.magnitude.formatted()) per maand")
+                        .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: SettingsYearItemRow.scenarioWidth)
+        }
+    }
+
+    static let scenarioWidth: CGFloat = 120
 
     // MARK: Open
 
@@ -257,6 +296,12 @@ struct SettingsYearItemRow: View {
         if on { months.insert(month) } else { months.remove(month) }
         draft.expectedMonths = months.sorted().map(String.init).joined(separator: ",")
         if !months.isEmpty { commit() }
+    }
+
+    private func commitScenario() {
+        let signed = scenario.map { item.direction == .IN ? $0.magnitude : -$0.magnitude }
+        guard signed != item.scenarioAmount else { return }
+        onScenario(signed)
     }
 
     private func commit() {

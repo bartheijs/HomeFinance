@@ -24,6 +24,7 @@ struct PotsDetailPanel: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
                 head
+                if let recovery = pot.recovery { PotsRecoveryBlock(recovery: recovery, onDistributions: onDistributions) }
                 if let goal = pot.goal { PotsGoalBlock(pot: pot, goal: goal, onDistributions: onDistributions) }
                 if history.isEmpty {
                     Text("Deze pot heeft nog geen boekingen. Hij krijgt saldo zodra je een boeking op de spaarrekening aan deze pot toewijst, of geld uit een andere pot hierheen verplaatst.")
@@ -86,7 +87,7 @@ struct PotsDetailPanel: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(pot.balance.formatted())
                     .font(.system(size: 32, weight: .bold, design: .rounded)).monospacedDigit()
-                    .foregroundStyle(pot.balance.isNegative ? Theme.negative : Color.primary)
+                    .foregroundStyle(pot.balance.isNegative ? Theme.warning : Color.primary)
                     .lineLimit(1).minimumScaleFactor(0.6)
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
             }
@@ -119,7 +120,7 @@ struct PotsDetailPanel: View {
     }
 
     private var subtitle: String {
-        if pot.balance.isNegative { return "Deze pot staat negatief · \(accountName)" }
+        if pot.balance.isNegative { return "Deze pot staat in de min · \(accountName)" }
         return "Saldo op \(asOf.short(withYear: true)) · \(accountName)"
     }
 

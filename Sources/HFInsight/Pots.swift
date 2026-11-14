@@ -33,6 +33,30 @@ public struct PotSummary: Identifiable, Equatable, Sendable {
     public let lastMovement: Day?
     /// Aantal losse verwachtingen (`ForecastItem`) die nog niet zijn uitgekomen.
     public let openForecastCount: Int
+    /// Voor een pot die in de min staat: hoe en wanneer hij weer op nul komt. nil als het saldo niet negatief is.
+    public let recovery: PotRecovery?
+}
+
+/// Of en wanneer een pot die in de min staat weer wordt aangevuld.
+public enum PotRecoveryStatus: String, Sendable, CaseIterable {
+    /// De vooruitblik komt op of boven nul; zie `recoveryDate`.
+    case herstelt
+    /// Er is geen vaste storting en geen verwachting die het tekort oplost.
+    case wordtNietAangevuld
+    /// Er komt wel geld bij, maar binnen 10 jaar niet genoeg.
+    case duurtLangerDan10Jaar
+}
+
+/// Een pot met een negatief saldo: het geld is geleend van de andere potten op dezelfde spaarrekening.
+public struct PotRecovery: Equatable, Sendable {
+    /// Het bedrag onder nul (positief).
+    public let shortfall: Money
+    /// Wat er per maand bij komt via niet-gearchiveerde vaste stortingen.
+    public let perMonth: Money
+    /// De eerste dag waarop de vooruitblik (vaste stortingen en open losse verwachtingen) op of boven nul komt,
+    /// tot 10 jaar vooruit; nil als dat niet gebeurt.
+    public let recoveryDate: Day?
+    public let status: PotRecoveryStatus
 }
 
 /// Een spaarrekening met zijn potten.
@@ -46,6 +70,10 @@ public struct SavingsAccountPots: Identifiable, Equatable, Sendable {
     public let potTotal: Money
     /// Niet toegewezen = saldo − som van de potten.
     public let unallocated: Money
+    /// Som van de negatieve potsaldi als positief bedrag: geleend van de andere potten op deze rekening.
+    public let borrowedFromOtherPots: Money
+    /// Aantal potten met een negatief saldo.
+    public let negativePotCount: Int
     public let pots: [PotSummary]
 }
 
@@ -75,6 +103,9 @@ public struct PotOverview: Equatable, Sendable {
     public let totalBalance: Money
     public let totalPots: Money
     public let totalUnallocated: Money
+    /// Som van alle negatieve potsaldi als positief bedrag.
+    public let borrowedFromOtherPots: Money
+    public let negativePotCount: Int
 }
 
 /// Boeking van een pot met het saldo van de pot ná die boeking.
@@ -163,7 +194,8 @@ extension Insight {
                               progress: target.map { max(0, balance.doubleValue / $0.doubleValue) },
                               remainingToTarget: target.map { max(.zero, $0 - balance) },
                               depositsThisYear: r["dep"], withdrawalsThisYear: r["wd"], lastMovement: r["lastDay"],
-                              openForecastCount: r["openForecasts"])
+                              openForecastCount: r["openForecasts"],
+                              recovery: forecast.recovery(potId: pot.id!, balance: balance))
         }
 
         let accounts = accountRows.map { r -> SavingsAccountPots in
@@ -172,7 +204,9 @@ extension Insight {
             let balance: Money = r["balance"]
             let potTotal = own.map(\.balance).sum()
             return SavingsAccountPots(id: id, name: r["name"], archived: r["archived"], balance: balance,
-                                      potTotal: potTotal, unallocated: balance - potTotal, pots: own)
+                                      potTotal: potTotal, unallocated: balance - potTotal,
+                                      borrowedFromOtherPots: -own.map(\.balance).filter { $0 < .zero }.sum(),
+                                      negativePotCount: own.filter { $0.balance < .zero }.count, pots: own)
         }
         let byKind = PotKind.allCases.compactMap { kind -> PotKindGroup? in
             let group = pots.filter { $0.kind == kind }
@@ -194,7 +228,9 @@ extension Insight {
         }
         return PotOverview(accounts: accounts, byKind: byKind, byOwner: byOwner,
                            totalBalance: accounts.map(\.balance).sum(), totalPots: accounts.map(\.potTotal).sum(),
-                           totalUnallocated: accounts.map(\.unallocated).sum())
+                           totalUnallocated: accounts.map(\.unallocated).sum(),
+                           borrowedFromOtherPots: accounts.map(\.borrowedFromOtherPots).sum(),
+                           negativePotCount: accounts.map(\.negativePotCount).reduce(0, +))
     }
 
     /// Alle boekingen van een pot op zijn spaarrekening, oudste eerst, met het oplopende saldo.

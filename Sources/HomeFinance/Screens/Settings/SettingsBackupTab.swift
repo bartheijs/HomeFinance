@@ -178,10 +178,18 @@ struct SettingsBackupTab: View {
     }
 
     private var exportCard: some View {
-        Card("Exporteren", icon: "tablecells") {
-            SettingsRow("Alles als CSV",
-                        text: "Eén bestand per tabel, direct te openen in Excel. Handig als extra zekerheid of om zelf mee te rekenen.") {
-                Button("Exporteer alles als CSV…") { exportCSV() }
+        Card("Exporteren", icon: "square.and.arrow.up") {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Een back-up is je hele administratie om terug te kunnen zetten. Een export is om te lezen en door te rekenen.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                SettingsRow("\(String(model.year)) naar Excel",
+                            text: "Eén leesbaar bestand met het maandgrid, de transacties, de potten en de vaste stortingen.") {
+                    Button("Exporteer \(String(model.year)) naar Excel…") { exportExcel() }
+                }
+                Divider()
+                SettingsRow("Alles als CSV", text: "Eén bestand per tabel, voor wie zelf wil doorrekenen.") {
+                    Button("Exporteer alles als CSV…") { exportCSV() }
+                }
             }
         }
     }
@@ -286,6 +294,25 @@ struct SettingsBackupTab: View {
             _ = try Backup.restore(from: info.url, into: model.db, safetyFolder: safety)
         }
         load()
+    }
+
+    private func exportExcel() {
+        let year = model.year
+        let panel = NSOpenPanel()
+        panel.title = "Kies de map voor ‘\(Backup.excelFileName(year: year))’"
+        panel.prompt = "Exporteer hier"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        var file: URL?
+        let ok = model.perform {
+            file = try Backup.exportYearAsExcel(model.db, year: year, to: folder)
+        }
+        if ok, let file {
+            model.toast = "‘\(file.lastPathComponent)’ geschreven"
+            NSWorkspace.shared.activateFileViewerSelecting([file])
+        }
     }
 
     private func exportCSV() {

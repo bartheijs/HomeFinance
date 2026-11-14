@@ -12,6 +12,8 @@ struct SettingsYearData: Equatable {
     var allYears: [Int] = []
     var entryCounts: [Int64: Int] = [:]
     var distributions: [SettingsDistributionOption] = []
+    /// De maandbalans (plan en wat-als) uit `Insight.planBalance`.
+    var balance: PlanBalance?
     /// Plan per jaar, per richting (RES = de RES-regels, die niet meetellen in de uitgaven).
     var yearPlan: [Direction: Money] = [:]
 
@@ -38,6 +40,7 @@ struct SettingsYearData: Equatable {
             """, arguments: [yearId]) {
             d.entryCounts[row["id"]] = row["n"]
         }
+        d.balance = try Insight.planBalance(db, year: year)
         let grid = try Insight.monthGrid(db, year: year, today: today)
         for row in grid.rows {
             let key: Direction = row.kind == .reserveLine ? .RES : row.direction
@@ -58,6 +61,9 @@ struct SettingsYearTab: View {
     @State private var confirmClose = false
     @State private var openGroups: Set<Direction> = [.IN, .UIT]
     @State private var expandedId: Int64?
+    @State private var showScenario = false
+    @State private var confirmApply = false
+    @State private var applyNote: String?
 
     var body: some View {
         Group {
@@ -90,6 +96,18 @@ struct SettingsYearTab: View {
                  ? "Op deze post staan \(SettingsFormat.count(count, "boeking", "boekingen")). Die blijven bestaan en tellen daarna mee als divers."
                  : "Op deze post staan geen boekingen.")
         }
+        .confirmationDialog("Van ‘wat als’ het nieuwe plan maken?", isPresented: $confirmApply) {
+            Button("Maak dit het nieuwe plan") { applyScenario() }
+            Button("Annuleer", role: .cancel) {}
+        } message: {
+            Text(applyMessage)
+        }
+        .alert("Niet alles is aangepast", isPresented: Binding(
+            get: { applyNote != nil }, set: { if !$0 { applyNote = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(applyNote ?? "")
+        }
         .confirmationDialog("Jaar \(String(model.year)) afsluiten?", isPresented: $confirmClose) {
             Button("Sluit af") { setClosed(true) }
             Button("Annuleer", role: .cancel) {}
@@ -116,8 +134,17 @@ struct SettingsYearTab: View {
                     .id("buffers-\(year.year)-\(resetToken)")
                     .disabled(year.closed)
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Vaste posten").font(.title2.weight(.semibold))
-                    Text("Klik op een post om hem te wijzigen.").font(.callout).foregroundStyle(.secondary)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Vaste posten").font(.title2.weight(.semibold))
+                        Spacer()
+                        Toggle("Wat als…", isOn: $showScenario)
+                            .toggleStyle(.switch).controlSize(.small)
+                            .help("Zet naast elk planbedrag een veld om een ander bedrag uit te proberen, bijvoorbeeld een ander loon.")
+                    }
+                    Text(showScenario
+                         ? "Probeer hier uit wat een wijziging doet. Er verandert niets aan je begroting tot je er het nieuwe plan van maakt."
+                         : "Klik op een post om hem te wijzigen.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     group(.IN, title: "Inkomsten", year: year)
                     group(.UIT, title: "Uitgaven", year: year)
                     group(.RES, title: "Reserveringen", year: year)
@@ -202,19 +229,20 @@ struct SettingsYearTab: View {
                     }
                     .padding(.horizontal, 18).padding(.vertical, 10)
                 }
+                if showScenario && direction != .RES && !rows.isEmpty {
+                    Divider().padding(.leading, 18)
+                    HStack(spacing: 10) {
+                        Spacer()
+                        Text("Plan")
+                        Text("Wat als").frame(width: SettingsYearItemRow.scenarioWidth, alignment: .trailing)
+                        Color.clear.frame(width: 8, height: 1)
+                    }
+                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    .padding(.horizontal, 18).padding(.vertical, 5)
+                }
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, item in
                     Divider().padding(.leading, 18)
-                    SettingsYearItemRow(item: item, pots: data.pots.filter { $0.kind == .reservering },
-                                        distributions: data.distributions,
-                                        reserveLineCount: data.items(.RES).count,
-                                        entryCount: data.entryCounts[item.id ?? -1] ?? 0,
-                                        isExpanded: expandedId == item.id,
-                                        isFirst: index == 0, isLast: index == rows.count - 1,
-                                        onToggle: { expandedId = expandedId == item.id ? nil : item.id },
-                                        onSave: { save($0) }, onLink: { link(item, to: $0) },
-                                        onGoToPots: { model.selection = .pots },
-                                        onMove: { move(item, by: $0, in: rows) },
-                                        onDelete: { deleteTarget = item })
+                    itemRow(item, index: index, rows: rows)
                         .id("\(item.id ?? 0)-\(resetToken)")
                         .draggable("hf-item:\(item.id ?? -1)")
                         .dropDestination(for: String.self) { texts, _ in
@@ -235,20 +263,103 @@ struct SettingsYearTab: View {
         .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius))
     }
 
-    private var totalsBar: some View {
-        HStack(spacing: 32) {
-            total("Gepland inkomen per jaar", data.plannedIncome,
-                  help: "Som van het plan van alle inkomstenposten, over het hele jaar")
-            total("Geplande uitgaven per jaar", data.plannedExpenses.magnitude,
-                  help: "Som van het plan van alle uitgavenposten, inclusief RESERVERINGEN")
-            total("Gepland overschot per maand", data.surplusPerMonth,
-                  color: data.surplusPerMonth.isNegative ? Theme.negative : Theme.positive,
-                  help: "Gepland inkomen min geplande uitgaven, gedeeld door twaalf. Dit is de ruimte voor diverse uitgaven.")
-            Spacer()
+    private func itemRow(_ item: BudgetItem, index: Int, rows: [BudgetItem]) -> SettingsYearItemRow {
+        var row = SettingsYearItemRow(
+            item: item, pots: data.pots.filter { $0.kind == .reservering }, distributions: data.distributions,
+            reserveLineCount: data.items(.RES).count, entryCount: data.entryCounts[item.id ?? -1] ?? 0,
+            isExpanded: expandedId == item.id, isFirst: index == 0, isLast: index == rows.count - 1,
+            onToggle: { expandedId = expandedId == item.id ? nil : item.id },
+            onSave: { save($0) }, onLink: { link(item, to: $0) }, onGoToPots: { model.selection = .pots },
+            onMove: { move(item, by: $0, in: rows) }, onDelete: { deleteTarget = item })
+        row.showScenario = showScenario
+        row.balanceRow = data.balance?.rows.first { $0.id == item.id }
+        row.onScenario = { setScenario(item, $0) }
+        return row
+    }
+
+    /// De maandbalans: wat blijft er per maand over, voor het plan en (als er iets is ingevuld) voor wat-als.
+    @ViewBuilder private var totalsBar: some View {
+        if let balance = data.balance {
+            let compare = showScenario && balance.hasScenario
+            HStack(alignment: .center, spacing: 32) {
+                if compare {
+                    compareGrid(balance)
+                    Spacer(minLength: 12)
+                    VStack(alignment: .trailing, spacing: 8) {
+                        Button("Maak dit het nieuwe plan") { confirmApply = true }
+                            .buttonStyle(.borderedProminent)
+                            .help("Elk ingevuld wat-als-bedrag wordt het planbedrag van die post")
+                        Button("Wis wat-als") { clearScenario() }
+                            .help("Maak alle wat-als-velden weer leeg; je begroting verandert niet")
+                    }
+                    .disabled(data.year?.closed ?? true)
+                } else {
+                    total("Inkomsten per maand", balance.plan.income,
+                          help: "Alle inkomstenposten omgerekend naar een maand")
+                    total("Uitgaven per maand", balance.plan.expenses.magnitude,
+                          help: "Alle uitgavenposten omgerekend naar een maand, inclusief RESERVERINGEN")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Blijft over per maand").font(.callout).foregroundStyle(.secondary)
+                        Text(balance.plan.surplus.formatted())
+                            .font(.system(.title, design: .rounded).weight(.bold)).monospacedDigit()
+                            .foregroundStyle(balance.plan.surplus.isNegative ? Theme.negative : Theme.positive)
+                    }
+                    .help("Inkomsten min uitgaven per maand. Dit is de ruimte voor diverse uitgaven.")
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 24).padding(.vertical, 12)
+            .background(.bar)
+            .overlay(alignment: .top) { Divider() }
         }
-        .padding(.horizontal, 24).padding(.vertical, 12)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider() }
+    }
+
+    private func compareGrid(_ balance: PlanBalance) -> some View {
+        let diff = balance.difference.surplus
+        return Grid(alignment: .trailing, horizontalSpacing: 28, verticalSpacing: 3) {
+            GridRow {
+                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                Text("Nu").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text("Wat als").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            }
+            GridRow {
+                Text("Inkomsten per maand").foregroundStyle(.secondary).gridColumnAlignment(.leading)
+                Text(balance.plan.income.formatted()).monospacedDigit()
+                Text(balance.scenario.income.formatted()).monospacedDigit()
+            }
+            GridRow {
+                Text("Uitgaven per maand").foregroundStyle(.secondary)
+                Text(balance.plan.expenses.magnitude.formatted()).monospacedDigit()
+                Text(balance.scenario.expenses.magnitude.formatted()).monospacedDigit()
+            }
+            GridRow {
+                Text("Blijft over per maand").fontWeight(.semibold)
+                Text(balance.plan.surplus.formatted())
+                    .font(.system(.title3, design: .rounded).weight(.semibold)).monospacedDigit()
+                Text(balance.scenario.surplus.formatted())
+                    .font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
+                    .foregroundStyle(balance.scenario.surplus.isNegative ? Theme.negative : Theme.positive)
+            }
+            GridRow {
+                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                Text(diff.isZero ? "gelijk aan nu"
+                     : "\(diff.magnitude.formatted()) per maand \(diff.isNegative ? "minder" : "meer")")
+                    .font(.callout).monospacedDigit()
+                    .foregroundStyle(diff.isZero ? Color.secondary : (diff.isNegative ? Theme.negative : Theme.positive))
+                    .gridCellColumns(2)
+            }
+        }
+    }
+
+    /// Welke posten met een wat-als-bedrag niet aangepast kunnen worden, vooraf gemeld.
+    private var applyMessage: String {
+        let skipped = data.items.filter { $0.scenarioAmount != nil && ($0.distributionId != nil || $0.isReserveTotal) }
+        var text = "Elk ingevuld wat-als-bedrag wordt het planbedrag van die post. Daarna zijn de wat-als-velden weer leeg."
+        if !skipped.isEmpty {
+            text += " Niet aangepast, omdat het plan een vaste storting volgt of berekend wordt: "
+                + skipped.map(\.label).joined(separator: ", ") + "."
+        }
+        return text
     }
 
     private func total(_ title: String, _ amount: Money, color: Color = .primary, help: String) -> some View {
@@ -264,6 +375,10 @@ struct SettingsYearTab: View {
 
     private func load() {
         data = model.read(SettingsYearData()) { try SettingsYearData.load($0, year: model.year, today: model.today) }
+        if !loaded {
+            let forced = model.isSnapshot && ProcessInfo.processInfo.environment["HF_SNAPSHOT_WHATIF"] == "1"
+            if forced || data.balance?.hasScenario == true { showScenario = true }
+        }
         loaded = true
     }
 
@@ -290,6 +405,31 @@ struct SettingsYearTab: View {
             } else {
                 _ = try DistributionService.unlink(db, budgetItemId: id)
             }
+        }
+    }
+
+    private func setScenario(_ item: BudgetItem, _ amount: Money?) {
+        guard let id = item.id else { return }
+        write { db in _ = try YearService.setScenario(db, itemId: id, amount: amount) }
+    }
+
+    private func clearScenario() {
+        guard let yearId = data.year?.id else { return }
+        write("Wat-als gewist") { db in _ = try YearService.clearScenario(db, yearId: yearId) }
+        resetToken += 1
+    }
+
+    private func applyScenario() {
+        guard let yearId = data.year?.id else { return }
+        var result: ScenarioApplyResult?
+        write { db in result = try YearService.applyScenario(db, yearId: yearId) }
+        guard let result else { return }
+        resetToken += 1
+        model.toast = "Nieuw plan: \(SettingsFormat.count(result.appliedCount, "post", "posten")) aangepast"
+        if !result.skipped.isEmpty {
+            applyNote = "Deze posten zijn overgeslagen, omdat hun plan een vaste storting volgt of berekend wordt: "
+                + result.skipped.map(\.label).joined(separator: ", ")
+                + ". Pas het bedrag aan bij Potten en sparen › Vaste stortingen."
         }
     }
 
