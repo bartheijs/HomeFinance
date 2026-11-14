@@ -61,6 +61,64 @@ public struct Money: Hashable, Comparable, Sendable, AdditiveArithmetic, CustomS
         self.cents = negative ? -value : value
     }
 
+    /// Leest een bedrag of een eenvoudige som, zoals je die in een spreadsheet typt:
+    /// "249*4", "2695 - 269,50", "4 x 19,80", "100/3". Volgorde: eerst × en ÷, dan + en −.
+    /// Een deling of een vermenigvuldiging met een kommagetal wordt afgerond op hele centen.
+    /// Geeft nil bij iets dat geen geldige som is.
+    public init?(evaluating text: String) {
+        if let plain = Money(parsing: text) { self = plain; return }
+        var s = text.replacingOccurrences(of: "€", with: "")
+            .replacingOccurrences(of: "×", with: "*").replacingOccurrences(of: "÷", with: "/")
+            .replacingOccurrences(of: "−", with: "-").replacingOccurrences(of: ":", with: "/")
+        s = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasPrefix("=") { s.removeFirst() }
+        // Splits in getallen en bewerkingen. "x" tussen twee getallen is ook vermenigvuldigen.
+        var numbers: [Decimal] = []
+        var operators: [Character] = []
+        var current = ""
+        var expectNumber = true
+        func flush() -> Bool {
+            let t = current.trimmingCharacters(in: .whitespaces)
+            guard !t.isEmpty, let m = Money(parsing: t) else { return false }
+            numbers.append(Decimal(m.cents) / 100)
+            current = ""
+            return true
+        }
+        for ch in s {
+            let isOp = "+-*/".contains(ch) || ((ch == "x" || ch == "X") && !expectNumber)
+            if isOp && !(expectNumber && (ch == "-" || ch == "+") && current.trimmingCharacters(in: .whitespaces).isEmpty) {
+                guard flush() else { return nil }
+                operators.append(ch == "x" || ch == "X" ? "*" : ch)
+                expectNumber = true
+            } else {
+                current.append(ch)
+                if !ch.isWhitespace { expectNumber = false }
+            }
+        }
+        guard flush(), numbers.count == operators.count + 1, numbers.count > 1 else { return nil }
+        // Eerst × en ÷.
+        var terms: [Decimal] = [numbers[0]]
+        var signs: [Character] = []
+        for (i, op) in operators.enumerated() {
+            let n = numbers[i + 1]
+            switch op {
+            case "*": terms[terms.count - 1] *= n
+            case "/":
+                guard n != 0 else { return nil }
+                terms[terms.count - 1] /= n
+            default: signs.append(op); terms.append(n)
+            }
+        }
+        var total = terms[0]
+        for (i, sign) in signs.enumerated() { total = sign == "+" ? total + terms[i + 1] : total - terms[i + 1] }
+        var scaled = total * 100
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &scaled, 0, .plain)
+        let cents = NSDecimalNumber(decimal: rounded).int64Value
+        guard abs(cents) < 1_000_000_000_000 else { return nil }
+        self.cents = cents
+    }
+
     /// "€ 1.234,56" of "-€ 45,50". Met `symbol: false`: "1.234,56".
     public func formatted(symbol: Bool = true, alwaysSign: Bool = false) -> String {
         let a = abs(cents)

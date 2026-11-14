@@ -86,3 +86,26 @@ import GRDB
         }
     }
 }
+
+@Suite struct MoneyExpressionTests {
+    @Test func evaluatesSimpleSums() {
+        #expect(Money(evaluating: "249*4")?.cents == 99600)
+        #expect(Money(evaluating: "2695 - 269,50")?.cents == 242550)
+        #expect(Money(evaluating: "4 x 19,80")?.cents == 7920)
+        #expect(Money(evaluating: "=157*2")?.cents == 31400)
+        #expect(Money(evaluating: "254*4-40")?.cents == 97600)
+        #expect(Money(evaluating: "818,42/3")?.cents == 27281)
+        #expect(Money(evaluating: "-5000+876,59")?.cents == -412341)
+        #expect(Money(evaluating: "10 * 39,5")?.cents == 39500)
+        #expect(Money(evaluating: "12,50")?.cents == 1250)
+        #expect(Money(evaluating: "-45,50")?.cents == -4550)
+    }
+
+    @Test func rejectsNonsense() {
+        #expect(Money(evaluating: "abc") == nil)
+        #expect(Money(evaluating: "12*") == nil)
+        #expect(Money(evaluating: "*12") == nil)
+        #expect(Money(evaluating: "10/0") == nil)
+        #expect(Money(evaluating: "") == nil)
+    }
+}

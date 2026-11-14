@@ -35,6 +35,8 @@ enum BackupSupport {
         // Alleen als de gebruiker automatische back-up bij afsluiten aan heeft staan.
         guard let settings = try? db.read({ try BackupSettings.load($0) }), settings.autoBackupOnQuit else { return }
         _ = try? Backup.backupUsingSettings(db)
+        // Ook naar de tweede back-upmap, als die is ingesteld.
+        SecondBackupSupport.backupOnQuitIfWanted(db: db)
     }
 }
 

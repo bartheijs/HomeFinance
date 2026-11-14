@@ -143,7 +143,8 @@ struct EmptyState: View {
     }
 }
 
-/// Tekstveld voor een bedrag in Nederlandse notatie. `value` is nil zolang de invoer ongeldig of leeg is.
+/// Tekstveld voor een bedrag in Nederlandse notatie. Een som als "249*4" of "2695-269,50" mag ook; bij het
+/// verlaten van het veld staat de uitkomst er. `value` is nil zolang de invoer ongeldig of leeg is.
 struct MoneyField: View {
     let title: String
     @Binding var value: Money?
@@ -158,14 +159,14 @@ struct MoneyField: View {
             .monospacedDigit()
             .focused($focused)
             .onAppear { text = value?.formatted(symbol: false) ?? "" }
-            .onChange(of: text) { _, new in value = Money(parsing: new) }
+            .onChange(of: text) { _, new in value = Money(evaluating: new) }
             .onChange(of: focused) { _, isFocused in
                 if !isFocused, let v = value { text = v.formatted(symbol: false) }
             }
             .overlay(alignment: .leading) {
                 if !text.isEmpty && value == nil {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
-                        .help("Dit is geen geldig bedrag. Gebruik bijvoorbeeld 12,50")
+                        .help("Dit is geen geldig bedrag. Gebruik bijvoorbeeld 12,50 of een som zoals 249*4")
                         .padding(.leading, 4)
                 }
             }
