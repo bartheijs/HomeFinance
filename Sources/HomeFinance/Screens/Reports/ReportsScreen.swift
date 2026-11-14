@@ -4,7 +4,7 @@ import HFInsight
 
 /// De rapporten in het scherm Rapporten.
 enum ReportsTab: String, CaseIterable, Identifiable {
-    case overview, spendable, tags, budget, divers, years
+    case overview, spendable, tags, labels, budget, divers, years
     var id: String { rawValue }
 
     var title: String {
@@ -12,6 +12,7 @@ enum ReportsTab: String, CaseIterable, Identifiable {
         case .overview: "Overzicht"
         case .spendable: "Besteedbaar"
         case .tags: "Categorieën"
+        case .labels: "Per omschrijving"
         case .budget: "Budget tegen werkelijk"
         case .divers: "Diverse uitgaven"
         case .years: "Jaar op jaar"
@@ -23,6 +24,7 @@ enum ReportsTab: String, CaseIterable, Identifiable {
         case .overview: "Inkomsten, uitgaven en besteedbaar per maand"
         case .spendable: "Wat je vrij kunt uitgeven, door het jaar heen"
         case .tags: "Wat je per maand uitgeeft aan een categorie (tag), zoals tanken of uit eten"
+        case .labels: "Losse boekingen met dezelfde omschrijving opgeteld, zoals zakgeld"
         case .budget: "Per vaste post: wat was gepland en wat is het echt geworden"
         case .divers: "Waar de uitgaven zonder vaste post naartoe gingen"
         case .years: "De totalen van alle jaren naast elkaar"
@@ -46,6 +48,8 @@ struct ReportsData {
     var divers: DiversBreakdown?
     var topDivers: [EntryRow] = []
     var years: [YearTotals] = []
+    /// Tags waarvoor verrekend wordt, met openstaand en verrekend bedrag.
+    var settlements: [TagSettlementSummary] = []
 
     /// Er zijn boekingen op de betaalrekening in dit jaar.
     var hasMovements: Bool { months.contains { !$0.income.isZero || !$0.expenses.isZero } }
@@ -61,6 +65,8 @@ struct ReportsScreen: View {
     @State private var tagMonth: Int?
     @State private var diversMonth: Int?
     @State private var showAllBudget = false
+    /// De tabel van "Per omschrijving", bijgehouden door dat tabblad zelf.
+    @State private var labelsTable = ""
 
     private struct LoadKey: Hashable {
         let revision: Int, year: Int, today: Day, tagId: Int64?, tagMonth: Int?, diversMonth: Int?
@@ -114,7 +120,7 @@ struct ReportsScreen: View {
         }
     }
 
-    /// ⌘1 t/m ⌘6 kiezen een rapport.
+    /// ⌘1 t/m ⌘7 kiezen een rapport.
     private var tabShortcuts: some View {
         ForEach(Array(ReportsTab.allCases.enumerated()), id: \.element) { index, item in
             Button(item.title) { tab = item }
@@ -150,8 +156,11 @@ struct ReportsScreen: View {
                                message: "Met een tag (zoals Tanken of Uit eten) volg je een soort uitgave over de maanden. Geef boekingen een tag bij Transacties, of laat een regel dat automatisch doen.",
                                icon: "tag", actionTitle: "Naar Transacties") { model.selection = .transactions }
                 } else {
-                    scroll { ReportsTagsTab(data: data, year: model.year, tagId: $tagId, month: $tagMonth) }
+                    scroll { ReportsTagsTab(data: data, year: model.year, showsSettledThisYear: model.year == model.today.year,
+                                            tagId: $tagId, month: $tagMonth) }
                 }
+            case .labels:
+                scroll { ReportsLabelsTab(year: model.year, table: $labelsTable) }
             case .budget:
                 if data.budget.isEmpty {
                     EmptyState(title: "Geen begroting voor \(String(model.year))",
@@ -194,6 +203,7 @@ struct ReportsScreen: View {
             if let chosen, tagMonth != nil {
                 result.tagEntries = try Insight.tagEntries(db, tagId: chosen, year: year, month: tagMonth)
             }
+            result.settlements = try Insight.settlementOverview(db, today: today)
             result.divers = try Insight.diversByTag(db, year: year, month: diversMonth)
             result.topDivers = try Insight.topDiversExpenses(db, year: year, month: diversMonth, limit: 15)
         }
@@ -209,8 +219,8 @@ struct ReportsScreen: View {
     // MARK: Klembord
 
     private func copyTable() {
-        let text = data.table(for: tab, year: model.year, tagId: tagId, tagMonth: tagMonth,
-                              diversMonth: diversMonth)
+        let text = tab == .labels ? labelsTable
+            : data.table(for: tab, year: model.year, tagId: tagId, tagMonth: tagMonth, diversMonth: diversMonth)
         ReportsFormat.copyToClipboard(text)
         model.toast = "Tabel gekopieerd. Plak hem in Excel met ⌘V."
     }

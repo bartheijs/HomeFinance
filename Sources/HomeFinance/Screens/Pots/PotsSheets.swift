@@ -8,12 +8,16 @@ enum PotsSheet: Identifiable {
     case new
     case edit(PotSummary)
     case move(PotSummary)
+    case distributions
+    case openings(Int64)
 
     var id: String {
         switch self {
         case .new: "new"
         case .edit(let pot): "edit-\(pot.id)"
         case .move(let pot): "move-\(pot.id)"
+        case .distributions: "distributions"
+        case .openings(let id): "openings-\(id)"
         }
     }
 }
@@ -29,31 +33,45 @@ struct PotsEditSheet: View {
     let accounts: [PotsAccountRef]
     let owners: [String]
     var onSaved: (Int64) -> Void
+    var onDistributions: () -> Void
 
     @State private var name: String
     @State private var kind: PotKind
     @State private var owner: String
-    @State private var monthly: Money?
-    @State private var target: Money?
     @State private var accountId: Int64?
+    @State private var opening: Money? = .zero
+    @State private var openingDate = Date()
+    @State private var openingDateTouched = false
+    @State private var target: Money?
+    @State private var hasTargetDate: Bool
+    @State private var targetDate: Date
+    /// Het beginbedrag zoals het was bij openen (om te zien of het gewijzigd is).
+    @State private var originalOpening: Money = .zero
+    @State private var loaded = false
 
-    init(pot: PotSummary?, accounts: [PotsAccountRef], defaultAccountId: Int64?, owners: [String],
-         onSaved: @escaping (Int64) -> Void) {
-        self.pot = pot; self.accounts = accounts; self.owners = owners; self.onSaved = onSaved
+    init(pot: PotSummary?, accounts: [PotsAccountRef], defaultAccountId: Int64?, owners: [String], today: Day,
+         onSaved: @escaping (Int64) -> Void, onDistributions: @escaping () -> Void) {
+        self.pot = pot; self.accounts = accounts; self.owners = owners
+        self.onSaved = onSaved; self.onDistributions = onDistributions
         _name = State(initialValue: pot?.name ?? "")
         _kind = State(initialValue: pot?.kind ?? .reservering)
         _owner = State(initialValue: pot?.owner ?? "")
-        _monthly = State(initialValue: pot?.monthlyAmount ?? .zero)
-        _target = State(initialValue: pot?.targetAmount)
         _accountId = State(initialValue: pot?.accountId ?? defaultAccountId ?? accounts.first?.id)
+        _target = State(initialValue: pot?.targetAmount)
+        _hasTargetDate = State(initialValue: pot?.targetDate != nil)
+        let fallback = Calendar.current.date(byAdding: .year, value: 1, to: today.date) ?? today.date
+        _targetDate = State(initialValue: pot?.targetDate?.date ?? fallback)
     }
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var canSave: Bool { !trimmedName.isEmpty && monthly != nil && accountId != nil }
+    private var canSave: Bool { !trimmedName.isEmpty && opening != nil && accountId != nil }
+    private var account: PotsAccountRef? { accounts.first { $0.id == accountId } }
 
     var body: some View {
         VStack(spacing: 0) {
             Text(pot == nil ? "Nieuwe pot" : "Pot bewerken").font(.headline).padding(.top, 16)
+            // De velden komen pas na het laden, zodat het beginbedrag meteen goed in het veld staat.
+            if !loaded { Spacer() } else {
             Form {
                 Section {
                     TextField("Naam", text: $name, prompt: Text("bijv. Wegenbelasting"))
@@ -62,34 +80,57 @@ struct PotsEditSheet: View {
                         Text("Sparen").tag(PotKind.spaar)
                     }
                     .pickerStyle(.segmented)
+                    .help(kind.potsExplanation)
                     if pot == nil && accounts.count > 1 {
                         Picker("Spaarrekening", selection: $accountId) {
                             ForEach(accounts) { Text($0.name).tag(Optional($0.id)) }
                         }
                     }
-                } footer: {
-                    Text(kind.potsExplanation).font(.caption).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                Section {
-                    MoneyField("Per maand", value: $monthly)
-                        .help("Het bedrag dat je elke maand in deze pot stort. Laat op 0,00 staan als je niet vast stort.")
-                    MoneyField("Doelbedrag (mag leeg)", value: $target)
-                        .help("Met een doelbedrag zie je hoe ver de pot is. Laat leeg als de pot geen doel heeft.")
                     TextField("Eigenaar (mag leeg)", text: $owner, prompt: Text("bijv. een gezinslid"))
                         .help("Spaarpotten worden per eigenaar gegroepeerd.")
                     if !owners.isEmpty {
-                        HStack(spacing: 6) {
-                            Text("Bestaande eigenaren:").font(.caption).foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            Text("Kies:").font(.callout).foregroundStyle(.secondary)
                             ForEach(owners, id: \.self) { o in
-                                Button(o) { owner = o }.buttonStyle(.link).font(.caption)
+                                Button(o) { owner = o }.buttonStyle(.link).font(.callout)
                             }
                         }
                     }
                 }
+                Section {
+                    MoneyField("Beginbedrag", value: $opening)
+                    DatePicker("Geldt op", selection: Binding(get: { openingDate },
+                                                             set: { openingDate = $0; openingDateTouched = true }),
+                               displayedComponents: .date)
+                } footer: {
+                    Text("Wat er al in de pot zat toen je met de app begon. Laat op 0,00 staan als de pot leeg begint.")
+                        .font(.callout).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Section("Spaardoel (mag leeg)") {
+                    MoneyField("Doelbedrag", value: $target)
+                        .help("Het bedrag dat je in deze pot wilt hebben. Laat leeg als de pot geen doel heeft.")
+                    Toggle("Met doeldatum", isOn: $hasTargetDate)
+                    if hasTargetDate {
+                        DatePicker("Doel halen op", selection: $targetDate, displayedComponents: .date)
+                    }
+                }
+                if let pot {
+                    Section {
+                        LabeledContent("Per maand naar deze pot") {
+                            Text(pot.distributionAmount.isZero ? "nog niets" : pot.distributionAmount.formatted())
+                                .monospacedDigit()
+                        }
+                        Button("Vaste stortingen…") { onDistributions() }
+                    } footer: {
+                        Text("Dit bedrag volgt uit je vaste stortingen. Je wijzigt het daar.")
+                            .font(.callout).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
             }
             .formStyle(.grouped)
-            .scrollDisabled(true)
+            }
 
             Divider()
             HStack {
@@ -101,16 +142,41 @@ struct PotsEditSheet: View {
             }
             .padding(16)
         }
-        .frame(width: 460)
+        .frame(width: 480, height: pot == nil ? 560 : 660)
+        .onAppear(perform: load)
+        .onChange(of: accountId) { _, _ in
+            if pot == nil, !openingDateTouched, let account { openingDate = account.openingDate.date }
+        }
+    }
+
+    /// Haalt het huidige beginbedrag en de datum ervan op.
+    private func load() {
+        guard !loaded else { return }
+        loaded = true
+        if let account { openingDate = account.openingDate.date }
+        guard let pot else { return }
+        let entry = model.read(Entry?.none) { db in
+            try Entry.filter(Column("potId") == pot.id && Column("accountId") == pot.accountId
+                             && Column("note") == PotService.openingNote).fetchOne(db)
+        }
+        if let entry {
+            opening = entry.amount
+            originalOpening = entry.amount
+            openingDate = entry.day.date
+        }
     }
 
     private func save() {
-        guard let monthly, let accountId else { return }
+        guard let opening, let accountId else { return }
         let ownerValue = owner.trimmingCharacters(in: .whitespacesAndNewlines)
         let targetValue = target.flatMap { $0 > .zero ? $0 : nil }
+        let targetDay: Day? = (targetValue != nil && hasTargetDate) ? Day(date: targetDate) : nil
+        let openingDay = Day(date: openingDate)
         var savedId: Int64?
         let ok = model.perform(pot == nil ? "Pot \(trimmedName) gemaakt" : "Pot \(trimmedName) bewaard") {
             try model.db.write { db in
+                // Het beginsaldo van de rekening bij de bank blijft gelijk; alleen de verdeling verandert.
+                let bankOpening = try PotService.openingSummary(db, accountId: accountId).total
                 if let existing = pot {
                     guard var record = try Pot.fetchOne(db, key: existing.id) else {
                         throw InsightError.potNotFound(existing.id)
@@ -118,14 +184,21 @@ struct PotsEditSheet: View {
                     record.name = trimmedName
                     record.kind = kind
                     record.owner = ownerValue.isEmpty ? nil : ownerValue
-                    record.monthlyAmount = monthly
                     record.targetAmount = targetValue
+                    record.targetDate = targetDay
                     savedId = try PotService.update(db, record).id
+                    if opening != originalOpening || (openingDateTouched && !opening.isZero) {
+                        _ = try PotService.setOpeningBalance(db, potId: existing.id, amount: opening, on: openingDay)
+                        _ = try AccountService.setOpeningFromPots(db, accountId: accountId, totalOpening: bankOpening)
+                    }
                 } else {
                     let record = Pot(accountId: accountId, name: trimmedName, kind: kind,
                                      owner: ownerValue.isEmpty ? nil : ownerValue,
-                                     monthlyAmount: monthly, targetAmount: targetValue)
-                    savedId = try PotService.create(db, record).id
+                                     targetAmount: targetValue, targetDate: targetDay)
+                    savedId = try PotService.create(db, record, openingBalance: opening, on: openingDay).id
+                    if !opening.isZero {
+                        _ = try AccountService.setOpeningFromPots(db, accountId: accountId, totalOpening: bankOpening)
+                    }
                 }
             }
         }
@@ -230,6 +303,121 @@ struct PotsMoveSheet: View {
             try model.db.write { db in
                 _ = try PotService.moveBetweenPots(db, from: from.id, to: toId, amount: amount,
                                                    day: Day(date: date), label: text.isEmpty ? defaultLabel : text)
+            }
+        }
+        if ok { dismiss() }
+    }
+}
+
+// MARK: - Beginbedragen nalopen
+
+/// Alle potten van een rekening onder elkaar met hun beginbedrag; één keer opslaan.
+struct PotsOpeningSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+
+    let accountId: Int64
+    let accountName: String
+
+    private struct Row: Identifiable, Equatable {
+        let id: Int64
+        let name: String
+        let original: Money
+        var amount: Money?
+    }
+
+    @State private var rows: [Row] = []
+    @State private var total: Money? = .zero
+    @State private var loaded = false
+
+    private var potSum: Money { rows.map { $0.amount ?? .zero }.sum() }
+    private var unallocated: Money { (total ?? .zero) - potSum }
+    private var valid: Bool { total != nil && rows.allSatisfy { $0.amount != nil } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Beginbedragen nalopen").font(.title3.weight(.semibold))
+                Text("Vul per pot in wat erin zat op de dag dat je met \(accountName) in de app begon. Samen met wat nog geen pot heeft is dat het beginsaldo van de rekening.")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(20)
+            Divider()
+            if loaded {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        HStack {
+                            Text("Beginsaldo van de rekening bij de bank").fontWeight(.medium)
+                            Spacer()
+                            MoneyField("Bedrag", value: $total)
+                                .textFieldStyle(.roundedBorder).frame(width: 130)
+                        }
+                        .padding(.horizontal, 20).padding(.vertical, 10)
+                        Divider()
+                        ForEach($rows) { $row in
+                            HStack {
+                                Text(row.name).lineLimit(1)
+                                Spacer()
+                                MoneyField("Bedrag", value: $row.amount)
+                                    .textFieldStyle(.roundedBorder).frame(width: 130)
+                            }
+                            .padding(.horizontal, 20).padding(.vertical, 5)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            Divider()
+            HStack(spacing: 6) {
+                Text("Potten").foregroundStyle(.secondary)
+                Text(potSum.formatted()).monospacedDigit()
+                Text("+ niet toegewezen").foregroundStyle(.secondary)
+                Text(unallocated.formatted()).monospacedDigit()
+                    .foregroundStyle(unallocated.isZero ? Color.primary : Theme.warning)
+                Text("= rekening").foregroundStyle(.secondary)
+                Text((total ?? .zero).formatted()).monospacedDigit().fontWeight(.semibold)
+                Spacer()
+            }
+            .font(.callout)
+            .padding(.horizontal, 20).padding(.vertical, 12)
+            .help("Niet toegewezen hoort € 0,00 te zijn: dan heeft elke euro van het beginsaldo een pot.")
+            Divider()
+            HStack {
+                Spacer()
+                Button("Annuleer", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Bewaar") { save() }.keyboardShortcut(.defaultAction).disabled(!valid)
+            }
+            .padding(16)
+        }
+        .frame(width: 520, height: 640)
+        .onAppear(perform: load)
+    }
+
+    private func load() {
+        guard !loaded else { return }
+        let summary = model.read(PotOpeningSummary?.none) { try PotService.openingSummary($0, accountId: accountId) }
+        if let summary {
+            rows = summary.potOpenings.compactMap { opening in
+                guard let id = opening.pot.id, !opening.pot.archived || !opening.amount.isZero else { return nil }
+                return Row(id: id, name: opening.pot.name, original: opening.amount, amount: opening.amount)
+            }
+            total = summary.total
+        }
+        loaded = true
+    }
+
+    private func save() {
+        guard let total else { return }
+        let ok = model.perform("Beginbedragen bewaard") {
+            try model.db.write { db in
+                for row in rows {
+                    guard let amount = row.amount, amount != row.original else { continue }
+                    _ = try PotService.setOpeningBalance(db, potId: row.id, amount: amount)
+                }
+                _ = try AccountService.setOpeningFromPots(db, accountId: accountId, totalOpening: total)
             }
         }
         if ok { dismiss() }

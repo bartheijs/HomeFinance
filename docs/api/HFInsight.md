@@ -278,6 +278,40 @@ for pot in overview.accounts.flatMap(\.pots) {
 }
 ```
 
+### Spaardoel uit onderdelen en projecten
+
+- `PotGoal.parts: [GoalPartRow]` (`label`, `quantity`, `unitAmount`, `amount`) en `PotGoal.partsTotal`: de
+  onderdelen (`GoalPart`) waaruit het doelbedrag is opgebouwd. Zonder onderdelen leeg en € 0,00. Het doel zelf
+  blijft `Pot.targetAmount`; de onderdelen zijn de onderbouwing.
+- `forecastProjects(db, potId:today:)` geeft `[ForecastProject]`: per niet-lege `ForecastItem.project` de regels
+  (`items`, elk met `realizedAmount`), `planned` (alle regels), `realized` (afgevinkte regels: het bedrag van de
+  gekoppelde echte boeking, anders het verwachte bedrag), `remaining` (open regels), `count`, `openCount`,
+  `overdueCount`, `firstDay` en `lastDay`. Het project met de laatste dag het verst weg staat eerst.
+- `ForecastEvent.project`: het project van een losse gebeurtenis in `PotForecast.events`, of nil.
+
+## Maandbalans met wat-als
+
+`planBalance(db, year:)` geeft één `PlanBalance`: wat er per maand overblijft van de vaste posten, voor het plan en
+voor de wat-als-variant (`BudgetItem.scenarioAmount`).
+
+- `rows: [PlanBalanceRow]`: eerst de inkomsten, dan de uitgaven, elk op `sortOrder` (ook als `incomeRows` en
+  `expenseRows`). RES-regels doen niet mee; RESERVERINGEN en posten bij een vaste storting wel.
+  Per rij: `label`, `direction`, `frequency`, `timesPerYear`, `plan` (per keer), `planPerMonth`
+  (plan × `timesPerYear` ÷ 12, afgerond op centen), `scenario` en `scenarioPerMonth` (nil als niet ingevuld) en
+  `difference` (`scenarioPerMonth` − `planPerMonth`).
+- `plan`, `scenario`, `difference`: `PlanBalanceTotals` per maand (`income`, `expenses`, `surplus`). In de variant
+  tellen posten zonder wat-als-bedrag met hun plan.
+- `planYear`, `scenarioYear`, `differenceYear`: dezelfde bedragen per jaar (plan × aantal keer, zonder de
+  afronding per maand).
+- `hasScenario`: er is bij minstens één post iets ingevuld.
+- Wat-als voor RESERVERINGEN: het eigen `scenarioAmount`; is dat leeg maar hebben RES-regels er een, dan de som
+  van de RES-regels (wat-als waar ingevuld, anders hun plan).
+
+```swift
+let balance = try appDatabase.read { db in try Insight.planBalance(db, year: 2027) }
+print(balance.plan.surplus, balance.hasScenario ? balance.scenario.surplus : nil)
+```
+
 ## Dashboard
 
 `dashboard(db, today:recentLimit:tagLimit:)` geeft één `Dashboard`:

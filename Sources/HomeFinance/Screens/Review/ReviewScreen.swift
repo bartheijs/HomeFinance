@@ -117,7 +117,7 @@ struct ReviewProgressLine: View {
                 Text(title(toCheck: toCheck, certain: certain))
                     .font(.system(.title2, design: .rounded).weight(.semibold))
                 Text(certain > 0
-                     ? "Zeker betekent: tegenpartij en bedrag kloppen met een regel. Die boek je in één keer; daarna blijven alleen de twijfelgevallen over."
+                     ? "Zeker betekent: tegenpartij en bedrag kloppen met een regel of een vaste storting. Die boek je in één keer; daarna blijven alleen de twijfelgevallen over."
                      : "Loop ze één voor één langs: kies waar het bij hoort en druk op ⏎.")
                     .font(.callout).foregroundStyle(.secondary)
             }

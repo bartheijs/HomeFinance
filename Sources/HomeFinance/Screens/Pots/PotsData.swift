@@ -15,6 +15,8 @@ struct PotsData: Equatable {
     var series: [Int64: [BalancePoint]] = [:]
     /// Alle spaarrekeningen (ook als het overzicht gefilterd is), voor de rekeningkeuze.
     var savingsAccounts: [PotsAccountRef] = []
+    /// Beginstand per spaarrekening waar nog geen enkele banktransactie op staat (om na te lopen).
+    var openings: [OpeningOverview] = []
     /// De dag waarop de saldi gelden.
     var asOf: Day
 
@@ -42,7 +44,7 @@ struct PotsData: Equatable {
                 .filter(Column("kind") == AccountKind.spaar.rawValue)
                 .order(Column("sortOrder"), Column("id"))
                 .fetchAll(db)
-                .compactMap { a in a.id.map { PotsAccountRef(id: $0, name: a.name, archived: a.archived) } }
+                .compactMap { a in a.id.map { PotsAccountRef(id: $0, name: a.name, archived: a.archived, openingDate: a.openingDate) } }
             let overview = try Insight.potOverview(db, accountId: accountId, today: asOf)
             data.overview = overview
             data.unallocated = try Insight.unallocatedSavingsEntries(db, accountId: accountId)
@@ -50,6 +52,11 @@ struct PotsData: Equatable {
                 if try PotService.distribution(db, for: entry.amount, accountId: entry.accountId) != nil {
                     data.distributable.insert(entry.id)
                 }
+            }
+            for account in overview.accounts where !account.archived {
+                let imported = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM bankTransaction WHERE accountId = ?",
+                                                arguments: [account.id]) ?? 0
+                if imported == 0 { data.openings.append(try Insight.openingOverview(db, accountId: account.id)) }
             }
             if let start = Day(year: asOf.year, month: 1, day: 1) {
                 for account in overview.accounts {
@@ -66,6 +73,7 @@ struct PotsAccountRef: Identifiable, Equatable, Hashable {
     let id: Int64
     let name: String
     let archived: Bool
+    let openingDate: Day
 }
 
 /// Eén stukje van de verdeling van het spaarsaldo over de potten.

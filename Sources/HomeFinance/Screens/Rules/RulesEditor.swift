@@ -1,6 +1,7 @@
 import SwiftUI
 import HFCore
 import HFRules
+import HFInsight
 
 /// Inspecteur rechts: één regel bewerken, met direct zicht op wat hij zou doen.
 struct RulesEditor: View {
@@ -21,6 +22,7 @@ struct RulesEditor: View {
     var onClose: () -> Void
 
     @State private var showConfidenceHelp = false
+    @FocusState private var labelFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -193,7 +195,9 @@ struct RulesEditor: View {
             }
             .help("Spaarrekening: de pot waar het bedrag bij of af gaat. Betaalrekening: de pot die de uitgave vergoedt.")
             TextField("Omschrijving", text: $draft.entryLabel.rulesText, prompt: Text("naam van de tegenpartij"))
+                .focused($labelFocused)
                 .help("De leesbare tekst van de boeking. Leeg = de opgeschoonde naam van de tegenpartij.")
+            labelHelp
             if !data.tags.isEmpty {
                 LabeledContent("Tags") {
                     RulesFlow(spacing: 6) {
@@ -238,6 +242,34 @@ struct RulesEditor: View {
             }
         } header: {
             Text("Over deze regel")
+        }
+    }
+
+    /// Aanvullen uit bestaande omschrijvingen, en een melding bij een bijna-gelijke omschrijving.
+    @ViewBuilder private var labelHelp: some View {
+        let text = RulesText.filled(draft.entryLabel) ?? ""
+        if !text.isEmpty {
+            if let near = LabelMatcher.similar(text, in: data.labels) {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
+                    Text("Bedoel je ‘\(near.label)’? Die omschrijving bestaat al (\(near.count)× gebruikt).")
+                        .font(.callout).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    Button("Gebruik") { draft.entryLabel = near.label }.controlSize(.small)
+                }
+            }
+            let options = LabelMatcher.suggest(text, from: data.labels, limit: 4)
+                .filter { $0.label.caseInsensitiveCompare(text) != .orderedSame }
+            if labelFocused && !options.isEmpty {
+                RulesFlow(spacing: 6) {
+                    ForEach(options) { option in
+                        Button(option.label) { draft.entryLabel = option.label }
+                            .buttonStyle(.bordered).controlSize(.small)
+                            .help("Bestaande omschrijving, \(option.count)× gebruikt")
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
         }
     }
 

@@ -179,19 +179,20 @@ public enum ForecastService {
     public static let suggestionPercent: Int64 = 5
 
     /// Maakt een verwachting bij een (niet-gearchiveerde) pot. Het bedrag heeft een teken en is niet nul; de
-    /// omschrijving mag leeg zijn; een datum in het verleden mag (dan is hij over tijd).
+    /// omschrijving mag leeg zijn; een datum in het verleden mag (dan is hij over tijd). `project` groepeert
+    /// verwachtingen (bv. een vakantie); het wordt getrimd en leeg betekent geen project.
     @discardableResult
     public static func create(_ db: Database, potId: Int64, day: Day, amount: Money,
-                              label: String = "") throws -> ForecastItem {
+                              label: String = "", project: String = "") throws -> ForecastItem {
         try atomic(db) {
-            var item = ForecastItem(potId: potId, day: day, amount: amount, label: label)
+            var item = ForecastItem(potId: potId, day: day, amount: amount, label: label, project: project)
             try validate(db, &item)
             try item.insert(db)
             return item
         }
     }
 
-    /// Werkt pot, datum, bedrag en omschrijving bij. Of de verwachting is uitgekomen wijzigt alleen via
+    /// Werkt pot, datum, bedrag, omschrijving en project bij. Of de verwachting is uitgekomen wijzigt alleen via
     /// `markRealized` en `reopen`.
     @discardableResult
     public static func update(_ db: Database, _ item: ForecastItem) throws -> ForecastItem {
@@ -298,5 +299,30 @@ public enum ForecastService {
         }
         guard !item.amount.isZero else { throw BudgetError.validation("Het verwachte bedrag mag niet nul zijn.") }
         item.label = item.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        item.project = item.project.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Hernoemt een project van een pot (ook bij uitgekomen verwachtingen); geeft het aantal gewijzigde
+    /// verwachtingen terug. Bestaat `to` al, dan gaan de twee projecten samen. Een lege `to` haalt de
+    /// verwachtingen uit het project; een lege `from` wordt geweigerd.
+    @discardableResult
+    public static func renameProject(_ db: Database, potId: Int64, from: String, to: String) throws -> Int {
+        try atomic(db) {
+            _ = try Check.pot(db, potId)
+            let from = from.trimmingCharacters(in: .whitespacesAndNewlines)
+            let to = to.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !from.isEmpty else { throw BudgetError.validation("Geef het project op dat hernoemd moet worden.") }
+            try db.execute(sql: "UPDATE forecastItem SET project = ? WHERE potId = ? AND project = ? AND project <> ?",
+                           arguments: [to, potId, from, to])
+            return db.changesCount
+        }
+    }
+
+    /// De projecten van een pot (ook van uitgekomen verwachtingen), op naam.
+    public static func projects(_ db: Database, potId: Int64) throws -> [String] {
+        try String.fetchAll(db, sql: """
+            SELECT DISTINCT project FROM forecastItem WHERE potId = ? AND project <> ''
+            ORDER BY project COLLATE NOCASE, project
+            """, arguments: [potId])
     }
 }

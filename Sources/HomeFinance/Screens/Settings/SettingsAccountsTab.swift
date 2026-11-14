@@ -8,13 +8,17 @@ struct SettingsAccountsData: Equatable {
     var accounts: [Account] = []
     var balances: [Int64: Money] = [:]
     var history: [Int64: [Reconciliation]] = [:]
+    /// Beginstand van spaarrekeningen: potten + niet toegewezen.
+    var opening: [Int64: OpeningOverview] = [:]
 
     static func load(_ db: Database, today: Day) throws -> SettingsAccountsData {
         var d = SettingsAccountsData()
         d.accounts = try Account.order(Column("sortOrder"), Column("id")).fetchAll(db)
         for overview in try Insight.accountOverview(db, today: today) { d.balances[overview.id] = overview.balance }
         for account in d.accounts {
-            if let id = account.id { d.history[id] = try BalanceService.history(db, accountId: id) }
+            guard let id = account.id else { continue }
+            d.history[id] = try BalanceService.history(db, accountId: id)
+            if account.kind == .spaar { d.opening[id] = try Insight.openingOverview(db, accountId: id) }
         }
         return d
     }
@@ -51,6 +55,7 @@ struct SettingsAccountsTab: View {
                                         onToggle: { expandedId = expandedId == account.id ? nil : account.id },
                                         balance: data.balances[account.id ?? -1] ?? .zero,
                                         history: data.history[account.id ?? -1] ?? [],
+                                        openingSplit: data.opening[account.id ?? -1],
                                         onChanged: { failed in if failed { resetToken += 1 }; load() },
                                         onCancel: {})
                         .id("\(account.id ?? 0)-\(resetToken)")
@@ -86,6 +91,8 @@ struct SettingsAccountCard: View {
     var onToggle: () -> Void
     let balance: Money
     let history: [Reconciliation]
+    /// Alleen bij een spaarrekening: het beginsaldo uitgesplitst.
+    var openingSplit: OpeningOverview?
     /// Aangeroepen na een schrijfactie; `true` als die mislukte.
     var onChanged: (Bool) -> Void
     var onCancel: () -> Void
@@ -97,7 +104,9 @@ struct SettingsAccountCard: View {
     @State private var confirmDelete = false
 
     init(account: Account, isNew: Bool, isExpanded: Bool, onToggle: @escaping () -> Void, balance: Money,
-         history: [Reconciliation], onChanged: @escaping (Bool) -> Void, onCancel: @escaping () -> Void) {
+         history: [Reconciliation], openingSplit: OpeningOverview? = nil,
+         onChanged: @escaping (Bool) -> Void, onCancel: @escaping () -> Void) {
+        self.openingSplit = openingSplit
         self.account = account; self.isNew = isNew; self.isExpanded = isExpanded; self.onToggle = onToggle
         self.balance = balance; self.history = history
         self.onChanged = onChanged; self.onCancel = onCancel
@@ -190,6 +199,16 @@ struct SettingsAccountCard: View {
                     }
                     .help("Het saldo aan het begin van die dag, vóór de eerste boeking in HomeFinance.")
                 }
+                if let split = openingSplit, !isNew {
+                    GridRow {
+                        Text("Verdeling").foregroundStyle(.secondary)
+                        HStack(spacing: 10) {
+                            Text(Self.splitText(split)).monospacedDigit()
+                                .help("Het beginsaldo van deze spaarrekening: het deel dat bij het begin over potten is verdeeld en het deel dat nog geen pot heeft.")
+                            Button("Naar Potten") { model.selection = .pots }.controlSize(.small)
+                        }
+                    }
+                }
             }
             HStack(spacing: 8) {
                 Button(isNew ? "Voeg toe" : "Bewaar") { save() }
@@ -209,6 +228,12 @@ struct SettingsAccountCard: View {
             }
             .padding(.top, 4)
         }
+    }
+
+    private static func splitText(_ split: OpeningOverview) -> String {
+        let pots = split.potTotal.formatted()
+        let rest = split.unallocated.formatted()
+        return "potten \(pots) + niet toegewezen \(rest)"
     }
 
     private var isDirty: Bool {

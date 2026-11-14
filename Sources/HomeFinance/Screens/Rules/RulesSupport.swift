@@ -2,6 +2,7 @@ import SwiftUI
 import GRDB
 import HFCore
 import HFRules
+import HFInsight
 
 /// Alles wat het regelscherm uit de database nodig heeft.
 struct RulesData: Equatable {
@@ -12,6 +13,8 @@ struct RulesData: Equatable {
     /// Labels van de posten van het gekozen jaar waarop geboekt kan worden (geen RES-regels).
     var itemLabels: [String] = []
     var transactionCount = 0
+    /// Bestaande omschrijvingen, om bij het typen voor te stellen.
+    var labels: [LabelSuggestion] = []
 
     static func load(_ db: Database, year: Int) throws -> RulesData {
         var d = RulesData()
@@ -26,6 +29,7 @@ struct RulesData: Equatable {
                 .fetchAll(db).map(\.label)
         }
         d.transactionCount = try BankTransaction.fetchCount(db)
+        d.labels = try Insight.allLabels(db)
         return d
     }
 

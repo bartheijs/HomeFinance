@@ -124,6 +124,14 @@ public enum BalanceService {
 
 // MARK: - Jaar en posten
 
+/// Uitkomst van `YearService.applyScenario`.
+public struct ScenarioApplyResult: Equatable, Sendable {
+    /// Aantal posten waarvan het wat-als-bedrag het plan is geworden.
+    public var appliedCount: Int
+    /// Posten met een wat-als-bedrag dat niet is toegepast, omdat hun plan berekend wordt.
+    public var skipped: [BudgetItem]
+}
+
 /// Begrotingsjaren en vaste posten beheren.
 public enum YearService {
     /// Maakt een leeg begrotingsjaar met zijn buffers.
@@ -158,6 +166,7 @@ public enum YearService {
             for var item in items {
                 item.id = nil
                 item.yearId = target.id!
+                item.scenarioAmount = nil   // wat-als-bedragen gaan niet mee naar een nieuw jaar
                 try item.insert(db)
             }
             try syncReserveTotal(db, yearId: target.id!)
@@ -193,6 +202,7 @@ public enum YearService {
         try atomic(db) {
             var item = item
             item.id = nil
+            item.scenarioAmount = nil
             try validate(db, &item)
             item.sortOrder = try Check.nextSortOrder(db, table: "budgetItem", whereSQL: "yearId = ?",
                                                      arguments: [item.yearId])
@@ -220,6 +230,8 @@ public enum YearService {
                 guard count == 0 else { throw BudgetError.itemHasEntries(item: existing.label, count: count) }
             }
             item.sortOrder = existing.sortOrder
+            // Het wat-als-bedrag wijzigt alleen via `setScenario`; bij een andere richting vervalt het.
+            item.scenarioAmount = item.direction == existing.direction ? existing.scenarioAmount : nil
             try item.update(db)
             try syncReserveTotal(db, yearId: item.yearId)
             return try Check.item(db, id)
@@ -239,6 +251,63 @@ public enum YearService {
             try db.execute(sql: "UPDATE entry SET budgetItemId = NULL WHERE budgetItemId = ?", arguments: [itemId])
             try db.execute(sql: "DELETE FROM budgetItem WHERE id = ?", arguments: [itemId])
             try syncReserveTotal(db, yearId: item.yearId)
+        }
+    }
+
+    // MARK: Wat-als
+
+    /// Zet het wat-als-bedrag van een post (nil = wissen). Zelfde tekenregels als het plan (IN ≥ 0, UIT ≤ 0);
+    /// niet voor reserveringsregels (RES). Een post met een vaste storting mag een wat-als-bedrag hebben; zijn
+    /// plan blijft de storting volgen. Geweigerd in een afgesloten jaar.
+    @discardableResult
+    public static func setScenario(_ db: Database, itemId: Int64, amount: Money?) throws -> BudgetItem {
+        try atomic(db) {
+            let item = try Check.item(db, itemId)
+            try Check.yearOpen(db, yearId: item.yearId)
+            if let amount {
+                switch item.direction {
+                case .RES:
+                    throw BudgetError.validation("De reserveringsregel \(item.label) kan geen wat-als-bedrag hebben.")
+                case .IN: guard !amount.isNegative else { throw BudgetError.signMismatch(direction: .IN) }
+                case .UIT: guard amount <= .zero else { throw BudgetError.signMismatch(direction: .UIT) }
+                }
+            }
+            try db.execute(sql: "UPDATE budgetItem SET scenarioAmount = ? WHERE id = ?", arguments: [amount, itemId])
+            return try Check.item(db, itemId)
+        }
+    }
+
+    /// Wist alle wat-als-bedragen van een jaar; geeft het aantal gewiste bedragen terug.
+    @discardableResult
+    public static func clearScenario(_ db: Database, yearId: Int64) throws -> Int {
+        try atomic(db) {
+            try Check.yearOpen(db, yearId: yearId)
+            try db.execute(sql: """
+                UPDATE budgetItem SET scenarioAmount = NULL WHERE yearId = ? AND scenarioAmount IS NOT NULL
+                """, arguments: [yearId])
+            return db.changesCount
+        }
+    }
+
+    /// Maakt van elk ingevuld wat-als-bedrag het planbedrag en wist daarna alle wat-als-bedragen van het jaar.
+    /// Posten waarvan het plan berekend wordt (gekoppeld aan een vaste storting, of de regel RESERVERINGEN)
+    /// worden overgeslagen en staan in `skipped`, met het niet toegepaste bedrag nog in `scenarioAmount`.
+    @discardableResult
+    public static func applyScenario(_ db: Database, yearId: Int64) throws -> ScenarioApplyResult {
+        try atomic(db) {
+            try Check.yearOpen(db, yearId: yearId)
+            let items = try BudgetItem.fetchAll(db, sql: """
+                SELECT * FROM budgetItem WHERE yearId = ? AND scenarioAmount IS NOT NULL ORDER BY sortOrder, id
+                """, arguments: [yearId])
+            let skipped = items.filter { $0.distributionId != nil || $0.isReserveTotal }
+            try db.execute(sql: """
+                UPDATE budgetItem SET planAmount = scenarioAmount
+                WHERE yearId = ? AND scenarioAmount IS NOT NULL AND distributionId IS NULL AND isReserveTotal = 0
+                """, arguments: [yearId])
+            let applied = db.changesCount
+            try db.execute(sql: "UPDATE budgetItem SET scenarioAmount = NULL WHERE yearId = ?", arguments: [yearId])
+            try syncReserveTotal(db, yearId: yearId)
+            return ScenarioApplyResult(appliedCount: applied, skipped: skipped)
         }
     }
 

@@ -34,11 +34,14 @@ struct TransactionsScreen: View {
                 VStack(alignment: .leading, spacing: 14) {
                     accountCards
                     TransactionsFilterBar(store: store, searchFocused: $searchFocused)
-                    if let summary = store.summary, summary.count > 0 {
-                        TransactionsSummaryLine(store: store, summary: summary)
+                    if store.criteria.hasFilters, store.criteria.status != .newOnly, store.totalEntryCount > 0 {
+                        TransactionsSummaryLine(store: store)
                     }
                     if !store.pendingAll.isEmpty { newBanner }
                     if store.kind == .betaal, store.loanOutstanding > .zero { loanBanner }
+                    if store.kind == .betaal {
+                        ForEach(store.settlements) { settlement in settlementBanner(settlement) }
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 8)
@@ -73,6 +76,9 @@ struct TransactionsScreen: View {
         }
         .sheet(item: $store.splitTarget) { target in
             TransactionsSplitSheet(store: store, target: target).environment(model)
+        }
+        .sheet(item: $store.settleTarget) { target in
+            TransactionsSettleSheet(store: store, target: target).environment(model)
         }
         .sheet(item: $store.noteTarget) { row in
             TransactionsNoteSheet(store: store, row: row).environment(model)
@@ -163,6 +169,22 @@ struct TransactionsScreen: View {
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 9))
         .help(TransactionsFormat.loanHelp)
+    }
+
+    /// Eén rustige regel per tag waarvan nog iets terug te storten is.
+    private func settlementBanner(_ settlement: TagSettlementSummary) -> some View {
+        HStack(spacing: 10) {
+            Circle().fill(Color(hex: settlement.color)).frame(width: 7, height: 7)
+            Text("\(settlement.outstanding.formatted()) \(settlement.name) nog terug te storten · \(TransactionsFormat.entries(settlement.openCount))")
+            Button("Verrekenen…") { store.startSettle(tagId: settlement.id) }
+                .buttonStyle(.link)
+                .help("Verreken deze uitgaven met de terugstorting op de betaalrekening")
+            Spacer(minLength: 0)
+        }
+        .font(.callout)
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 9))
+        .help("Uitgaven met de tag \(settlement.name) die je nog terugstort op de betaalrekening")
     }
 
     // MARK: Inhoud

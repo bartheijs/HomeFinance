@@ -1,5 +1,6 @@
 import SwiftUI
 import HFCore
+import HFInsight
 
 /// Rechterpaneel: de ruwe bankgegevens van de gekozen transactie en het voorstel dat je kunt aanpassen.
 struct ReviewInspector: View {
@@ -98,7 +99,9 @@ private struct ReviewDetail: View {
     /// Hoogstens één melding: waarom je hier even moet opletten.
     @ViewBuilder private var warning: some View {
         let s = row.suggestion
-        let text: String? = if s.amountDiffers, let expected = s.expectedAmount {
+        let text: String? = if let match = row.match {
+            match.warning
+        } else if s.amountDiffers, let expected = s.expectedAmount {
             "De regel verwacht \(expected.formatted()). Klopt de post nog?"
         } else if let first = s.warnings.first {
             first
@@ -117,9 +120,20 @@ private struct ReviewDetail: View {
     @ViewBuilder private var target: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Waar hoort dit bij?").font(.headline)
+            if let match = row.match, match.isAmbiguous {
+                Text("Er passen meer vaste stortingen bij deze overboeking. Kies welke het is.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                ForEach(match.distributions) { distribution in
+                    Button(distribution.name) { store.chooseDistribution(distribution, for: row, model) }
+                }
+            }
+            if let name = row.match?.distribution?.name, !store.isEdited(row) {
+                Label("Vaste storting: \(name)", systemImage: "arrow.triangle.branch").fontWeight(.medium)
+                    .help("Een vaste storting is een bedrag dat regelmatig van de betaalrekening naar de spaarrekening gaat en daar over potten wordt verdeeld.")
+            }
             if draft.wrappedValue.isSplit {
                 VStack(alignment: .leading, spacing: 6) {
-                    ForEach(draft.wrappedValue.lines) { line in
+                    ForEach(draft.wrappedValue.lines.filter { !$0.isDifference }) { line in
                         HStack {
                             Text(store.title(of: line.target, kind: store.kind)).lineLimit(1)
                             Spacer()
@@ -127,20 +141,62 @@ private struct ReviewDetail: View {
                         }
                     }
                 }
-                Text(row.distribution != nil && !store.isEdited(row)
-                     ? "Deze storting is gelijk aan de maandbedragen van de reserveringspotten en wordt daarover verdeeld."
-                     : "Deze transactie is gesplitst.")
-                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                if let index = draft.wrappedValue.lines.firstIndex(where: \.isDifference) {
+                    differenceChoice(index)
+                } else if row.match == nil || store.isEdited(row) {
+                    Text("Deze transactie is gesplitst.").font(.callout).foregroundStyle(.secondary)
+                }
                 Button("Aanpassen…") { moreBinding.wrappedValue = true }.buttonStyle(.link)
             } else {
                 ReviewTargetPicker(year: row.tx.day.year, selection: draft.target).controlSize(.large)
                 Text(hint).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
+            if store.kind == .betaal { periodChoice }
         }
+    }
+
+    /// Het gestorte bedrag wijkt af van de vaste storting: waar gaat het verschil heen?
+    private func differenceChoice(_ index: Int) -> some View {
+        let amount = draft.wrappedValue.lines[index].amount ?? .zero
+        return VStack(alignment: .leading, spacing: 6) {
+            Divider()
+            HStack {
+                Text(amount.isNegative ? "Minder gestort dan de verdeling" : "Meer gestort dan de verdeling")
+                Spacer()
+                Text(amount.formatted(alwaysSign: true)).monospacedDigit().fontWeight(.semibold).foregroundStyle(Theme.warning)
+            }
+            HStack {
+                Text("Verschil naar").foregroundStyle(.secondary)
+                ReviewTargetPicker(year: row.tx.day.year, selection: Binding(
+                    get: { draft.wrappedValue.lines.indices.contains(index) ? draft.wrappedValue.lines[index].target : .none },
+                    set: { if draft.wrappedValue.lines.indices.contains(index) { draft.wrappedValue.lines[index].target = $0 } }))
+            }
+            Text("De potten krijgen hun vaste bedrag. Kies een pot voor het verschil, of laat het niet toegewezen.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// In welke maand telt deze boeking mee voor de begroting?
+    private var periodChoice: some View {
+        HStack(spacing: 6) {
+            Text("Telt mee in").foregroundStyle(.secondary)
+            Picker("Telt mee in", selection: draft.period) {
+                ForEach(store.periodChoices(for: row), id: \.period) { choice in
+                    Text(choice.title).tag(choice.period)
+                }
+            }
+            .labelsHidden().fixedSize()
+        }
+        .font(.callout).controlSize(.small)
+        .help("Voor iets dat eind van de maand is betaald maar bij de volgende maand hoort.")
     }
 
     private var hint: String {
         if store.isEdited(row) { return "Je eigen keuze. De app onthoudt dit voor de volgende keer." }
+        if let match = row.match, match.distribution != nil {
+            return match.exactAmount ? "Herkend aan de rekeningen en het bedrag van de vaste storting."
+                                     : "Herkend aan de rekeningen; het bedrag wijkt \(match.difference.formatted(alwaysSign: true)) af van de vaste storting."
+        }
         if row.pair != nil, draft.wrappedValue.target == .none { return "Dit lijkt een overboeking tussen je eigen rekeningen." }
         switch row.suggestion.confidence {
         case .hoog: return "Voorstel van een regel: tegenpartij en bedrag kloppen."
@@ -156,7 +212,7 @@ private struct ReviewDetail: View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Omschrijving").font(.callout).foregroundStyle(.secondary)
-                TextField("Omschrijving", text: draft.label).textFieldStyle(.roundedBorder)
+                ReviewLabelField(text: draft.label)
                     .help("De leesbare naam van deze boeking. De tekst van de bank blijft bewaard.")
             }
             if !store.tags.isEmpty {
@@ -351,7 +407,7 @@ private struct ReviewSplitEditor: View {
                     MoneyField("Bedrag", value: $line.amount)
                         .textFieldStyle(.roundedBorder).frame(width: 84)
                     VStack(spacing: 3) {
-                        TextField("Omschrijving", text: $line.label).textFieldStyle(.roundedBorder)
+                        ReviewLabelField(text: $line.label)
                         ReviewTargetPicker(year: row.tx.day.year, selection: $line.target)
                     }
                     Button {
@@ -435,5 +491,31 @@ struct ReviewFlow: Layout {
             maxX = max(maxX, x - spacing)
         }
         return (points, maxX, y + rowHeight)
+    }
+}
+
+/// Omschrijvingsveld dat aanvult uit bestaande omschrijvingen en waarschuwt bij een bijna-gelijke schrijfwijze.
+struct ReviewLabelField: View {
+    @Environment(ReviewStore.self) private var store
+    @Binding var text: String
+
+    var body: some View {
+        let typed = text.trimmingCharacters(in: .whitespaces)
+        VStack(alignment: .leading, spacing: 3) {
+            TextField("Omschrijving", text: $text)
+                .textFieldStyle(.roundedBorder)
+                .textInputSuggestions {
+                    if !typed.isEmpty {
+                        ForEach(LabelMatcher.suggest(typed, from: store.labels, limit: 6).filter { $0.label != typed }) { suggestion in
+                            Text(suggestion.label).textInputCompletion(suggestion.label)
+                        }
+                    }
+                }
+            if !typed.isEmpty, let existing = LabelMatcher.similar(typed, in: store.labels), existing.label != typed {
+                Button("Bedoel je ‘\(existing.label)’?") { text = existing.label }
+                    .buttonStyle(.link).font(.caption)
+                    .help("Deze omschrijving bestaat al in bijna dezelfde schrijfwijze. Met dezelfde tekst tellen de boekingen bij elkaar op in de rapporten.")
+            }
+        }
     }
 }

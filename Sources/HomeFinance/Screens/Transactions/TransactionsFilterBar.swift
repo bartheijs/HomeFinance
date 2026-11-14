@@ -192,30 +192,27 @@ private struct TransactionsFilterChip: View {
     }
 }
 
-/// Samenvatting bij een filter op tag, post of pot: aantal, som en gemiddelde per maand in het begrotingsjaar.
+/// Eén regel boven de feed bij zoeken of filteren: aantal en totaal van alle gevonden boekingen.
+/// Bij een filter op tag, post of pot ook het totaal en het gemiddelde per maand in het begrotingsjaar.
 struct TransactionsSummaryLine: View {
     @Environment(AppModel.self) private var model
     let store: TransactionsStore
-    let summary: TransactionsSummary
-
-    private var subject: String {
-        let c = store.criteria
-        let l = store.lookups
-        return [l.tag(c.tagId)?.name, l.item(c.itemId)?.label, l.pot(c.potId)?.name]
-            .compactMap { $0 }.joined(separator: " + ")
-    }
 
     var body: some View {
         HStack(spacing: 14) {
-            Text("\(subject) in \(store.criteria.month.map { Day.monthNames[$0 - 1] + " " } ?? "")\(String(model.year))")
-                .fontWeight(.semibold)
-            fact("Aantal", TransactionsFormat.number(summary.count))
-            fact("Totaal", summary.sum.formatted())
-            if let average = summary.average, let months = summary.months {
-                fact("Gemiddeld per maand", average.formatted())
-                    .help(months == 12
-                          ? "Het totaal gedeeld door de 12 maanden van \(String(model.year))"
-                          : "Het totaal gedeeld door de \(months) maanden van \(String(model.year)) tot en met \(Day.monthNames[months - 1])")
+            Text("\(TransactionsFormat.entries(store.totalEntryCount)) · \(store.foundSum.formatted())")
+                .fontWeight(.medium).monospacedDigit()
+                .help("Aantal en totaal van alle gevonden boekingen, ook van de regels die nog niet geladen zijn")
+            if let summary = store.summary, summary.count > 0 {
+                if store.criteria.month == nil {
+                    fact("In \(String(model.year))", summary.sum.formatted())
+                }
+                if let average = summary.average, let months = summary.months {
+                    fact("Gemiddeld per maand", average.formatted())
+                        .help(months == 12
+                              ? "Het totaal van \(String(model.year)) gedeeld door 12 maanden"
+                              : "Het totaal van \(String(model.year)) gedeeld door de \(months) maanden tot en met \(Day.monthNames[months - 1])")
+                }
             }
             Spacer(minLength: 0)
         }

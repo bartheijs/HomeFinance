@@ -260,8 +260,14 @@ struct PotsRowView: View {
                         Text(pot.name).lineLimit(1).truncationMode(.tail)
                         if pot.archived { Text("gearchiveerd").font(.callout).foregroundStyle(.tertiary) }
                     }
-                    if pot.progress != nil {
-                        PotsTargetBar(pot: pot, showTarget: true).frame(maxWidth: 320, alignment: .leading)
+                    if let goal = pot.goal {
+                        HStack(spacing: 10) {
+                            PotsTargetBar(pot: pot, barOnly: true).frame(width: 140)
+                            Text(PotsGoalText.line(goal))
+                                .font(.callout)
+                                .foregroundStyle(PotsGoalText.needsAttention(goal) ? Theme.warning : Color.secondary)
+                                .lineLimit(1)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -291,6 +297,8 @@ struct PotsTargetBar: View {
     let pot: PotSummary
     /// Toont ook het doelbedrag als tekst.
     var showTarget = false
+    /// Alleen de balk, zonder percentage.
+    var barOnly = false
 
     var body: some View {
         if let progress = pot.progress, let target = pot.targetAmount {
@@ -303,10 +311,12 @@ struct PotsTargetBar: View {
                     }
                 }
                 .frame(height: 4)
+                if !barOnly {
                 Text(showTarget ? "\(PotsFormat.percent(progress)) van \(PotsFormat.wholeEuros(target.doubleValue))"
                      : PotsFormat.percent(progress))
                     .font(.callout).monospacedDigit().foregroundStyle(.secondary)
                     .fixedSize()
+                }
             }
             .help(progress >= 1
                   ? "Doel van \(target.formatted()) gehaald."
@@ -387,5 +397,40 @@ struct PotsUnallocatedCard: View {
         }
         .font(.body)
         .padding(.horizontal, 18).padding(.vertical, 9)
+    }
+}
+
+// MARK: - Beginstand
+
+/// Rustig blok zolang er nog niets geïmporteerd is: potten + niet toegewezen = rekening.
+struct PotsOpeningBlock: View {
+    let opening: OpeningOverview
+    let showName: Bool
+    var review: () -> Void
+
+    var body: some View {
+        PotsPanel {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(showName ? "Beginstand \(opening.accountName)" : "Beginstand").font(.callout).foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Text("potten").foregroundStyle(.secondary)
+                        Text(opening.potTotal.formatted()).monospacedDigit()
+                        Text("+ niet toegewezen").foregroundStyle(.secondary)
+                        Text(opening.unallocated.formatted()).monospacedDigit()
+                            .foregroundStyle(opening.unallocated.isZero ? Color.primary : Theme.warning)
+                        Text("= rekening").foregroundStyle(.secondary)
+                        Text(opening.total.formatted()).monospacedDigit().fontWeight(.semibold)
+                    }
+                    .font(.body)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 12)
+                Button("Beginbedragen nalopen", action: review)
+                    .help("Vul per pot in wat erin zat op \(opening.openingDate.short(withYear: true)), de dag waarop je met deze rekening in de app begon.")
+            }
+            .padding(.horizontal, 18).padding(.vertical, 12)
+        }
+        .help("Dit blok verdwijnt zodra je de eerste transacties van deze spaarrekening hebt geïmporteerd.")
     }
 }

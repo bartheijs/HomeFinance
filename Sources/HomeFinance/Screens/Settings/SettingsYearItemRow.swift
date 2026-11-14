@@ -6,6 +6,8 @@ import HFCore
 struct SettingsYearItemRow: View {
     let item: BudgetItem
     let pots: [Pot]
+    /// Vaste stortingen waaraan een UIT-post gekoppeld kan worden (id en naam).
+    let distributions: [SettingsDistributionOption]
     let reserveLineCount: Int
     let entryCount: Int
     let isExpanded: Bool
@@ -13,6 +15,9 @@ struct SettingsYearItemRow: View {
     let isLast: Bool
     var onToggle: () -> Void
     var onSave: (BudgetItem) -> Void
+    /// Koppelen aan een vaste storting, of ontkoppelen (nil).
+    var onLink: (Int64?) -> Void
+    var onGoToPots: () -> Void
     var onMove: (Int) -> Void
     var onDelete: () -> Void
 
@@ -23,9 +28,11 @@ struct SettingsYearItemRow: View {
     @State private var showMonths = false
     @FocusState private var focus: Field?
 
-    init(item: BudgetItem, pots: [Pot], reserveLineCount: Int, entryCount: Int, isExpanded: Bool,
-         isFirst: Bool, isLast: Bool, onToggle: @escaping () -> Void,
-         onSave: @escaping (BudgetItem) -> Void, onMove: @escaping (Int) -> Void, onDelete: @escaping () -> Void) {
+    init(item: BudgetItem, pots: [Pot], distributions: [SettingsDistributionOption], reserveLineCount: Int,
+         entryCount: Int, isExpanded: Bool, isFirst: Bool, isLast: Bool, onToggle: @escaping () -> Void,
+         onSave: @escaping (BudgetItem) -> Void, onLink: @escaping (Int64?) -> Void,
+         onGoToPots: @escaping () -> Void, onMove: @escaping (Int) -> Void, onDelete: @escaping () -> Void) {
+        self.distributions = distributions; self.onLink = onLink; self.onGoToPots = onGoToPots
         self.item = item; self.pots = pots; self.reserveLineCount = reserveLineCount; self.entryCount = entryCount
         self.isExpanded = isExpanded; self.isFirst = isFirst; self.isLast = isLast
         self.onToggle = onToggle; self.onSave = onSave; self.onMove = onMove; self.onDelete = onDelete
@@ -53,7 +60,13 @@ struct SettingsYearItemRow: View {
         Button(action: onToggle) {
             HStack(spacing: 10) {
                 Text(item.label).font(.title3)
-                if item.isReserveTotal {
+                if let name = distributionName {
+                    Label(name, systemImage: "arrow.triangle.branch")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(Color.primary.opacity(0.06), in: Capsule())
+                        .help("Het planbedrag volgt de vaste storting ‘\(name)’")
+                } else if item.isReserveTotal {
                     Text("som van de reserveringen").font(.callout).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
@@ -119,8 +132,24 @@ struct SettingsYearItemRow: View {
         .background(Color.primary.opacity(0.03))
     }
 
+    /// Naam van de vaste storting waaraan deze post gekoppeld is, of nil.
+    private var distributionName: String? {
+        guard let id = item.distributionId else { return nil }
+        return distributions.first { $0.id == id }?.name ?? "vaste storting"
+    }
+
     @ViewBuilder private var planField: some View {
-        if item.isReserveTotal {
+        if let name = distributionName {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(item.planAmount.magnitude.formatted()).monospacedDigit()
+                    Image(systemName: "lock.fill").font(.caption).foregroundStyle(.tertiary)
+                }
+                Text("Volgt de vaste storting ‘\(name)’ (instellen bij Potten en sparen › Vaste stortingen)")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Button("Naar Vaste stortingen", action: onGoToPots).controlSize(.small)
+            }
+        } else if item.isReserveTotal {
             HStack(spacing: 6) {
                 Text(item.planAmount.magnitude.formatted()).monospacedDigit()
                 Image(systemName: "lock.fill").font(.caption).foregroundStyle(.tertiary)
@@ -182,7 +211,20 @@ struct SettingsYearItemRow: View {
     }
 
     @ViewBuilder private var extraRow: some View {
-        if item.direction == .RES {
+        if item.direction == .UIT, item.distributionId != nil || !distributions.isEmpty {
+            GridRow {
+                Text("Hoort bij vaste storting").foregroundStyle(.secondary)
+                Picker("Vaste storting", selection: Binding(get: { item.distributionId }, set: { onLink($0) })) {
+                    Text("Geen").tag(Int64?.none)
+                    Divider()
+                    ForEach(distributions.filter { !$0.archived || $0.id == item.distributionId }) { option in
+                        Text(option.name).tag(Optional(option.id))
+                    }
+                }
+                .labelsHidden().fixedSize()
+                .help("Gekoppeld aan een vaste storting volgt het planbedrag vanzelf het totaal van die storting.")
+            }
+        } else if item.direction == .RES {
             GridRow {
                 Text("Vult pot").foregroundStyle(.secondary)
                 Picker("Pot", selection: Binding(get: { draft.potId }, set: { draft.potId = $0; commit() })) {
@@ -221,7 +263,7 @@ struct SettingsYearItemRow: View {
         var next = draft
         next.label = next.label.trimmingCharacters(in: .whitespaces)
         guard !next.label.isEmpty else { draft.label = item.label; return }
-        if !item.isReserveTotal {
+        if !item.isReserveTotal && item.distributionId == nil {
             guard let plan else { return }
             next.planAmount = item.direction == .IN ? plan.magnitude : -plan.magnitude
         }
@@ -230,4 +272,11 @@ struct SettingsYearItemRow: View {
         guard next != item else { return }
         onSave(next)
     }
+}
+
+/// Een vaste storting als keuze bij een post.
+struct SettingsDistributionOption: Identifiable, Equatable {
+    let id: Int64
+    let name: String
+    let archived: Bool
 }

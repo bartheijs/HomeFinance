@@ -17,11 +17,31 @@ enum TransactionsItemID: Hashable {
 struct TransactionsPending: Equatable {
     let transaction: BankTransaction
     let suggestion: Suggestion
+    /// De vaste storting waar deze transactie bij past, als die herkend is (gaat vóór de regels).
+    var match: DistributionMatch? = nil
 
     var id: Int64 { transaction.id ?? 0 }
+    /// Herkende vaste storting waarvan de regels precies het bankbedrag zijn: zo te boeken.
+    var bookableMatch: DistributionMatch? {
+        guard let match, match.distribution != nil, !match.allocations.isEmpty,
+              match.allocations.map(\.amount).sum() == transaction.amount else { return nil }
+        return match
+    }
     /// Het voorstel is bruikbaar zonder verder te kiezen.
-    var hasSuggestion: Bool { suggestion.confidence != .geen && suggestion.warnings.isEmpty }
-    var isCertain: Bool { suggestion.confidence == .hoog && suggestion.warnings.isEmpty }
+    var hasSuggestion: Bool {
+        match == nil ? suggestion.confidence != .geen && suggestion.warnings.isEmpty : bookableMatch != nil
+    }
+    var isCertain: Bool {
+        match == nil ? suggestion.confidence == .hoog && suggestion.warnings.isEmpty : bookableMatch != nil
+    }
+    /// De regels om mee te boeken volgens het voorstel (nagekeken, want de gebruiker klikt zelf).
+    func suggestedAllocations(kind: AccountKind) -> [Allocation] {
+        if let bookableMatch {
+            return bookableMatch.allocations.map { var a = $0; a.reviewed = true; return a }
+        }
+        return [TransactionsDraft(pending: self, kind: kind).allocation(
+            amount: transaction.amount, kind: kind, ruleId: suggestion.ruleId, confidence: suggestion.confidence)]
+    }
 }
 
 struct TransactionsFeedItem: Identifiable, Equatable {
@@ -43,7 +63,7 @@ struct TransactionsFeedItem: Identifiable, Equatable {
     var day: Day { entry?.day ?? pending?.transaction.day ?? Day.today() }
     var amount: Money { entry?.amount ?? pending?.transaction.amount ?? .zero }
     var title: String {
-        let text = entry?.label ?? pending?.suggestion.label ?? ""
+        let text = entry?.label ?? pending?.match?.distribution?.name ?? pending?.suggestion.label ?? ""
         return text.isEmpty ? "Zonder omschrijving" : text
     }
     var bankTransactionId: Int64? { entry?.bankTransactionId ?? pending?.id }
@@ -184,8 +204,21 @@ struct TransactionsDraft: Equatable {
     var note = ""
     /// Tijdelijk geleend van spaar (alleen betaalrekening).
     var temporaryLoan = false
+    /// "yyyy-MM": de maand waarin de boeking meetelt; nil = de maand van de datum.
+    var period: String?
 
     init() {}
+
+    /// Neemt een bestaande omschrijving over, met de post en tags die er meestal bij horen
+    /// als die hier nog niet gekozen zijn.
+    mutating func adopt(_ suggestion: LabelSuggestion, lookups: TransactionsLookups, kind: AccountKind) {
+        label = suggestion.label
+        if kind == .betaal, itemId == nil, let itemLabel = suggestion.itemLabel,
+           let item = lookups.item(label: itemLabel, year: day.year) {
+            itemId = item.id
+        }
+        if tagIds.isEmpty { tagIds = Set(suggestion.tags.map(\.id)) }
+    }
 
     init(row: EntryRow) {
         label = row.label; day = row.day
@@ -193,6 +226,7 @@ struct TransactionsDraft: Equatable {
         itemId = row.budgetItemId; potId = row.potId; reimburse = row.reimburse
         tagIds = Set(row.tags.map(\.id)); note = row.note
         temporaryLoan = row.temporaryLoan
+        period = row.period
     }
 
     init(pending p: TransactionsPending, kind: AccountKind) {
@@ -229,7 +263,7 @@ struct TransactionsDraft: Equatable {
                           potId: kind == .spaar ? potId : (wantsReimburse ? potId : nil),
                           reimburse: wantsReimburse, tagIds: tagIds.sorted(), note: note,
                           ruleId: ruleId, confidence: confidence, reviewed: true,
-                          temporaryLoan: kind == .betaal && temporaryLoan)
+                          temporaryLoan: kind == .betaal && temporaryLoan, period: period)
     }
 }
 
@@ -271,6 +305,14 @@ struct TransactionsSplitTarget: Identifiable {
     var id: Int64 { transaction.id ?? 0 }
 }
 
+/// Waarvoor de sheet Verrekenen opent: een tag, optioneel met een bijschrijving als terugstorting.
+struct TransactionsSettleTarget: Identifiable {
+    let tagId: Int64
+    let tagName: String
+    var deposit: EntryRow?
+    var id: Int64 { tagId }
+}
+
 struct TransactionsSummary: Equatable {
     var count: Int
     var sum: Money
@@ -297,6 +339,13 @@ final class TransactionsStore {
     private(set) var summary: TransactionsSummary?
     /// Wat er nu tijdelijk van spaar geleend is en nog niet is teruggeboekt.
     private(set) var loanOutstanding = Money.zero
+    /// Som van alle gevonden boekingen (bij zoeken of filteren).
+    private(set) var foundSum = Money.zero
+    /// Bestaande omschrijvingen, om aan te vullen tijdens het typen.
+    private(set) var labels: [LabelSuggestion] = []
+    /// Tags die verrekend worden en waar nog iets van openstaat.
+    private(set) var settlements: [TagSettlementSummary] = []
+    var settleTarget: TransactionsSettleTarget?
 
     var selection = Set<TransactionsItemID>()
     var showDetail = false
@@ -311,6 +360,11 @@ final class TransactionsStore {
     private(set) var original = TransactionsDraft()
     private(set) var draftFor: TransactionsItemID?
     private(set) var draftVersion = 0
+    /// Vaste storting bij de gekozen nieuwe transactie (nil = zelf kiezen), en waar een verschil heen gaat.
+    var matchChoice: DistributionMatch?
+    var differencePotId: Int64?
+    /// Een open verwachting die bij de gekozen boeking past.
+    private(set) var forecast: ForecastItem?
 
     /// Laatst gekozen posten (op label, want posten bestaan per jaar) en potten, voor bovenaan de keuzelijst.
     private(set) var recentItemLabels: [String] = []
@@ -347,26 +401,35 @@ final class TransactionsStore {
 
         pendingAll = model.read([]) { db in
             let suggestions = try RuleEngine.suggestAll(db, accountId: accountId)
+            // Vaste stortingen worden vóór de regels herkend.
+            let matches = try DistributionService.recognizeAll(db, accountId: accountId)
             var list: [TransactionsPending] = []
             for item in try Insight.reviewQueue(db, accountId: accountId) {
                 guard let id = item.transaction.id else { continue }
                 let suggestion = try suggestions[id] ?? RuleEngine.suggest(for: item.transaction, db)
-                list.append(TransactionsPending(transaction: item.transaction, suggestion: suggestion))
+                list.append(TransactionsPending(transaction: item.transaction, suggestion: suggestion, match: matches[id]))
             }
             return list
         }
         loanOutstanding = model.read(Money.zero) { try Insight.temporaryLoanOutstanding($0, on: model.today) }
+        let kind = kind
+        labels = model.read(labels) { try Insight.allLabels($0, accountKind: kind) }
+        settlements = model.read([]) {
+            try Insight.settlementOverview($0, today: model.today).filter { $0.openCount > 0 && $0.outstanding > .zero }
+        }
         if criteria.loanOnly {
             // EntryFilter kent dit filter niet; HFInsight levert de gemarkeerde boekingen in één keer.
             entries = model.read([]) { try Insight.temporaryLoanEntries($0).filter { $0.accountId == accountId } }
             totalEntryCount = entries.count
+            foundSum = entries.map(\.amount).sum()
         } else if criteria.status == .newOnly {
-            entries = []; totalEntryCount = 0
+            entries = []; totalEntryCount = 0; foundSum = .zero
         } else {
             let filter = criteria.entryFilter(accountId: accountId, year: model.year, limit: limit)
             if let result = model.read(nil as EntrySearchResult?, { try Insight.searchEntries($0, filter: filter) }) {
                 entries = result.rows
                 totalEntryCount = result.totalCount
+                foundSum = result.totalSum
             }
         }
         loadSummary(model, accountId: accountId)
@@ -464,8 +527,12 @@ final class TransactionsStore {
         }
         if let row = item?.entry {
             extra = model.read(TransactionsExtra()) { try TransactionsExtra.fetch($0, row: row) }
+            forecast = row.accountKind == .spaar && row.potId != nil
+                ? model.read(nil as ForecastItem?) { try ForecastService.suggestRealization($0, entryId: row.id).first }
+                : nil
         } else {
             extra = TransactionsExtra()
+            forecast = nil
         }
     }
 
@@ -476,6 +543,8 @@ final class TransactionsStore {
         draft = fresh
         original = fresh
         draftVersion += 1
+        matchChoice = single?.pending?.match
+        differencePotId = nil
     }
 
     func closeDetail() {
@@ -541,16 +610,12 @@ final class TransactionsStore {
             return
         }
         let kind = kind
-        let requests = usable.map { p in
-            BookingRequest(bankTransactionId: p.id, allocations: [
-                TransactionsDraft(pending: p, kind: kind).allocation(
-                    amount: p.transaction.amount, kind: kind, ruleId: p.suggestion.ruleId, confidence: p.suggestion.confidence)])
-        }
+        let requests = usable.map { BookingRequest(bankTransactionId: $0.id, allocations: $0.suggestedAllocations(kind: kind)) }
         if usable.count == 1, selection.contains(.bank(usable[0].id)) { reselectBankId = usable[0].id }
-        let name = targetName(TransactionsDraft(pending: usable[0], kind: kind))
+        let name = usable[0].bookableMatch?.distribution?.name ?? targetName(TransactionsDraft(pending: usable[0], kind: kind))
         run(model, { usable.count == 1 ? "Geboekt op ‘\(name)’" : "\(TransactionsFormat.number(usable.count)) transacties geboekt" }) { db in
             try BookingService.bookAll(db, requests)
-            for ruleId in usable.compactMap(\.suggestion.ruleId) { try RuleEngine.recordUse(ruleId: ruleId, db) }
+            for ruleId in usable.filter({ $0.match == nil }).compactMap(\.suggestion.ruleId) { try RuleEngine.recordUse(ruleId: ruleId, db) }
         }
     }
 
@@ -815,6 +880,115 @@ final class TransactionsStore {
         return ok
     }
 
+    // MARK: Begrotingsmaand
+
+    /// Laat boekingen in een andere maand meetellen ("yyyy-MM"; nil = de maand van de datum).
+    func setPeriod(_ model: AppModel, ids: [TransactionsItemID], period: String?) {
+        let rows = entries(in: ids)
+        guard !rows.isEmpty else { return }
+        let parts = period?.split(separator: "-").compactMap { Int($0) } ?? []
+        let year = parts.count == 2 ? parts[0] : nil, month = parts.count == 2 ? parts[1] : nil
+        run(model, {
+            guard let month else { return "Telt weer mee in de maand van de datum" }
+            return "Telt nu mee in \(Day.monthNames[month - 1]). Het saldo van de rekening verandert niet."
+        }) { db in
+            for row in rows { try EntryService.setPeriod(db, entryId: row.id, year: year, month: month) }
+        }
+    }
+
+    // MARK: Omschrijving overnemen
+
+    /// Zet een bestaande omschrijving op een boeking, met de post en tags die er meestal bij horen
+    /// als de boeking die nog niet heeft.
+    func applyLabel(_ model: AppModel, row: EntryRow, _ suggestion: LabelSuggestion) {
+        var d = TransactionsDraft(row: row)
+        d.adopt(suggestion, lookups: lookups, kind: row.accountKind)
+        if draftFor == .entry(row.id) { draft.label = d.label; original.label = d.label }
+        run(model, { "Omschrijving ‘\(d.label)’ overgenomen" }) { db in
+            var e = try EntryService.draft(db, entryId: row.id)
+            e.label = d.label
+            if row.accountKind == .betaal { e.budgetItemId = d.itemId }
+            e.tagIds = d.tagIds.sorted()
+            try EntryService.update(db, entryId: row.id, e)
+        }
+    }
+
+    // MARK: Vaste storting
+
+    /// Kiest één van meer passende vaste stortingen voor de gekozen nieuwe transactie.
+    func chooseDistribution(_ model: AppModel, _ p: TransactionsPending, distributionId: Int64) {
+        matchChoice = model.read(matchChoice) {
+            try DistributionService.proposal($0, distributionId: distributionId, for: p.transaction)
+        }
+        differencePotId = nil
+    }
+
+    /// Wat er na de vaste verdeling overblijft van het bankbedrag (nul als het precies past).
+    func distributionRest(_ p: TransactionsPending) -> Money {
+        guard let match = matchChoice else { return .zero }
+        return p.transaction.amount - match.allocations.map(\.amount).sum()
+    }
+
+    /// Boekt volgens de vaste storting; een verschil gaat naar de gekozen pot of blijft niet toegewezen.
+    func bookDistribution(_ model: AppModel, _ p: TransactionsPending) {
+        guard let match = matchChoice, let distribution = match.distribution, !match.allocations.isEmpty else { return }
+        var allocations = match.allocations.map { a -> Allocation in var a = a; a.reviewed = true; return a }
+        let rest = distributionRest(p)
+        if !rest.isZero {
+            allocations.append(Allocation(amount: rest, label: "\(distribution.name): verschil",
+                                          potId: match.side == .destination ? differencePotId : nil, reviewed: true))
+        }
+        let count = allocations.count
+        if selection.contains(.bank(p.id)) { reselectBankId = nil }
+        run(model, { count == 1 ? "Geboekt op ‘\(distribution.name)’" : "‘\(distribution.name)’ geboekt, verdeeld over \(count) regels" }) { db in
+            try BookingService.book(db, bankTransactionId: p.id, allocations: allocations)
+        }
+    }
+
+    // MARK: Verwachting
+
+    func realizeForecast(_ model: AppModel, _ item: ForecastItem, row: EntryRow) {
+        guard let id = item.id else { return }
+        run(model, { "Verwachting afgevinkt" }) { try ForecastService.markRealized($0, forecastItemId: id, entryId: row.id) }
+    }
+
+    // MARK: Verrekenen
+
+    @discardableResult
+    func settle(_ model: AppModel, tagId: Int64, entryIds: [Int64], day: Day, depositEntryId: Int64?) -> Bool {
+        var result: SettlementResult?
+        return run(model, {
+            guard let result else { return "Verrekend" }
+            var text = "\(result.settlement.amount.formatted()) verrekend"
+            if let difference = result.difference, !difference.isZero {
+                text += difference > .zero ? "; \(difference.formatted()) te veel teruggestort" : "; \(difference.magnitude.formatted()) te weinig teruggestort"
+            } else if result.deposit == nil {
+                text += "; de terugstorting koppel je later"
+            }
+            return text
+        }) { db in
+            result = try SettlementService.settle(db, tagId: tagId, entryIds: entryIds, day: day, depositEntryId: depositEntryId)
+        }
+    }
+
+    func linkDeposit(_ model: AppModel, settlementId: Int64, depositEntryId: Int64) {
+        run(model, { "Terugstorting gekoppeld aan de verrekening" }) {
+            try SettlementService.linkDeposit($0, settlementId: settlementId, depositEntryId: depositEntryId)
+        }
+    }
+
+    /// Opent de sheet Verrekenen voor een tag, optioneel met een bijschrijving als terugstorting.
+    func startSettle(tagId: Int64, deposit: EntryRow? = nil) {
+        guard let tag = lookups.tag(tagId) else { return }
+        settleTarget = TransactionsSettleTarget(tagId: tagId, tagName: tag.name, deposit: deposit)
+    }
+
+    func deleteSettlement(_ model: AppModel, settlementId: Int64) {
+        run(model, { "Verrekening ongedaan gemaakt; de boekingen staan weer open" }) {
+            try SettlementService.delete($0, settlementId: settlementId)
+        }
+    }
+
     // MARK: Splitsen en notitie
 
     func startSplit(_ model: AppModel, _ item: TransactionsFeedItem) {
@@ -834,7 +1008,7 @@ final class TransactionsStore {
                     d.label = entry.label; d.day = entry.day
                     d.isIncome = !entry.amount.isNegative; d.magnitude = entry.amount.magnitude
                     d.itemId = entry.budgetItemId; d.potId = entry.potId; d.reimburse = entry.reimburse
-                    d.note = entry.note; d.temporaryLoan = entry.temporaryLoan
+                    d.note = entry.note; d.temporaryLoan = entry.temporaryLoan; d.period = entry.period
                     d.tagIds = Set(try EntryService.tagIds(db, entryId: entry.id ?? 0))
                     parts.append(TransactionsSplitPart(draft: d))
                 }
@@ -877,6 +1051,22 @@ enum TransactionsFormat {
     private static let weekdays = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"]
 
     static let loanHelp = "Geld dat je even van spaar haalt en later terugboekt. Het telt niet mee als besteedbaar zolang het uitstaat. Markeer ook de terugboeking."
+
+    static let periodHelp = "Voor iets dat eind van de maand is betaald maar bij de volgende maand hoort. Het saldo van je rekening verandert er niet door."
+
+    /// "yyyy-MM" voor de maand vóór (−1), van (0) of na (+1) de datum; nil voor de maand van de datum zelf.
+    static func period(_ day: Day, offset: Int) -> (key: String?, month: Int, year: Int) {
+        var month = day.month + offset, year = day.year
+        if month < 1 { month += 12; year -= 1 }
+        if month > 12 { month -= 12; year += 1 }
+        return (offset == 0 ? nil : String(format: "%04d-%02d", year, month), month, year)
+    }
+
+    /// Maandnummer uit "yyyy-MM".
+    static func month(of period: String?) -> Int? {
+        guard let parts = period?.split(separator: "-"), parts.count == 2, let m = Int(parts[1]), (1...12).contains(m) else { return nil }
+        return m
+    }
 
     static func number(_ n: Int) -> String { n.formatted(.number.locale(dutch)) }
 

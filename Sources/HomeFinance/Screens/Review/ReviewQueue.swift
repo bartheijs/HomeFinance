@@ -14,7 +14,7 @@ struct ReviewQueueView: View {
                     section("Na te kijken", store.toCheckRows,
                             help: "Geen regel gevonden, of de regel is niet zeker van de post of het bedrag. Kijk deze zelf na.")
                     section("Zeker", store.rows.filter { $0.group == .certain },
-                            help: "Tegenpartij en bedrag kloppen met een regel. Deze kun je in één keer boeken.")
+                            help: "Tegenpartij en bedrag kloppen met een regel of een vaste storting. Deze kun je in één keer boeken.")
                 }
                 .padding(8)
             }
@@ -103,9 +103,17 @@ struct ReviewQueueRow: View {
     /// Het voorstel als één label; oranje alleen als je zelf nog moet kiezen of het bedrag afwijkt.
     @ViewBuilder private func proposal(_ draft: ReviewDraft) -> some View {
         let s = row.suggestion
-        if draft.isSplit {
-            label(row.distribution != nil && !store.isEdited(row) ? "Verdelen over \(draft.lines.count) potten"
-                                                                  : "Gesplitst in \(draft.lines.count)")
+        if let match = row.match, !store.isEdited(row) {
+            if let distribution = match.distribution {
+                label(match.exactAmount ? distribution.name : "\(distribution.name) · ander bedrag", attention: !match.exactAmount)
+                    .help(match.exactAmount ? "Herkend als vaste storting."
+                                            : "Herkend als vaste storting, maar het bedrag wijkt \(match.difference.formatted(alwaysSign: true)) af.")
+            } else {
+                label("Kies vaste storting", attention: true)
+                    .help("Er passen meer vaste stortingen bij deze overboeking.")
+            }
+        } else if draft.isSplit {
+            label("Gesplitst in \(draft.lines.count)")
         } else if draft.target == .none, row.pair != nil {
             label("Overboeking")
         } else if s.amountDiffers, !store.isEdited(row) {

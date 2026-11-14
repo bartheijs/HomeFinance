@@ -7,6 +7,8 @@ import HFInsight
 struct ReportsTagsTab: View {
     let data: ReportsData
     let year: Int
+    /// "Dit jaar verrekend" geldt voor het lopende jaar; bij een ander jaar blijft het weg.
+    var showsSettledThisYear = true
     @Binding var tagId: Int64?
     @Binding var month: Int?
     @State private var hover: String?
@@ -55,10 +57,23 @@ struct ReportsTagsTab: View {
         return text
     }
 
+    private func settlementLine(_ s: TagSettlementSummary) -> String {
+        var text = s.openCount == 0
+            ? "Verrekenen: er staat niets open."
+            : "Verrekenen: \(s.outstanding.formatted()) staat nog open (\(s.openCount) \(s.openCount == 1 ? "boeking" : "boekingen"))."
+        if showsSettledThisYear { text += " Dit jaar verrekend: \(s.settledThisYear.formatted())." }
+        return text
+    }
+
     private func detail(_ tag: TagYearRow) -> some View {
         VStack(alignment: .leading, spacing: 24) {
             ReportsQuestion("Hoeveel \(tag.yearToDate.isNegative || tag.yearToDate.isZero ? "geven we per maand uit aan" : "komt er per maand binnen via") \(tag.name)?",
                             detail: summaryLine(tag))
+            if let settlement = data.settlements.first(where: { $0.id == tag.id }) {
+                Label(settlementLine(settlement), systemImage: "arrow.left.arrow.right")
+                    .foregroundStyle(.secondary)
+                    .help("Verrekenen: deze uitgaven worden later teruggestort op de betaalrekening. Openstaand is wat nog niet is teruggestort.")
+            }
             chart(tag).frame(height: 320)
             if let month {
                 VStack(alignment: .leading, spacing: 10) {

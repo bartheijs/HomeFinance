@@ -16,7 +16,7 @@ extension Backup {
     static let moneyColumns: [String: Set<String>] = [
         "account": ["openingBalance"],
         "budgetYear": ["antiRood", "tijdelijkAntiRood"],
-        "budgetItem": ["planAmount"],
+        "budgetItem": ["planAmount", "scenarioAmount"],
         "pot": ["monthlyAmount", "targetAmount"],
         "importBatch": ["openingBalance", "closingBalance"],
         "bankTransaction": ["amount", "balanceBefore"],
@@ -27,6 +27,7 @@ extension Backup {
         "settlement": ["amount"],
         "distributionLine": ["amount"],
         "forecastItem": ["amount"],
+        "goalPart": ["unitAmount"],
     ]
 
     /// Exporteert de complete dataset: één CSV per tabel (`<tabel>.csv`) in `folder`, met kopregel.

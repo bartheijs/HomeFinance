@@ -32,10 +32,11 @@ struct TransactionsSplitSheet: View {
             ScrollView {
                 VStack(spacing: 8) {
                     ForEach($parts) { $part in
-                        HStack(spacing: 8) {
-                            TextField("Omschrijving", text: $part.draft.label)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(minWidth: 150)
+                        HStack(alignment: .top, spacing: 8) {
+                            TransactionsLabelField(title: "Omschrijving", text: $part.draft.label, labels: store.labels) { suggestion in
+                                part.draft.adopt(suggestion, lookups: store.lookups, kind: target.kind)
+                            }
+                            .frame(minWidth: 150)
                             Group {
                                 switch target.kind {
                                 case .betaal:

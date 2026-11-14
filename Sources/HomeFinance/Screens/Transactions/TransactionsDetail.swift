@@ -1,6 +1,7 @@
 import SwiftUI
 import HFCore
 import HFInsight
+import HFBudget
 
 /// Het paneel rechts: één transactie in detail, of de acties voor een selectie van meer regels.
 struct TransactionsDetailPanel: View {
@@ -62,9 +63,15 @@ private struct TransactionsSingleDetail: View {
                         Label("Het jaar \(String(item.day.year)) is afgesloten: bekijken kan, wijzigen niet.", systemImage: "lock.fill")
                             .font(.callout).foregroundStyle(.secondary)
                     }
+                    if let row, let forecast = store.forecast { forecastBox(forecast, row: row) }
                     Group {
                         actionRow
-                        assignment
+                        if let p = pending, let match = store.matchChoice {
+                            TransactionsDistributionSection(store: store, pending: p, match: match)
+                        } else {
+                            assignment
+                        }
+                        if store.kind == .betaal { periodRow }
                         more
                     }
                     .disabled(locked)
@@ -205,6 +212,48 @@ private struct TransactionsSingleDetail: View {
         }
     }
 
+    // MARK: Telt mee in
+
+    private var periodBinding: Binding<String?> {
+        if pending != nil { return $store.draft.period }
+        return Binding(get: { row?.period }, set: { store.setPeriod(model, ids: ids, period: $0) })
+    }
+
+    private var periodRow: some View {
+        let current = periodBinding.wrappedValue
+        let options = [-1, 0, 1].map { TransactionsFormat.period(item.day, offset: $0) }
+        return HStack(spacing: 8) {
+            Text("Telt mee in").font(.callout).foregroundStyle(.secondary)
+            Picker("Telt mee in", selection: periodBinding) {
+                ForEach(options, id: \.month) { option in
+                    Text(Day.monthNames[option.month - 1] + (option.year == item.day.year ? "" : " \(String(option.year))"))
+                        .tag(option.key)
+                }
+                // Een eerder gekozen maand verder weg blijft zichtbaar.
+                if let current, !options.contains(where: { $0.key == current }), let month = TransactionsFormat.month(of: current) {
+                    Text(Day.monthNames[month - 1]).tag(String?.some(current))
+                }
+            }
+            .labelsHidden()
+            .fixedSize()
+            Spacer(minLength: 0)
+        }
+        .help(TransactionsFormat.periodHelp)
+    }
+
+    private func forecastBox(_ forecast: ForecastItem, row: EntryRow) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Is dit de verwachte \(forecast.label.isEmpty ? "boeking" : "‘\(forecast.label)’") van \(forecast.amount.magnitude.formatted())?")
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Ja, afvinken") { store.realizeForecast(model, forecast, row: row) }
+                .help("Vinkt de verwachting van \(forecast.day.short(withYear: true)) af en koppelt deze boeking eraan; hij telt dan niet meer mee in de vooruitblik")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.info.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+    }
+
     // MARK: Meer
 
     private var tagBinding: Binding<Set<Int64>> {
@@ -243,9 +292,10 @@ private struct TransactionsSingleDetail: View {
         DisclosureGroup(isExpanded: $store.showMore) {
             VStack(alignment: .leading, spacing: 14) {
                 field("Omschrijving") {
-                    TextField("Omschrijving", text: $store.draft.label)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit { store.saveText(model) }
+                    TransactionsLabelField(title: "Omschrijving", text: $store.draft.label, labels: store.labels, onPick: { suggestion in
+                        if let row { store.applyLabel(model, row: row, suggestion) }
+                        else { store.draft.adopt(suggestion, lookups: store.lookups, kind: store.kind) }
+                    }, onSubmit: { store.saveText(model) })
                 }
                 if isManual {
                     field("Datum") { TransactionsDayPicker(day: $store.draft.day) }
@@ -288,6 +338,14 @@ private struct TransactionsSingleDetail: View {
                     Button("Splitsen…", systemImage: "square.split.2x1") { store.startSplit(model, item) }
                         .disabled(inTransfer)
                         .help("Verdeel deze transactie over meer posten, bv. boodschappen en een cadeau op één bon")
+                }
+                if let row, row.accountKind == .betaal, !row.amount.isNegative {
+                    ForEach(store.lookups.tags.filter(\.settles)) { tag in
+                        Button("Verrekening \(tag.name)…", systemImage: "arrow.left.arrow.right") {
+                            store.startSettle(tagId: tag.id ?? 0, deposit: row)
+                        }
+                        .help("Deze bijschrijving is de terugstorting voor \(tag.name): verreken er de openstaande boekingen mee")
+                    }
                 }
                 if store.extra.parts.count > 1 { partsSection }
                 if let counter = store.extra.counter { counterSection(counter) }
@@ -416,10 +474,13 @@ private struct TransactionsSingleDetail: View {
                 Button("Sla over") { store.skip(model, ids: ids) }
                     .help("Niet boeken, bv. omdat je hem al met de hand hebt ingevoerd")
                 Spacer()
-                Button("Boek") { store.book(model, p, with: store.draft) }
+                Button("Boek") {
+                    if store.matchChoice != nil { store.bookDistribution(model, p) } else { store.book(model, p, with: store.draft) }
+                }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(locked || store.draft.label.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(locked || (store.matchChoice.map { $0.distribution == nil }
+                                         ?? store.draft.label.trimmingCharacters(in: .whitespaces).isEmpty))
                     .help("Boekt de transactie met deze keuzes (⌘⏎). Wijkt je keuze af van het voorstel, dan leert de app ervan.")
             } else {
                 Text(store.isTextDirty ? "Getypte tekst is nog niet bewaard" : "Keuzes worden meteen bewaard")

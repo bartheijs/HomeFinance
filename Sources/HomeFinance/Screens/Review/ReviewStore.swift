@@ -22,9 +22,11 @@ struct ReviewSplitLine: Identifiable, Equatable {
     var amount: Money?
     var label = ""
     var target: ReviewTarget = .none
+    /// Het verschil tussen het gestorte bedrag en de vaste storting; de gebruiker kiest waar het heen gaat.
+    var isDifference = false
 
     static func == (l: Self, r: Self) -> Bool {
-        l.amount == r.amount && l.label == r.label && l.target == r.target
+        l.amount == r.amount && l.label == r.label && l.target == r.target && l.isDifference == r.isDifference
     }
 }
 
@@ -38,6 +40,8 @@ struct ReviewDraft: Equatable {
     var note = ""
     /// Geld dat even van spaar is gehaald (of de terugboeking daarvan); telt niet mee als besteedbaar.
     var temporaryLoan = false
+    /// "yyyy-MM": de maand waarin de boeking meetelt; nil = de maand van de datum.
+    var period: String?
     var isSplit = false
     var lines: [ReviewSplitLine] = []
 }
@@ -83,8 +87,8 @@ struct ReviewRow: Identifiable, Equatable {
     let suggestion: Suggestion
     let cleanLabel: String
     let group: ReviewGroup
-    /// Voorstel om een storting over de reserveringspotten te verdelen.
-    let distribution: [Allocation]?
+    /// Herkend als (een kant van) een vaste storting; gaat vóór de regels.
+    let match: DistributionMatch?
     /// Deze transactie is één kant van een overboeking tussen eigen rekeningen.
     let pair: TransferPair?
 
@@ -105,7 +109,9 @@ struct ReviewImportPart: Identifiable {
     var fileName: String
     var accountName: String
     var preview: ImportPreview
-    /// Eerste import na de Excel-historie: positie (in tijdsvolgorde) van de eerste regel die volgens het
+    /// De rekening heeft Excel-historie; anders start hij met alleen een beginsaldo.
+    var hasHistory = false
+    /// Eerste import van de rekening: positie (in tijdsvolgorde) van de eerste regel die volgens het
     /// eerste voorstel meegaat. Daaromheen toont het venster de regels om zelf te kiezen.
     var seamCenter: Int?
 }
@@ -158,12 +164,16 @@ final class ReviewStore {
     var showMore = false
     /// Wat er nu uitstaat aan tijdelijk van spaar geleend geld.
     var loanOutstanding: Money = .zero
+    /// Bestaande omschrijvingen, om aan te vullen bij het typen.
+    var labels: [LabelSuggestion] = []
 
     private var itemsByYear: [Int: [BudgetItem]] = [:]
     private var itemsById: [Int64: BudgetItem] = [:]
     private var potsById: [Int64: Pot] = [:]
     private var drafts: [Int64: ReviewDraft] = [:]
     private var defaults: [Int64: ReviewDraft] = [:]
+    /// De vaste storting die de gebruiker koos toen er meer kandidaten waren.
+    private var chosenMatches: [Int64: DistributionMatch] = [:]
 
     // MARK: Afgeleid
 
@@ -227,21 +237,23 @@ final class ReviewStore {
                 return
             }
             let suggestions = try RuleEngine.suggestAll(db, accountId: accountId)
+            let matches = try DistributionService.recognizeAll(db, accountId: accountId)
+            labels = try Insight.allLabels(db, accountKind: account.kind)
             pairs = try TransferService.findTransferPairs(db).filter {
                 ($0.from.accountId == accountId || $0.to.accountId == accountId)
                     && ($0.from.status == .nieuw || $0.to.status == .nieuw)
             }
-            rows = try queue.filter { $0.transaction.accountId == accountId }.map { item in
+            rows = queue.filter { $0.transaction.accountId == accountId }.map { item in
                 let tx = item.transaction
                 let suggestion = suggestions[item.id] ?? Suggestion(bankTransactionId: item.id)
-                let distribution = account.kind == .spaar && !tx.amount.isNegative
-                    ? try PotService.distribution(db, for: tx.amount, accountId: accountId) : nil
+                let match = chosenMatches[item.id] ?? matches[item.id]
                 let pair = pairs.first { $0.from.id == tx.id || $0.to.id == tx.id }
                 return ReviewRow(
                     item: item, suggestion: suggestion,
                     cleanLabel: LabelCleaner.cleanLabel(counterparty: tx.counterpartyName, description: tx.descriptionText),
-                    group: Self.group(suggestion, hasProposal: distribution != nil || pair != nil),
-                    distribution: distribution, pair: pair)
+                    group: match.map { $0.distribution != nil && $0.exactAmount ? .certain : .doubt }
+                        ?? Self.group(suggestion, hasProposal: pair != nil),
+                    match: match, pair: pair)
             }
             .sorted { ($0.group.rawValue, $0.tx.day, $0.id) < ($1.group.rawValue, $1.tx.day, $1.id) }
 
@@ -254,6 +266,7 @@ final class ReviewStore {
 
         let ids = Set(rows.map(\.id))
         drafts = drafts.filter { ids.contains($0.key) }
+        chosenMatches = chosenMatches.filter { ids.contains($0.key) }
         defaults = defaults.filter { ids.contains($0.key) }
         for row in rows {
             let fresh = makeDefault(row)
@@ -280,6 +293,26 @@ final class ReviewStore {
         var draft = ReviewDraft(label: s.label.isEmpty || s.label == "Onbekend" ? row.cleanLabel : s.label,
                                 tagIds: Set(s.tagIds))
         if draft.label.isEmpty { draft.label = "Onbekend" }
+        // Een vaste storting gaat vóór de regels.
+        if let match = row.match, match.distribution != nil, !match.allocations.isEmpty {
+            draft.tagIds = []
+            if match.side == .source, let only = match.allocations.first {
+                draft.label = only.label
+                draft.target = only.budgetItemId.flatMap { itemsById[$0] != nil ? .item($0) : nil } ?? .none
+                draft.temporaryLoan = false
+            } else {
+                draft.isSplit = true
+                draft.lines = match.allocations.map { a in
+                    ReviewSplitLine(amount: a.amount, label: a.label, target: a.potId.map { .pot($0) } ?? .none)
+                }
+                if !match.difference.isZero {
+                    draft.lines.append(ReviewSplitLine(amount: match.difference,
+                                                       label: "\(match.distribution?.name ?? "Storting"): verschil",
+                                                       target: .none, isDifference: true))
+                }
+            }
+            return draft
+        }
         switch kind {
         case .betaal:
             if let id = s.budgetItemId, itemsById[id] != nil { draft.target = .item(id) }
@@ -288,12 +321,6 @@ final class ReviewStore {
             draft.temporaryLoan = looksLikeLoanReturn(row)
         case .spaar:
             if let id = s.potId, potsById[id]?.accountId == row.tx.accountId { draft.target = .pot(id) }
-            if draft.target == .none, let distribution = row.distribution {
-                draft.isSplit = true
-                draft.lines = distribution.map { a in
-                    ReviewSplitLine(amount: a.amount, label: a.label, target: a.potId.map { .pot($0) } ?? .none)
-                }
-            }
         }
         return draft
     }
@@ -302,6 +329,27 @@ final class ReviewStore {
     /// dit lijkt de terugboeking van wat tijdelijk van spaar is gehaald.
     func looksLikeLoanReturn(_ row: ReviewRow) -> Bool {
         kind == .betaal && row.pair != nil && row.tx.amount.isNegative && loanOutstanding > .zero
+    }
+
+    /// Er passen meer vaste stortingen: de gebruiker kiest er één, daarna volgt het voorstel van die storting.
+    func chooseDistribution(_ distribution: Distribution, for row: ReviewRow, _ model: AppModel) {
+        guard let id = distribution.id else { return }
+        let ok = model.perform {
+            chosenMatches[row.id] = try model.db.read {
+                try DistributionService.proposal($0, distributionId: id, for: row.tx)
+            }
+        }
+        if ok { drafts[row.id] = nil; load(model) }
+    }
+
+    /// De drie maanden rond de datum van de transactie, als (periode, naam); nil = de maand van de datum zelf.
+    func periodChoices(for row: ReviewRow) -> [(period: String?, title: String)] {
+        (-1...1).map { offset in
+            var year = row.tx.day.year, month = row.tx.day.month + offset
+            if month < 1 { month = 12; year -= 1 } else if month > 12 { month = 1; year += 1 }
+            return (offset == 0 ? nil : String(format: "%04d-%02d", year, month),
+                    "\(Day.monthNames[month - 1]) \(year)")
+        }
     }
 
     func draft(for row: ReviewRow) -> ReviewDraft { drafts[row.id] ?? defaults[row.id] ?? makeDefault(row) }
@@ -344,7 +392,8 @@ final class ReviewStore {
                 let t = ids(line.target)
                 let label = line.label.trimmingCharacters(in: .whitespaces)
                 return Allocation(amount: line.amount ?? .zero, label: label.isEmpty ? draft.label : label,
-                                  budgetItemId: t.item, potId: t.pot, tagIds: tagIds, note: note, reviewed: reviewed)
+                                  budgetItemId: t.item, potId: t.pot, tagIds: tagIds, note: note, reviewed: reviewed,
+                                  period: draft.period)
             }
         }
         let t = ids(draft.target)
@@ -355,7 +404,8 @@ final class ReviewStore {
                            budgetItemId: t.item, potId: kind == .betaal ? (reimburse ? draft.reimbursePotId : nil) : t.pot,
                            reimburse: reimburse, tagIds: tagIds, note: note,
                            ruleId: sameTarget ? s.ruleId : nil, confidence: sameTarget ? s.confidence : nil,
-                           reviewed: reviewed, temporaryLoan: kind == .betaal && draft.temporaryLoan)]
+                           reviewed: reviewed, temporaryLoan: kind == .betaal && draft.temporaryLoan,
+                           period: draft.period)]
     }
 
     private func correction(for row: ReviewRow) -> Correction {
@@ -428,7 +478,8 @@ final class ReviewStore {
         let ok = model.perform {
             try model.db.write { db in
                 _ = try BookingService.book(db, bankTransactionId: row.id, allocations: allocations)
-                if !draft.isSplit { learned = try RuleEngine.learn(from: correction(for: row), db) }
+                // Van een vaste storting leert de app geen regel: die wordt al herkend.
+                if !draft.isSplit, row.match == nil { learned = try RuleEngine.learn(from: correction(for: row), db) }
             }
         }
         guard ok else { return }
@@ -521,7 +572,7 @@ final class ReviewStore {
     // MARK: Overboekingen tussen eigen rekeningen
 
     /// Koppelt de gevonden paren. Een kant die nog niet geboekt is, krijgt eerst het voorstel van de regels
-    /// (of de verdeling over de reserveringspotten), zodat de post of pot niet verloren gaat.
+    /// (of de verdeling van een vaste storting met exact bedrag), zodat de post of pot niet verloren gaat.
     func linkPairs(_ model: AppModel, only pair: TransferPair? = nil) {
         let chosen = pair.map { [$0] } ?? pairs
         guard !chosen.isEmpty else { return }
@@ -531,9 +582,9 @@ final class ReviewStore {
                 for pair in chosen {
                     for side in [pair.from, pair.to] where side.status == .nieuw {
                         guard let id = side.id, let kind = kinds[side.accountId] else { continue }
-                        if kind == .spaar, !side.amount.isNegative,
-                           let split = try PotService.distribution(db, for: side.amount, accountId: side.accountId) {
-                            _ = try BookingService.book(db, bankTransactionId: id, allocations: split)
+                        if let match = try DistributionService.recognize(db, bankTransaction: side),
+                           match.distribution != nil, match.exactAmount, !match.allocations.isEmpty {
+                            _ = try BookingService.book(db, bankTransactionId: id, allocations: match.allocations)
                             continue
                         }
                         let s = try RuleEngine.suggest(for: side, db)
@@ -585,29 +636,25 @@ final class ReviewStore {
         }
     }
 
-    /// Leest het bestand. Bij de eerste bankimport na de Excel-historie (`needsSeam`) zoekt HFImport op saldo
-    /// waar het bestand aansluit op de administratie, met de laatste historiedag als terugval.
+    /// Leest het bestand. Bij de eerste bankimport van een rekening (`needsSeam`) zoekt HFImport op saldo
+    /// waar het bestand aansluit op de administratie (beginsaldo of Excel-historie), met een dag als terugval.
     private func makePending(data: Data, fileName: String, _ model: AppModel) throws -> ReviewPendingImport? {
         let importer = BankImporter(database: model.db)
-        // Het saldo over alle boekingen: de historieposten staan niet op de echte dag.
-        let farFuture = Day(year: 9999, month: 12, day: 31) ?? model.today
-        func adminBalance(_ accountId: Int64) throws -> Money {
-            try model.db.read { try Insight.balance($0, accountId: accountId, on: farFuture) }
-        }
         if fileName.lowercased().hasSuffix(".zip") || data.starts(with: [0x50, 0x4B, 0x03, 0x04]) {
             var cutovers: [Int64: Day] = [:]
             var balances: [Int64: Money] = [:]
             for id in try model.db.read({ try Int64.fetchAll($0, sql: "SELECT id FROM account") })
             where try importer.needsSeam(accountId: id) {
-                cutovers[id] = try importer.historyCutover(accountId: id)
-                balances[id] = try adminBalance(id)
+                cutovers[id] = try importer.defaultSkipThrough(accountId: id)
+                balances[id] = try importer.resumeBalance(accountId: id)
             }
             let archive = try importer.previewArchive(data: data, fileName: fileName, skipThroughByAccount: cutovers,
                                                       resumeFromBalance: balances)
-            let parts = archive.importableItems.compactMap { item in
-                item.preview.map {
+            let parts = try archive.importableItems.compactMap { item in
+                try item.preview.map {
                     ReviewImportPart(fileName: item.fileName, accountName: item.account?.name ?? "Onbekende rekening",
-                                     preview: $0, seamCenter: Self.seamCenter($0))
+                                     preview: $0, hasHistory: try importer.historyCutover(accountId: $0.accountId) != nil,
+                                     seamCenter: Self.seamCenter($0))
                 }
             }
             return ReviewPendingImport(fileName: fileName, archive: archive, parts: parts, skipped: archive.skippedItems)
@@ -618,11 +665,13 @@ final class ReviewStore {
         let needsSeam = try importer.needsSeam(accountId: target)
         let preview = try importer.preview(
             data: data, fileName: fileName, accountId: target,
-            skipThrough: needsSeam ? try importer.historyCutover(accountId: target) : nil,
-            resumeFromBalance: needsSeam ? try adminBalance(target) : nil)
+            skipThrough: needsSeam ? try importer.defaultSkipThrough(accountId: target) : nil,
+            resumeFromBalance: needsSeam ? try importer.resumeBalance(accountId: target) : nil)
         return ReviewPendingImport(
             fileName: fileName,
-            parts: [ReviewImportPart(fileName: fileName, accountName: name, preview: preview, seamCenter: Self.seamCenter(preview))],
+            parts: [ReviewImportPart(fileName: fileName, accountName: name, preview: preview,
+                                     hasHistory: try importer.historyCutover(accountId: target) != nil,
+                                     seamCenter: Self.seamCenter(preview))],
             recognition: match?.account != nil
                 ? "Herkend als: \(name)"
                 : "\(match?.message ?? "De rekening is niet herkend.") Het bestand gaat naar de gekozen rekening: \(name).",
@@ -681,12 +730,12 @@ final class ReviewStore {
             var parts = [n == 1 ? "1 transactie geïmporteerd" : "\(n) transacties geïmporteerd"]
             if only.result.duplicateCount > 0 { parts.append("\(only.result.duplicateCount) al bekend") }
             if only.result.skippedErrorCount > 0 { parts.append("\(only.result.skippedErrorCount) fout overgeslagen") }
-            if only.result.cutoverSkippedCount > 0 { parts.append("\(only.result.cutoverSkippedCount) overgeslagen (Excel-historie)") }
+            if only.result.cutoverSkippedCount > 0 { parts.append("\(only.result.cutoverSkippedCount) overgeslagen (stond al in je administratie)") }
             model.toast = parts.joined(separator: " · ")
         } else {
             let skipped = results.map(\.result.cutoverSkippedCount).reduce(0, +)
             model.toast = "Geïmporteerd · " + results.map { "\($0.name): \($0.result.transactions.count) nieuw" }.joined(separator: " · ")
-                + (skipped > 0 ? " · \(skipped) overgeslagen (Excel-historie)" : "")
+                + (skipped > 0 ? " · \(skipped) overgeslagen (stond al in je administratie)" : "")
         }
         pendingImport = nil
         notice = nil

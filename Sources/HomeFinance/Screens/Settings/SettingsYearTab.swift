@@ -11,6 +11,7 @@ struct SettingsYearData: Equatable {
     var pots: [Pot] = []
     var allYears: [Int] = []
     var entryCounts: [Int64: Int] = [:]
+    var distributions: [SettingsDistributionOption] = []
     /// Plan per jaar, per richting (RES = de RES-regels, die niet meetellen in de uitgaven).
     var yearPlan: [Direction: Money] = [:]
 
@@ -25,6 +26,9 @@ struct SettingsYearData: Equatable {
         var d = SettingsYearData()
         d.allYears = try Int.fetchAll(db, sql: "SELECT year FROM budgetYear ORDER BY year")
         d.pots = try Pot.order(Column("accountId"), Column("sortOrder"), Column("id")).fetchAll(db)
+        d.distributions = try Insight.distributions(db, today: today).map {
+            SettingsDistributionOption(id: $0.id, name: $0.name, archived: $0.archived)
+        }
         guard let record = try BudgetYear.filter(Column("year") == year).fetchOne(db), let yearId = record.id else { return d }
         d.year = record
         d.items = try BudgetItem.filter(Column("yearId") == yearId).order(Column("sortOrder"), Column("id")).fetchAll(db)
@@ -178,6 +182,16 @@ struct SettingsYearTab: View {
             .help(groupHelp(direction))
 
             if isOpen {
+                if direction == .RES {
+                    Divider()
+                    HStack(spacing: 10) {
+                        Text("De verdeling over potten stel je voortaan in bij Vaste stortingen.")
+                            .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Spacer()
+                        Button("Naar Vaste stortingen") { model.selection = .pots }.controlSize(.small)
+                    }
+                    .padding(.horizontal, 18).padding(.vertical, 10)
+                }
                 if missingTotal {
                     Divider()
                     HStack(spacing: 10) {
@@ -191,12 +205,15 @@ struct SettingsYearTab: View {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, item in
                     Divider().padding(.leading, 18)
                     SettingsYearItemRow(item: item, pots: data.pots.filter { $0.kind == .reservering },
+                                        distributions: data.distributions,
                                         reserveLineCount: data.items(.RES).count,
                                         entryCount: data.entryCounts[item.id ?? -1] ?? 0,
                                         isExpanded: expandedId == item.id,
                                         isFirst: index == 0, isLast: index == rows.count - 1,
                                         onToggle: { expandedId = expandedId == item.id ? nil : item.id },
-                                        onSave: { save($0) }, onMove: { move(item, by: $0, in: rows) },
+                                        onSave: { save($0) }, onLink: { link(item, to: $0) },
+                                        onGoToPots: { model.selection = .pots },
+                                        onMove: { move(item, by: $0, in: rows) },
                                         onDelete: { deleteTarget = item })
                         .id("\(item.id ?? 0)-\(resetToken)")
                         .draggable("hf-item:\(item.id ?? -1)")
@@ -261,6 +278,18 @@ struct SettingsYearTab: View {
         write { db in
             _ = try YearService.updateBuffers(db, year: model.year, antiRood: antiRood,
                                               tijdelijkAntiRood: tijdelijk)
+        }
+    }
+
+    /// Koppelt een post aan een vaste storting, of maakt hem los (nil).
+    private func link(_ item: BudgetItem, to distributionId: Int64?) {
+        guard let id = item.id else { return }
+        write { db in
+            if let distributionId {
+                _ = try DistributionService.link(db, distributionId: distributionId, budgetItemId: id)
+            } else {
+                _ = try DistributionService.unlink(db, budgetItemId: id)
+            }
         }
     }
 

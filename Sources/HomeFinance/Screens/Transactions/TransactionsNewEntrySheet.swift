@@ -9,7 +9,6 @@ struct TransactionsNewEntrySheet: View {
     @State private var accountId: Int64?
     @State private var draft = TransactionsDraft()
     @State private var prepared = false
-    @FocusState private var labelFocused: Bool
 
     private var kind: AccountKind { store.lookups.account(accountId)?.kind ?? .betaal }
 
@@ -33,8 +32,11 @@ struct TransactionsNewEntrySheet: View {
                         TransactionsAmountInput(isIncome: $draft.isIncome, magnitude: $draft.magnitude)
                             .frame(maxWidth: 230)
                     }
-                    TextField("Omschrijving", text: $draft.label, prompt: Text("Bv. Zakgeld contant"))
-                        .focused($labelFocused)
+                    LabeledContent("Omschrijving") {
+                        TransactionsLabelField(title: "Bv. Zakgeld contant", text: $draft.label, labels: store.labels, autoFocus: true) { suggestion in
+                            draft.adopt(suggestion, lookups: store.lookups, kind: kind)
+                        }
+                    }
                 }
                 Section {
                     switch kind {
@@ -116,7 +118,6 @@ struct TransactionsNewEntrySheet: View {
         prepared = true
         accountId = store.accountId ?? store.lookups.accounts.first?.id
         draft.day = model.today
-        labelFocused = true
     }
 
     private func add() {

@@ -20,6 +20,8 @@ public struct ForecastEvent: Identifiable, Equatable, Sendable {
     public let amount: Money
     public let label: String
     public let kind: ForecastEventKind
+    /// Het project van een losse verwachting (`ForecastItem.project`), of nil.
+    public let project: String?
     /// Het verwachte potsaldo na deze mutatie.
     public let balanceAfter: Money
 }
@@ -103,6 +105,48 @@ public struct PotGoal: Equatable, Sendable {
     /// De eerste dag waarop de vooruitblik het doel haalt (vandaag als het al bereikt is); nil als dat met de
     /// huidige stortingen en verwachtingen binnen 10 jaar niet gebeurt.
     public let projectedReachDate: Day?
+    /// De onderdelen waaruit het doelbedrag is opgebouwd (`GoalPart`), of leeg.
+    public let parts: [GoalPartRow]
+    /// Som van de onderdelen (€ 0,00 zonder onderdelen).
+    public let partsTotal: Money
+}
+
+/// Eén onderdeel van een spaardoel: aantal × bedrag per stuk.
+public struct GoalPartRow: Identifiable, Equatable, Sendable {
+    public let id: Int64
+    public let label: String
+    public let quantity: Int
+    public let unitAmount: Money
+    /// `quantity` × `unitAmount`.
+    public let amount: Money
+}
+
+/// Eén regel van een project, met wat er werkelijk betaald is als de regel is afgevinkt.
+public struct ForecastProjectItem: Identifiable, Equatable, Sendable {
+    public var id: Int64 { item.id ?? 0 }
+    public let item: ForecastItem
+    /// Afgevinkt: het bedrag van de gekoppelde echte boeking, of anders het verwachte bedrag. Open: nil.
+    public let realizedAmount: Money?
+}
+
+/// De verwachtingen van één project (bv. een vakantie) als begroting: gepland, betaald, nog te komen.
+public struct ForecastProject: Identifiable, Equatable, Sendable {
+    public var id: String { name }
+    public let name: String
+    /// De regels, oudste dag eerst.
+    public let items: [ForecastProjectItem]
+    /// Som van alle regels (verwachte bedragen, met teken).
+    public let planned: Money
+    /// Som van de afgevinkte regels (werkelijk bedrag waar bekend).
+    public let realized: Money
+    /// Som van de nog open regels.
+    public let remaining: Money
+    public let count: Int
+    public let openCount: Int
+    /// Open regels met een dag op of vóór de peildag.
+    public let overdueCount: Int
+    public let firstDay: Day
+    public let lastDay: Day
 }
 
 // MARK: - Functies
@@ -117,13 +161,15 @@ struct ForecastContext {
         /// banktransactie met het totaal van de storting), of nil.
         let lastDeposit: Day?
     }
-    typealias RawEvent = (day: Day, amount: Money, label: String, kind: ForecastEventKind, id: String)
+    typealias RawEvent = (day: Day, amount: Money, label: String, kind: ForecastEventKind, id: String, project: String?)
 
     let today: Day
     /// Open losse verwachtingen per pot, op dag.
     var items: [Int64: [ForecastItem]] = [:]
     /// Regels van niet-gearchiveerde vaste stortingen per pot, op volgorde van de stortingen.
     var lines: [Int64: [Line]] = [:]
+    /// Onderdelen van het spaardoel per pot.
+    var parts: [Int64: [GoalPartRow]] = [:]
 
     init(_ db: Database, today: Day, potId: Int64? = nil) throws {
         self.today = today
@@ -131,6 +177,12 @@ struct ForecastContext {
         if let potId { request = request.filter(Column("potId") == potId) }
         for item in try request.order(Column("day"), Column("id")).fetchAll(db) {
             items[item.potId, default: []].append(item)
+        }
+        var partRequest = GoalPart.order(Column("sortOrder"), Column("id"))
+        if let potId { partRequest = partRequest.filter(Column("potId") == potId) }
+        for part in try partRequest.fetchAll(db) {
+            parts[part.potId, default: []].append(GoalPartRow(id: part.id!, label: part.label, quantity: part.quantity,
+                                                              unitAmount: part.unitAmount, amount: part.amount))
         }
         let deposit = "e.potId = l.potId AND e.accountId = p.accountId AND e.amount = l.amount AND e.day <= ?"
         var sql = """
@@ -177,11 +229,15 @@ struct ForecastContext {
     /// Alle verwachte mutaties van een pot van morgen t/m `until`, op dag (op één dag eerst wat erbij komt).
     func events(potId: Int64, until: Day) -> [RawEvent] {
         var raw: [RawEvent] = (items[potId] ?? []).filter { $0.day > today && $0.day <= until }
-            .map { ($0.day, $0.amount, $0.label, .oneOff(forecastItemId: $0.id!), "los-\($0.id!)") }
+            .map { item -> RawEvent in
+                let project = item.project.trimmingCharacters(in: .whitespaces)
+                return (item.day, item.amount, item.label, .oneOff(forecastItemId: item.id!), "los-\(item.id!)",
+                        project.isEmpty ? nil : project)
+            }
         for line in lines[potId] ?? [] {
             for day in depositDays(lastDeposit: line.lastDeposit, until: until) {
                 raw.append((day, line.amount, line.name, .recurring(distributionId: line.distributionId),
-                            "vast-\(line.distributionId)-\(Q.periodKey(day.year, day.month))"))
+                            "vast-\(line.distributionId)-\(Q.periodKey(day.year, day.month))", nil))
             }
         }
         return raw.sorted { ($0.day, $1.amount, $0.id) < ($1.day, $0.amount, $1.id) }
@@ -226,7 +282,8 @@ struct ForecastContext {
                        remaining: remaining, expectedOneOffs: oneOffs, monthsLeft: monthsLeft,
                        requiredPerMonth: required, currentPerMonth: current,
                        shortfallPerMonth: required.map { $0 - current }, projectedOnTargetDate: projected,
-                       status: status, projectedReachDate: reachDate)
+                       status: status, projectedReachDate: reachDate,
+                       parts: parts[potId] ?? [], partsTotal: (parts[potId] ?? []).map(\.amount).sum())
     }
 }
 
@@ -248,7 +305,8 @@ extension Insight {
         var running = startBalance
         let events = context.events(potId: potId, until: until).map { e -> ForecastEvent in
             running += e.amount
-            return ForecastEvent(id: e.id, day: e.day, amount: e.amount, label: e.label, kind: e.kind, balanceAfter: running)
+            return ForecastEvent(id: e.id, day: e.day, amount: e.amount, label: e.label, kind: e.kind,
+                                 project: e.project, balanceAfter: running)
         }
 
         // Grafiek: echt saldo per maandeinde, dan het verwachte saldo.
@@ -284,6 +342,30 @@ extension Insight {
             SELECT COALESCE(SUM(amount), 0) FROM entry WHERE potId = ? AND accountId = ? AND day <= ?
             """, arguments: [potId, pot.accountId, today]) ?? .zero
         return try ForecastContext(db, today: today, potId: potId).goal(pot: pot, balance: balance)
+    }
+
+    /// De projecten van een pot: per niet-lege `ForecastItem.project` de regels met wat gepland, betaald en nog
+    /// te komen is. Het project met de laatste dag het verst in de toekomst staat eerst.
+    public static func forecastProjects(_ db: Database, potId: Int64, today: Day) throws -> [ForecastProject] {
+        var groups: [String: [ForecastProjectItem]] = [:]
+        for r in try Row.fetchAll(db, sql: """
+            SELECT f.*, e.amount AS entryAmount FROM forecastItem f LEFT JOIN entry e ON e.id = f.realizedEntryId
+            WHERE f.potId = ? AND trim(f.project) <> '' ORDER BY f.day, f.id
+            """, arguments: [potId]) {
+            let item = try ForecastItem(row: r)
+            let actual: Money? = r["entryAmount"]
+            groups[item.project.trimmingCharacters(in: .whitespaces), default: []].append(
+                ForecastProjectItem(item: item, realizedAmount: item.isRealized ? (actual ?? item.amount) : nil))
+        }
+        return groups.map { name, items in
+            let open = items.filter { !$0.item.isRealized }
+            return ForecastProject(name: name, items: items, planned: items.map(\.item.amount).sum(),
+                                   realized: items.compactMap(\.realizedAmount).sum(),
+                                   remaining: open.map(\.item.amount).sum(), count: items.count, openCount: open.count,
+                                   overdueCount: open.filter { $0.item.day <= today }.count,
+                                   firstDay: items.first!.item.day, lastDay: items.last!.item.day)
+        }
+        .sorted { ($0.lastDay, $1.name) > ($1.lastDay, $0.name) }
     }
 
     /// Alle losse verwachtingen van een pot: eerst de open (oudste dag eerst), dan de uitgekomen (nieuwste eerst).

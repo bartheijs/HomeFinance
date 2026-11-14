@@ -127,12 +127,20 @@ gebruiker ook met de hand kan koppelen.
 | `create(db, Pot, openingBalance:, on:)` | Maakt de pot; met een beginbedrag (niet nul) komt er een handmatige boeking "Beginsaldo <potnaam>" op de spaarrekening. `on` standaard de begindatum van de rekening. |
 | `setOpeningBalance(db, potId:, amount:, on:) -> Entry?` | Past de beginboeking aan of maakt hem; nul verwijdert hem. Herkend aan `note == PotService.openingNote` ("Beginsaldo"). |
 | `openingSummary(db, accountId:) -> PotOpeningSummary` | `accountOpening` (niet toegewezen), `potOpenings` (per pot), `potTotal` en `total`. |
+| `goalParts(db, potId:) -> [GoalPart]` / `setGoalParts(db, potId:, [GoalPart])` | Spaardoel uit onderdelen (aantal × bedrag per stuk); `setGoalParts` vervangt ze in één keer en zet `Pot.targetAmount` op de som. |
 | `update(db, Pot)` / `delete(db, potId:)` | Beheer. Alleen op een spaarrekening; verwijderen alleen zonder boekingen (de pot verdwijnt dan ook uit vaste stortingen). |
 | `reorder(db, accountId:, orderedIds:)` | Volgorde (alle pot-id's van de rekening). |
 | `archive(db, potId:)` / `unarchive(db, potId:)` | Archiveren kan alleen bij saldo € 0,00. |
 | `balance(db, potId:) -> Money` | Som van de boekingen op de spaarrekening met deze pot. |
 | `distribution(db, for:, accountId:) -> [Allocation]?` | **Oude weg**, blijft werken voor bestaande aanroepen; nieuwe code gebruikt `DistributionService`. Eén regel per reserveringspot als het bedrag gelijk is aan de som van hun maandbedragen; anders `nil`. |
 | `moveBetweenPots(db, from:, to:, amount:, day:, label:) -> (from: Entry, to: Entry)` | Twee handmatige boekingen op dezelfde rekening die samen nul zijn. |
+
+**Spaardoel uit onderdelen.** Aantal ≥ 1, bedrag per stuk ≥ 0, label mag leeg; de volgorde van de lijst is de
+volgorde van de onderdelen (`potId`, `id` en `sortOrder` in de meegegeven onderdelen worden genegeerd). Met
+onderdelen is `Pot.targetAmount` altijd hun som: `PotService.update` weigert een ander bedrag niet maar
+overschrijft het, zodat een naamswijziging met een verouderde kopie van de pot niet mislukt. Het scherm hoort
+het doelveld dan alleen-lezen te tonen. Met een lege lijst verdwijnen de onderdelen, blijft `targetAmount` wat
+het was en is het weer vrij in te vullen.
 
 **Beginsaldo van een spaarrekening met potten.** Een beginboeking van een pot telt mee in het rekeningsaldo.
 Daarom is de regel: `Account.openingBalance` is het NIET toegewezen deel, en beginsaldo bij de bank =
@@ -208,8 +216,10 @@ uitgave). Het telt nergens in mee behalve in de vooruitblik. Terugkerende storti
 
 | Functie | Doet |
 |---|---|
-| `create(db, potId:, day:, amount:, label:) -> ForecastItem` | Nieuwe verwachting. Bedrag met teken, niet nul; omschrijving mag leeg; een datum in het verleden mag. |
-| `update(db, ForecastItem)` / `delete(db, forecastItemId:)` | Wijzigen (pot, datum, bedrag, omschrijving) en verwijderen. |
+| `create(db, potId:, day:, amount:, label:, project:) -> ForecastItem` | Nieuwe verwachting. Bedrag met teken, niet nul; omschrijving mag leeg; een datum in het verleden mag. `project` wordt getrimd; leeg = geen project. |
+| `update(db, ForecastItem)` / `delete(db, forecastItemId:)` | Wijzigen (pot, datum, bedrag, omschrijving, project) en verwijderen. |
+| `renameProject(db, potId:, from:, to:) -> Int` | Hernoemt een project van die pot, ook bij uitgekomen verwachtingen; geeft het aantal gewijzigde verwachtingen. Bestaat `to` al, dan gaan ze samen; een lege `to` haalt ze uit het project; een lege `from` wordt geweigerd. |
+| `projects(db, potId:) -> [String]` | De projecten van een pot op naam, ook van uitgekomen verwachtingen. |
 | `markRealized(db, forecastItemId:, entryId:, at:)` | Markeert als uitgekomen en koppelt optioneel de echte boeking. |
 | `reopen(db, forecastItemId:)` | Maakt hem weer open en verbreekt de koppeling. |
 | `suggestRealization(db, entryId:) -> [ForecastItem]` | Open verwachtingen van de pot van die boeking, zelfde teken, bedrag exact of binnen 5 % van het verwachte bedrag, datum binnen 45 dagen; exact eerst. |
@@ -311,11 +321,22 @@ handmatige boeking tegenover staat.
 | `createItem(db, BudgetItem)` / `updateItem(db, BudgetItem)` | Post maken of wijzigen; geeft de opgeslagen post terug. Het plan van een post met `distributionId` wordt overschreven met − het totaal van de storting. |
 | `deleteItem(db, itemId:, convertEntriesToDivers:)` | Met boekingen alleen als ze "divers" mogen worden. |
 | `reorderItems(db, yearId:, orderedIds:)` | Volgorde (alle post-id's van het jaar). |
+| `setScenario(db, itemId:, amount:) -> BudgetItem` | Zet het wat-als-bedrag van een post; `nil` wist het. |
+| `clearScenario(db, yearId:) -> Int` | Wist alle wat-als-bedragen van het jaar; geeft het aantal. |
+| `applyScenario(db, yearId:) -> ScenarioApplyResult` | Maakt van elk wat-als-bedrag het plan en wist daarna alle wat-als-bedragen. |
 
 - Teken: IN ≥ 0, UIT en RES ≤ 0.
 - Hoogstens één post per jaar met `isReserveTotal` (moet UIT zijn). Zijn plan is altijd de som van het plan
   van de RES-regels van dat jaar; een zelf ingevuld plan wordt overschreven.
 - Kwartaal- en jaarposten hebben `expectedMonths` nodig ("1,4,7,10"); bij maandposten wordt het geleegd.
+- **Wat-als (`BudgetItem.scenarioAmount`)**: zelfde tekenregels als het plan (IN ≥ 0, UIT ≤ 0, nul mag); niet
+  voor RES-regels; geweigerd in een afgesloten jaar. Een post met een vaste storting en de regel RESERVERINGEN
+  mogen een wat-als-bedrag hebben, maar hun plan wordt berekend: `applyScenario` slaat ze over en geeft ze terug
+  in `ScenarioApplyResult.skipped` (met het niet toegepaste bedrag nog in `scenarioAmount`); `appliedCount` is
+  het aantal toegepaste posten. Na `applyScenario` zijn alle wat-als-bedragen van het jaar gewist, ook die van
+  de overgeslagen posten.
+- `createItem` en `updateItem` schrijven het wat-als-bedrag niet: het wijzigt alleen via `setScenario`, en
+  vervalt als de richting van de post wijzigt. `createYear(copyingFrom:)` neemt wat-als-bedragen niet mee.
 - Nieuwe posten, potten, rekeningen en tags komen achteraan; de volgorde wijzig je met `reorder…`.
 
 ## AccountService en TagService

@@ -135,7 +135,11 @@ private struct TransactionsFeedRow: View {
         case .betaal: parts.append(row.itemLabel ?? "Divers")
         case .spaar: parts.append(row.potName.map { "Pot \($0)" } ?? "Nog geen pot")
         }
-        parts.append(contentsOf: row.tags.map(\.name))
+        // Een verrekende boeking krijgt een vinkje bij zijn tag.
+        parts.append(contentsOf: row.tags.map { tag in
+            row.settlementId != nil && store.lookups.tag(tag.id)?.settles == true ? "\(tag.name) ✓" : tag.name
+        })
+        if let month = TransactionsFormat.month(of: row.period) { parts.append("telt in \(Day.monthNamesShort[month - 1])") }
         if row.reimburse { parts.append(row.savingsTransferId == nil ? "vergoeden uit spaar" : "vergoed uit spaar") }
         if row.temporaryLoan { parts.append(row.amount.isNegative ? "terug naar spaar" : "tijdelijk geleend") }
         if let bank = row.bank, bank.amount != row.amount { parts.append("gesplitst") }
@@ -147,6 +151,10 @@ private struct TransactionsFeedRow: View {
     /// Wat de regels voorstellen, als tekst; nil als er iets te kiezen valt.
     private func suggestionTarget(_ p: TransactionsPending) -> String? {
         guard p.hasSuggestion else { return nil }
+        if let match = p.bookableMatch, let distribution = match.distribution {
+            if match.side == .destination { return "\(distribution.name): verdeeld over \(match.allocations.count) potten" }
+            return store.lookups.item(match.allocations.first?.budgetItemId)?.label ?? distribution.name
+        }
         switch store.kind {
         case .betaal: return p.suggestion.targetItemLabel ?? "Divers"
         case .spaar: return store.lookups.pot(p.suggestion.potId)?.name
@@ -156,6 +164,21 @@ private struct TransactionsFeedRow: View {
     @ViewBuilder private func suggestionButton(_ p: TransactionsPending) -> some View {
         if locked {
             Label("Jaar afgesloten", systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary)
+        } else if let match = p.match, p.bookableMatch == nil {
+            // Vaste storting herkend, maar er valt nog iets te kiezen: het detail laat de verdeling zien.
+            Button {
+                store.selection = [item.id]
+                store.showDetail = true
+            } label: {
+                Text(match.isAmbiguous ? "Vaste storting: kies welke…" : "\(match.distribution?.name ?? "Vaste storting"): bedrag wijkt af…")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Theme.warning)
+                    .padding(.horizontal, 9).padding(.vertical, 3)
+                    .background(Theme.warning.opacity(0.13), in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("Deze transactie past bij een vaste storting, maar niet precies. Klik om de verdeling te zien en te kiezen waar het verschil heen gaat.")
         } else if let target = suggestionTarget(p) {
             Button {
                 store.bookSuggested(model, [p])
@@ -384,6 +407,14 @@ struct TransactionsContextMenu: View {
                     store.toggleTemporaryLoan(model, ids: ids)
                 }
                 .help(TransactionsFormat.loanHelp)
+            }
+            if chosen.count == 1, let row = rows.first, row.accountKind == .betaal, !row.amount.isNegative {
+                ForEach(store.lookups.tags.filter(\.settles)) { tag in
+                    Button("Verrekening \(tag.name)…", systemImage: "arrow.left.arrow.right") {
+                        store.startSettle(tagId: tag.id ?? 0, deposit: row)
+                    }
+                    .help("Deze bijschrijving is de terugstorting voor \(tag.name)")
+                }
             }
             if chosen.count == 1, let item = chosen.first {
                 Divider()

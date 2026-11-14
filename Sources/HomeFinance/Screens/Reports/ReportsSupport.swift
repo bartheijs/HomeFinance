@@ -60,6 +60,8 @@ enum ReportsColor {
 /// Of de uitklapbare delen open beginnen (`HF_REPORTS_OPEN`, voor een snapshot).
 enum ReportsDebug {
     static var startsOpen: Bool { ProcessInfo.processInfo.environment["HF_REPORTS_OPEN"] != nil }
+    /// Toont het samenvoegvenster in plaats van het tabblad (`HF_REPORTS_MERGE`, voor een snapshot).
+    static var showsMerge: Bool { ProcessInfo.processInfo.environment["HF_REPORTS_MERGE"] != nil }
 }
 
 /// De vraag die een rapport beantwoordt, als gewone zin boven de grafiek.

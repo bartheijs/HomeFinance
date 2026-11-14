@@ -15,25 +15,29 @@ struct PotsDetailPanel: View {
     var onUnarchive: () -> Void
     var onDelete: () -> Void
     var onClose: () -> Void
+    var onDistributions: () -> Void
+    @State private var showAllMovements = false
 
     private var points: [PotsChartPoint] { PotsChartPoint.points(from: history, asOf: asOf) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            head.padding(16)
-            Divider()
-            if history.isEmpty {
-                ContentUnavailableView {
-                    Label("Nog geen boekingen", systemImage: "tray")
-                } description: {
-                    Text("Deze pot krijgt saldo zodra je een boeking op de spaarrekening aan deze pot toewijst, of geld uit een andere pot hierheen verplaatst.")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 26) {
+                head
+                if let goal = pot.goal { PotsGoalBlock(pot: pot, goal: goal, onDistributions: onDistributions) }
+                if history.isEmpty {
+                    Text("Deze pot heeft nog geen boekingen. Hij krijgt saldo zodra je een boeking op de spaarrekening aan deze pot toewijst, of geld uit een andere pot hierheen verplaatst.")
+                        .font(.callout).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    chart
                 }
-                .frame(maxHeight: .infinity)
-            } else {
-                chart.padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
-                Divider()
-                movements
+                if !pot.archived {
+                    PotsForecastSection(pot: pot, history: history, onDistributions: onDistributions)
+                }
+                if !history.isEmpty { movements }
             }
+            .padding(18)
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Theme.card)
@@ -87,14 +91,13 @@ struct PotsDetailPanel: View {
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
             }
 
-            if pot.progress != nil { PotsTargetBar(pot: pot) }
-
             HStack(spacing: 0) {
-                fact("Per maand", pot.monthlyAmount.isZero ? "–" : pot.monthlyAmount.formatted())
+                fact("Per maand", pot.distributionAmount.isZero ? "–" : pot.distributionAmount.formatted())
+                    .help("Wat er volgens je vaste stortingen elke maand naar deze pot gaat.")
                 Divider().frame(height: 26).padding(.horizontal, 10)
-                fact("Gestort \(String(asOf.year))", pot.depositsThisYear.formatted(alwaysSign: true), tint: Theme.positive)
+                fact("Gestort \(String(asOf.year))", pot.depositsThisYear.isZero ? "–" : pot.depositsThisYear.formatted(alwaysSign: true))
                 Divider().frame(height: 26).padding(.horizontal, 10)
-                fact("Opgenomen", pot.withdrawalsThisYear.formatted(), tint: Theme.negative)
+                fact("Opgenomen", pot.withdrawalsThisYear.isZero ? "–" : pot.withdrawalsThisYear.formatted())
             }
 
             HStack(spacing: 8) {
@@ -105,7 +108,7 @@ struct PotsDetailPanel: View {
                 .help("Zet een bedrag over van deze pot naar een andere pot. Het saldo van de spaarrekening verandert niet.")
                 Button("Bewerk", action: onEdit)
                     .keyboardShortcut("e", modifiers: .command)
-                    .help("Naam, soort, eigenaar, maandbedrag en doel wijzigen (⌘E)")
+                    .help("Naam, soort, eigenaar, beginbedrag en spaardoel wijzigen (⌘E)")
                 if !pot.archived && pot.balance.isZero {
                     Button("Archiveer", action: onArchive)
                         .help("Een lege pot die je niet meer gebruikt verdwijnt uit de lijst. De boekingen blijven bewaard.")
@@ -133,7 +136,7 @@ struct PotsDetailPanel: View {
 
     private var chart: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Saldo in de tijd").font(.subheadline.weight(.medium))
+            Text("Saldoverloop").font(.headline)
             Chart {
                 ForEach(points) { point in
                     AreaMark(x: .value("Datum", point.date), y: .value("Saldo", point.balance))
@@ -186,23 +189,26 @@ struct PotsDetailPanel: View {
     // MARK: Mutaties
 
     private var movements: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Mutaties").font(.subheadline.weight(.medium))
-                Text("\(history.count)").font(.caption).monospacedDigit().foregroundStyle(.secondary)
+        let rows = Array(history.reversed())
+        let shown = showAllMovements ? rows : Array(rows.prefix(5))
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Mutaties").font(.headline)
+                Text("\(history.count)").font(.callout).monospacedDigit().foregroundStyle(.secondary)
                 Spacer()
-                Text("Saldo erna").font(.caption).foregroundStyle(.secondary)
+                Text("saldo erna").font(.caption).foregroundStyle(.secondary)
                     .help("Het saldo van de pot direct na deze boeking.")
             }
-            .padding(.horizontal, 16).padding(.vertical, 8)
-            Divider()
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(history.reversed()) { row in
-                        movementRow(row)
-                        Divider().padding(.leading, 16)
-                    }
-                }
+            .padding(.bottom, 6)
+            ForEach(shown) { row in
+                Divider()
+                movementRow(row)
+            }
+            if rows.count > 5 {
+                Divider()
+                Button(showAllMovements ? "Toon minder" : "Toon alle \(rows.count) mutaties") { showAllMovements.toggle() }
+                    .buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout)
+                    .padding(.top, 8)
             }
         }
     }
@@ -220,14 +226,14 @@ struct PotsDetailPanel: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 1) {
-                MoneyText(row.entry.amount, colored: true, alwaysSign: true)
+                MoneyText(row.entry.amount, alwaysSign: true)
                 Text(row.runningBalance.formatted(symbol: false))
                     .font(.caption).monospacedDigit()
                     .foregroundStyle(row.runningBalance.isNegative ? Theme.negative : Color.secondary)
             }
         }
         .font(.callout)
-        .padding(.horizontal, 16).padding(.vertical, 5)
+        .padding(.vertical, 6)
         .help(row.entry.note.isEmpty ? row.entry.day.dutch : "\(row.entry.day.dutch) · \(row.entry.note)")
     }
 }

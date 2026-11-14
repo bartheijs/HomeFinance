@@ -221,7 +221,9 @@ public enum PotService {
             """, arguments: [pot.id, pot.accountId, openingNote])
     }
 
-    /// Werkt naam, soort, eigenaar, maandbedrag en doel bij. Rekening, volgorde en archivering blijven gelijk.
+    /// Werkt naam, soort, eigenaar, maandbedrag, doel en doeldatum bij. Rekening, volgorde en archivering blijven
+    /// gelijk. Heeft de pot onderdelen (`setGoalParts`), dan wordt een zelf ingevuld `targetAmount` niet
+    /// geweigerd maar overschreven met de som van de onderdelen.
     @discardableResult
     public static func update(_ db: Database, _ pot: Pot) throws -> Pot {
         try atomic(db) {
@@ -234,6 +236,9 @@ public enum PotService {
             try validate(db, &pot)
             pot.sortOrder = existing.sortOrder
             pot.archived = existing.archived
+            // Met onderdelen is het spaardoel altijd hun som; een zelf ingevuld bedrag wordt overschreven.
+            let parts = try goalParts(db, potId: id)
+            if !parts.isEmpty { pot.targetAmount = parts.map(\.amount).sum() }
             try pot.update(db)
             return pot
         }
@@ -295,6 +300,44 @@ public enum PotService {
             """, arguments: [accountId, PotKind.reservering])
         guard !pots.isEmpty, pots.map(\.monthlyAmount).sum() == amount else { return nil }
         return pots.map { Allocation(amount: $0.monthlyAmount, label: $0.name, potId: $0.id) }
+    }
+
+    // MARK: Spaardoel uit onderdelen
+
+    /// De onderdelen van het spaardoel van een pot, op volgorde.
+    public static func goalParts(_ db: Database, potId: Int64) throws -> [GoalPart] {
+        try GoalPart.fetchAll(db, sql: "SELECT * FROM goalPart WHERE potId = ? ORDER BY sortOrder, id",
+                              arguments: [potId])
+    }
+
+    /// Vervangt de onderdelen van het spaardoel in één keer (aantal ≥ 1, bedrag per stuk ≥ 0, label mag leeg);
+    /// de volgorde van de lijst is de volgorde van de onderdelen. Met onderdelen wordt `Pot.targetAmount` hun
+    /// som; met een lege lijst verdwijnen de onderdelen en blijft `targetAmount` wat het was.
+    @discardableResult
+    public static func setGoalParts(_ db: Database, potId: Int64, _ parts: [GoalPart]) throws -> [GoalPart] {
+        try atomic(db) {
+            let pot = try Check.pot(db, potId)
+            for part in parts {
+                guard part.quantity >= 1 else {
+                    throw BudgetError.validation("Het aantal van een onderdeel van het spaardoel moet minstens 1 zijn.")
+                }
+                guard !part.unitAmount.isNegative else {
+                    throw BudgetError.validation("Het bedrag per stuk van een onderdeel mag niet negatief zijn.")
+                }
+            }
+            try db.execute(sql: "DELETE FROM goalPart WHERE potId = ?", arguments: [potId])
+            for (index, part) in parts.enumerated() {
+                var record = GoalPart(potId: potId, label: part.label.trimmingCharacters(in: .whitespacesAndNewlines),
+                                      quantity: part.quantity, unitAmount: part.unitAmount, sortOrder: index)
+                try record.insert(db)
+            }
+            let saved = try goalParts(db, potId: potId)
+            if !saved.isEmpty {
+                try db.execute(sql: "UPDATE pot SET targetAmount = ? WHERE id = ?",
+                               arguments: [saved.map(\.amount).sum(), pot.id])
+            }
+            return saved
+        }
     }
 
     /// Verplaatst een (positief) bedrag van de ene pot naar de andere op dezelfde rekening, als twee

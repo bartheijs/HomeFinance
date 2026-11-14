@@ -33,6 +33,9 @@ extension ReportsData {
             }
             return ReportsFormat.tsv(header, rows)
 
+        case .labels:
+            return ""   // het tabblad levert zijn eigen tabel
+
         case .budget:
             let rows = ReportsBudgetTab.ordered(budget).map { r in
                 [r.label, r.direction.rawValue, p(r.planToDate), p(r.actualToDate), p(r.difference), p(r.planYear),

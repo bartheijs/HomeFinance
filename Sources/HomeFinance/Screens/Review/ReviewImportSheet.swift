@@ -231,7 +231,7 @@ private struct ReviewImportPartView: View {
                     Text(row.counterpartyName.isEmpty ? row.descriptionText : row.counterpartyName).lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if row.isBeforeCutover {
-                        Text("Excel-historie").font(.caption).foregroundStyle(.secondary)
+                        Text("gaat niet mee").font(.caption).foregroundStyle(.secondary)
                     } else if row.isDuplicate {
                         Text("al bekend").font(.caption).foregroundStyle(.secondary)
                     }
@@ -294,7 +294,7 @@ struct ReviewRawFileSheet: View {
     }
 }
 
-/// Eerste import na de Excel-historie: sluit het bestand aan op de administratie?
+/// Eerste import van een rekening: sluit het bestand aan op de administratie (beginsaldo of Excel-historie)?
 private struct ReviewSeamBlock: View {
     @Environment(ReviewStore.self) private var store
     let part: ReviewImportPart
@@ -319,7 +319,7 @@ private struct ReviewSeamBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Aansluiting op je Excel-historie").font(.callout.weight(.semibold))
+            Text(part.hasHistory ? "Aansluiting op je Excel-historie" : "Aansluiting op je beginsaldo").font(.callout.weight(.semibold))
             Label { Text(headline).fixedSize(horizontal: false, vertical: true) } icon: {
                 Image(systemName: fits ? "checkmark.seal.fill" : "xmark.seal.fill")
             }
@@ -333,12 +333,12 @@ private struct ReviewSeamBlock: View {
         .font(.callout)
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
         .background((fits ? Theme.positive : Theme.negative).opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
-        .help("Bij de eerste import na je Excel-historie zoekt de app de regel in het bankbestand waarvan het saldo vóór de mutatie gelijk is aan het saldo van je administratie. Alles daarvoor staat al in de app.")
+        .help("Bij de eerste import van een rekening zoekt de app de regel in het bankbestand waarvan het saldo vóór de mutatie gelijk is aan het saldo van je administratie. Alles daarvoor staat al in de app.")
     }
 
     private var headline: String {
         let skipped = seam.skippedCount
-        let skippedText = skipped == 0 ? "" : " \(skipped) eerdere \(skipped == 1 ? "regel" : "regels") overgeslagen (die \(skipped == 1 ? "staat" : "staan") al in je Excel)."
+        let skippedText = skipped == 0 ? "" : " \(skipped) eerdere \(skipped == 1 ? "regel" : "regels") overgeslagen (\(part.hasHistory ? "die \(skipped == 1 ? "staat" : "staan") al in je Excel" : "die \(skipped == 1 ? "valt" : "vallen") vóór je beginsaldo"))."
         switch seam.method {
         case .alreadyProcessed:
             return "Alles in dit bestand staat al in je administratie."
@@ -371,7 +371,8 @@ private struct ReviewSeamBlock: View {
                     .help("Eindsaldo van het bestand min het saldo van je administratie en de aangevinkte regels. Bij € 0,00 sluit de overgang.")
                 }
             }
-            Text("Vink aan wat nog niet in je Excel staat. Wat uit staat, wordt niet geïmporteerd.")
+            Text(part.hasHistory ? "Vink aan wat nog niet in je Excel staat. Wat uit staat, wordt niet geïmporteerd."
+                                 : "Vink aan wat na je beginsaldo komt. Wat uit staat, wordt niet geïmporteerd.")
                 .font(.caption).foregroundStyle(.secondary)
             VStack(spacing: 0) {
                 if lower > 0 { more("\(lower) eerdere \(lower == 1 ? "regel" : "regels") · toon meer") }

@@ -35,11 +35,15 @@ struct PotsScreen: View {
         .sheet(item: $sheet) { sheet in
             switch sheet {
             case .new:
-                PotsEditSheet(pot: nil, accounts: activeAccounts, defaultAccountId: accountId, owners: owners) { id in
-                    selectedPotId = id
-                }
+                PotsEditSheet(pot: nil, accounts: activeAccounts, defaultAccountId: accountId, owners: owners,
+                              today: model.today, onSaved: { _ in }, onDistributions: { self.sheet = .distributions })
             case .edit(let pot):
-                PotsEditSheet(pot: pot, accounts: activeAccounts, defaultAccountId: pot.accountId, owners: owners) { _ in }
+                PotsEditSheet(pot: pot, accounts: data?.savingsAccounts ?? [], defaultAccountId: pot.accountId, owners: owners,
+                              today: model.today, onSaved: { _ in }, onDistributions: { self.sheet = .distributions })
+            case .distributions:
+                PotsDistributionsSheet()
+            case .openings(let id):
+                PotsOpeningSheet(accountId: id, accountName: data?.accountName(id) ?? "de spaarrekening")
             case .move(let pot):
                 PotsMoveSheet(from: pot,
                               candidates: (data?.allPots ?? []).filter { $0.accountId == pot.accountId && $0.id != pot.id && !$0.archived },
@@ -87,6 +91,8 @@ struct PotsScreen: View {
                     .help("Laat ook de potten zien die je gearchiveerd hebt.")
             }
             if !data.savingsAccounts.isEmpty {
+                Button("Vaste stortingen") { sheet = .distributions }
+                    .help("Wat je regelmatig van betaal naar spaar overmaakt, en hoe dat over de potten verdeeld wordt.")
                 Button { sheet = .new } label: { Label("Nieuwe pot…", systemImage: "plus") }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut("n", modifiers: .command)
@@ -137,7 +143,7 @@ struct PotsScreen: View {
                         .onKeyPress(.upArrow) { step(-1, in: data); return .handled }
                         if data.pot(selectedPotId) != nil {
                             Divider()
-                            detailPanel(data).frame(width: compact ? 340 : 400)
+                            detailPanel(data).frame(width: compact ? 380 : 440)
                                 .transition(.move(edge: .trailing))
                         }
                     }
@@ -178,6 +184,12 @@ struct PotsScreen: View {
                 ForEach(overview.accounts) { account in
                     PotsAccountStrip(account: account, series: data.series[account.id] ?? [], asOf: data.asOf,
                                      showName: overview.accounts.count > 1, onSelectPot: select)
+                }
+            }
+
+            ForEach(data.openings, id: \.accountId) { opening in
+                PotsOpeningBlock(opening: opening, showName: data.openings.count > 1 || (data.overview?.accounts.count ?? 0) > 1) {
+                    sheet = .openings(opening.accountId)
                 }
             }
 
@@ -233,7 +245,8 @@ struct PotsScreen: View {
                             onArchive: { archive(pot) },
                             onUnarchive: { unarchive(pot) },
                             onDelete: { potToDelete = pot },
-                            onClose: { withAnimation(.easeInOut(duration: 0.2)) { selectedPotId = nil } })
+                            onClose: { withAnimation(.easeInOut(duration: 0.2)) { selectedPotId = nil } },
+                            onDistributions: { sheet = .distributions })
                 .id(pot.id)
         }
     }
