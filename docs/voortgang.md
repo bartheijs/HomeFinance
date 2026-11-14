@@ -11,6 +11,17 @@
 - "Tijdelijk anti-rood" volgt uit boekingen met de markering *tijdelijk geleend van spaar*.
 - Back-up naar iCloud Drive; dashboard voor de telefoon als bestand in een cloudmap (geen hosting).
 
+## Koerswijziging 14 november 2026
+
+- **Start met alleen beginstanden**, geen historie. De gebruiker richt zelf in (posten, potten met beginbedrag)
+  om de app te leren kennen. De historie-import staat in de wacht; de oorzaak van de mislukte proefdraai en de
+  oplossing staan hieronder en blijven geldig voor later.
+- **Vaste storting met verdeling** wordt een eigen instelling (naam, potten met bedrag, totaal); er kunnen er
+  meer zijn. Vervangt het maandbedrag per pot en de RES-regels als bron van de verdeling.
+- **Een post voor een maand met de hand afvinken** als voldaan.
+- **Een boeking kan in een andere maand meetellen** dan zijn datum (`Entry.period`); het saldo volgt de datum.
+- Schema v4 staat erin. `HFBudget` en `HFInsight` bouwen de logica; daarna de schermen.
+
 ## Stand per onderdeel
 
 | Onderdeel | Stand |
