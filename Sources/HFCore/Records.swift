@@ -139,10 +139,14 @@ public struct Pot: Codable, Identifiable, Equatable, Sendable, FetchableRecord, 
     public var targetAmount: Money?
     public var sortOrder: Int
     public var archived: Bool
+    /// De dag waarop het spaardoel bereikt moet zijn, of nil (doel zonder datum).
+    public var targetDate: Day?
 
     public static let databaseTableName = "pot"
     public init(id: Int64? = nil, accountId: Int64, name: String, kind: PotKind, owner: String? = nil,
-                monthlyAmount: Money = .zero, targetAmount: Money? = nil, sortOrder: Int = 0, archived: Bool = false) {
+                monthlyAmount: Money = .zero, targetAmount: Money? = nil, sortOrder: Int = 0, archived: Bool = false,
+                targetDate: Day? = nil) {
+        self.targetDate = targetDate
         self.id = id; self.accountId = accountId; self.name = name; self.kind = kind; self.owner = owner
         self.monthlyAmount = monthlyAmount; self.targetAmount = targetAmount
         self.sortOrder = sortOrder; self.archived = archived

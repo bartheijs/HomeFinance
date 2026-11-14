@@ -284,6 +284,13 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Spaardoel per pot: naast het doelbedrag ook de datum waarop het er moet zijn.
+        m.registerMigration("v7-pot-target-date") { db in
+            try db.alter(table: "pot") { t in
+                t.add(column: "targetDate", .text)
+            }
+        }
+
         return m
     }
 }
