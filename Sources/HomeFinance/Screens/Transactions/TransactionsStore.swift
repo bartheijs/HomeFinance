@@ -608,6 +608,7 @@ final class TransactionsStore {
         if ok {
             reload(model)
             model.toast = message()
+            model.autoReconcile(accountIds: accountId.map { [$0] })
         }
         return ok
     }

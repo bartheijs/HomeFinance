@@ -17,6 +17,9 @@ public enum AttentionItem: Equatable, Sendable {
     case reconciliationOld(accountId: Int64, accountName: String, lastDay: Day?, daysAgo: Int)
     /// Een afgevinkte verrekening met spaar is na 5 dagen nog niet aan beide kanten in een bankbestand gezien.
     case unconfirmedSettlement(amount: Money, day: Day)
+    /// Meer dan één afgevinkte verrekening is nog niet in een bankbestand gezien: aantal, samen (zonder teken) en
+    /// de dag van de oudste.
+    case unconfirmedSettlements(count: Int, total: Money, oldestDay: Day)
     /// Er is nog geen begroting voor het jaar van vandaag.
     case yearMissing(year: Int)
     /// Er staat nog een bedrag uit dat tijdelijk van spaar geleend is.
@@ -45,6 +48,8 @@ public enum AttentionItem: Equatable, Sendable {
             return "\(name): nog nooit afgestemd."
         case .unconfirmedSettlement(let amount, let day):
             return "Verrekening van \(amount.formatted()) op \(day.dutch) is nog niet gezien in een bankbestand."
+        case .unconfirmedSettlements(let count, let total, let oldest):
+            return "\(count) verrekeningen (samen \(total.formatted())) zijn nog niet gezien in een bankbestand, de oudste van \(oldest.dutch)."
         case .yearMissing(let year):
             return "Er is nog geen begroting voor \(year)."
         case .temporaryLoanOutstanding(let amount):
@@ -109,9 +114,17 @@ extension Insight {
             attention.append(.openReimbursements(amount: net.magnitude, count: open["c"],
                                                  direction: SavingsTransferDirection(net: net)))
         }
-        for t in try savingsTransfers(db).reversed()
-        where t.done && !t.bankConfirmed && Q.daysBetween(t.day, today) > settlementConfirmationDays {
-            attention.append(.unconfirmedSettlement(amount: t.transferAmount, day: t.day))
+        // Zoals `SavingsTransferService.unconfirmed`: `settlementConfirmationDays` dagen na het boeken nog geen bankregel.
+        let unconfirmed: [(amount: Money, day: Day)] = try savingsTransfers(db).reversed().compactMap { t in
+            guard t.done, !t.amount.isZero, let since = t.unconfirmedSince,
+                  since.adding(days: settlementConfirmationDays) <= today else { return nil }
+            return (t.transferAmount, since)
+        }
+        if unconfirmed.count == 1, let t = unconfirmed.first {
+            attention.append(.unconfirmedSettlement(amount: t.amount, day: t.day))
+        } else if let oldest = unconfirmed.map(\.day).min() {
+            attention.append(.unconfirmedSettlements(count: unconfirmed.count,
+                                                     total: unconfirmed.map(\.amount).sum(), oldestDay: oldest))
         }
         let borrowed = try temporaryLoanOutstanding(db, on: today)
         if !borrowed.isZero { attention.append(.temporaryLoanOutstanding(amount: borrowed)) }

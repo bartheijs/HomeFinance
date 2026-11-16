@@ -549,6 +549,7 @@ final class ReviewStore {
         selection = next.map { [$0] } ?? []
         cursor = next
         load(model)
+        model.autoReconcile()
     }
 
     // MARK: Boeken en overslaan

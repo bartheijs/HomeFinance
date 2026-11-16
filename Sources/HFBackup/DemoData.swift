@@ -221,6 +221,8 @@ public enum DemoData {
         var transactionCount = 0, newCount = 0
         var ruleUse: [Int64: (count: Int, last: Day)] = [:]
         var linked: [Int: (checking: Int64?, savings: [Int64])] = [:]
+        /// De boekingen van het afvinken per verrekening, zoals HFBudget ze bijhoudt in `Setting`.
+        var bookedByTransfer: [Int64: [Int64]] = [:]
         var checkingBalance = DemoPlan.checkingOpening
 
         func insertAccount(_ list: [DemoTx], accountId: Int64, isChecking: Bool) throws {
@@ -256,6 +258,8 @@ public enum DemoData {
                 if recent { newCount += 1; continue }
                 if isChecking { checkingBalance += tx.amount }
 
+                // Bankregel van een afgevinkte verrekening: de boekingen zijn die van het afvinken.
+                let transferId = tx.transferIndex.flatMap { transferIds[$0] }
                 for line in tx.lines {
                     let ruleId = line.ruleName.flatMap { ruleIds[$0] }
                     var entry = Entry(
@@ -263,10 +267,11 @@ public enum DemoData {
                         label: line.label, budgetItemId: line.itemLabel.flatMap { itemIds[$0] },
                         potId: line.potName.flatMap { potIds[$0] }, reimburse: line.reimburse,
                         savingsTransferId: line.transferIndex.flatMap { transferIds[$0] },
-                        reviewed: index < unreviewedFrom, ruleId: ruleId,
+                        reviewed: index < unreviewedFrom, note: transferId.map { "Verrekening #\($0)" } ?? "", ruleId: ruleId,
                         confidence: ruleId == nil ? nil : line.confidence, createdAt: tx.day.date)
                     try entry.insert(db)
                     entryCount += 1
+                    if let transferId { bookedByTransfer[transferId, default: []].append(entry.id!) }
                     for tag in line.tags {
                         try EntryTag(entryId: entry.id!, tagId: tagIds[tag]!).insert(db)
                     }
@@ -291,6 +296,9 @@ public enum DemoData {
             for savingsEntry in pair.savings {
                 try db.execute(sql: "UPDATE entry SET counterEntryId = ? WHERE id = ?", arguments: [checkingEntry, savingsEntry])
             }
+        }
+        for (transferId, ids) in bookedByTransfer.sorted(by: { $0.key < $1.key }) {
+            try Setting.set(db, "savingsTransfer.\(transferId).entries", ids.sorted().map(String.init).joined(separator: ","))
         }
         for (ruleId, use) in ruleUse {
             try db.execute(sql: "UPDATE rule SET hitCount = ?, lastUsed = ? WHERE id = ?",

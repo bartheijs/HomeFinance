@@ -190,8 +190,14 @@ Wat erin zit, van 1 januari van het jaar van `today` t/m `today`:
 - Afwijkingen van het plan (energie in maart, mobiel in februari, salaris met vakantiegeld in mei,
   zorgverzekering in augustus) en één ontbrekende betaling (Water) voor een "te laat".
 - Wekelijks zakgeld, tanken en uit eten met tag, eenmalige inkomsten.
-- Uitgaven met `reimburse` en pot: elke maand op de 27e vergoed in één afgeronde `SavingsTransfer` (met de
-  banktransacties spaar → betaal); wat daarna komt staat open.
+- Uitgaven met `reimburse` en pot: elke maand op de 27e verrekend in één afgeronde `SavingsTransfer`, zoals
+  `SavingsTransferService` (HFBudget) dat maakt: de gemarkeerde uitgaven hebben `savingsTransferId`; op de dag
+  van de overboeking staan de boekingen van het afvinken (notitie `Verrekening #<id>`: per pot een boeking
+  "Verrekening spaar: <pot>" op de spaarrekening en één diverse boeking "Verrekening spaar" op de betaalrekening,
+  gekoppeld via `counterEntryId`), vastgelegd in `Setting` `savingsTransfer.<id>.entries`; en aan beide kanten
+  hangt de bankregel (tegenrekening = de andere eigen rekening, status `verwerkt`), zodat
+  `SavingsTransferService.unconfirmed` leeg is. De verrekening van de laatste 10 dagen is niet gemaakt: de
+  uitgaven staan open en de bankregels van die dagen zijn `nieuw` (of komen uit de voorbeeld-CSV).
 - Privélening: op 5 januari komt "Schenking familie" binnen (12 × de maandrente, IN divers), op 6 januari gaat
   dat bedrag naar de pot "Rente privélening" op de spaarrekening (reserveringspot zonder maandbedrag en zonder
   RES-regel, gekoppeld via `counterEntryId`). Elke rentebetaling (de 28e) heeft `reimburse` met die pot en zit

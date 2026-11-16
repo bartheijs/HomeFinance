@@ -85,7 +85,7 @@ private struct DashboardAttentionLook {
         case .openSettlement:
             icon = "arrow.uturn.left.circle"; tint = .secondary; action = "Bekijk"; target = .transactions
             help = "Uitgaven met deze tag die je nog moet terugstorten op de betaalrekening."
-        case .unconfirmedSettlement:
+        case .unconfirmedSettlement, .unconfirmedSettlements:
             icon = "questionmark.circle"; tint = Theme.warning; action = "Bekijk"; target = .reimbursements
             help = "Je hebt deze verrekening afgevinkt, maar de overboeking is nog niet in een bankbestand gezien. Controleer of je hem hebt overgemaakt, of importeer een nieuw bankbestand."
         case .temporaryLoanOutstanding:

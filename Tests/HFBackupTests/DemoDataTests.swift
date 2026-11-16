@@ -201,6 +201,70 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
         }
     }
 
+    /// Afgeronde verrekeningen met spaar zoals HFBudget ze maakt (`markDone`) en een latere import ze aanhangt
+    /// (`attach`): boekingen "Verrekening #<id>" op beide rekeningen, met de bankregels eraan.
+    @Test(arguments: demoDays)
+    func settlementsHaveBankTransactionsOnBothSides(today: Day) throws {
+        let (db, summary) = try seeded(today)
+        try db.read { database in
+            let transfers = try SavingsTransfer.fetchAll(database, sql: "SELECT * FROM savingsTransfer ORDER BY day, id")
+            for transfer in transfers {
+                #expect(transfer.done && transfer.doneAt != nil && transfer.amount > .zero)
+                let id = transfer.id!
+                let list = try #require(try Setting.get(database, "savingsTransfer.\(id).entries"))
+                let ids = list.split(separator: ",").compactMap { Int64($0) }
+                let booked = try Entry.fetchAll(database, sql:
+                    "SELECT * FROM entry WHERE id IN (\(list)) ORDER BY id")
+                #expect(booked.count == ids.count && !booked.isEmpty)
+                #expect(booked.allSatisfy { $0.note == "Verrekening #\(id)" && $0.savingsTransferId == nil && $0.reviewed })
+                // Er hangt niets anders onder dit nummer.
+                #expect(try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM entry WHERE note = ?",
+                                         arguments: ["Verrekening #\(id)"]) == booked.count)
+
+                // Betaalkant: één diverse boeking van +netto; spaarkant: per pot een boeking, samen −netto.
+                let checking = booked.filter { $0.accountId == summary.checkingAccountId }
+                let savings = booked.filter { $0.accountId == summary.savingsAccountId }
+                #expect(checking.count == 1 && checking[0].amount == transfer.amount)
+                #expect(checking[0].label == "Verrekening spaar" && checking[0].budgetItemId == nil && !checking[0].reimburse)
+                #expect(savings.map(\.amount).sum() == -transfer.amount)
+                #expect(savings.allSatisfy { $0.potId != nil && $0.amount.isNegative && $0.counterEntryId == checking[0].id })
+                #expect(Set(savings.compactMap(\.potId)).count == savings.count)
+                #expect(savings.map(\.id).contains(checking[0].counterEntryId))
+                // De gemarkeerde uitgaven zijn samen het bedrag van de verrekening.
+                let marked = try Money.fetchOne(database, sql:
+                    "SELECT COALESCE(SUM(amount), 0) FROM entry WHERE savingsTransferId = ?", arguments: [id])!
+                #expect(-marked == transfer.amount)
+
+                // Aan beide kanten een bankregel, met de eigen andere rekening als tegenrekening.
+                let checkingTx = try #require(try BankTransaction.fetchOne(database, key: checking[0].bankTransactionId))
+                #expect(checkingTx.status == .verwerkt && checkingTx.amount == transfer.amount)
+                #expect(checkingTx.counterpartyIban == DemoPlan.savingsIban && checkingTx.day == checking[0].day)
+                #expect(checkingTx.day == transfer.day && checkingTx.accountId == summary.checkingAccountId)
+                #expect(Set(savings.compactMap(\.bankTransactionId)).count == 1)
+                let savingsTx = try #require(try BankTransaction.fetchOne(database, key: savings[0].bankTransactionId))
+                #expect(savingsTx.status == .verwerkt && savingsTx.amount == -transfer.amount)
+                #expect(savingsTx.counterpartyIban == DemoPlan.checkingIban && savingsTx.accountId == summary.savingsAccountId)
+                #expect(savings.allSatisfy { $0.day == savingsTx.day })
+            }
+            #expect(transfers.count >= (today.month > 3 ? 3 : 0))
+
+            // Zoals `SavingsTransferService.unconfirmed`: niets afgevinkts zonder bankregel na 5 dagen.
+            var unconfirmed = 0
+            for transfer in transfers {
+                let list = try Setting.get(database, "savingsTransfer.\(transfer.id!).entries") ?? ""
+                let open = try Entry.fetchAll(database, sql:
+                    "SELECT * FROM entry WHERE id IN (\(list)) AND bankTransactionId IS NULL")
+                if let bookedOn = open.map(\.day).min(), bookedOn.adding(days: 5) <= today { unconfirmed += 1 }
+            }
+            #expect(unconfirmed == 0)
+            // En zoals het Dashboard het ziet: geen afgevinkte verrekening waarvan een kant geen bankregel heeft.
+            #expect(try Int.fetchOne(database, sql: """
+                SELECT COUNT(*) FROM savingsTransfer t WHERE t.done = 1 AND (
+                    SELECT COUNT(*) FROM entry e WHERE e.note = 'Verrekening #' || t.id AND e.bankTransactionId IS NULL) > 0
+                """) == 0)
+        }
+    }
+
     @Test func seedingTwiceRefuses() throws {
         let (db, _) = try seeded(testToday)
         let before = try dump(db)

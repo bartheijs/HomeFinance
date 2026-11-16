@@ -84,7 +84,11 @@ public struct Spendable: Equatable, Sendable {
     /// Posten die deze maand verwacht worden en nog geen boeking hebben (leeg buiten het lopende jaar).
     public let expectedItems: [ExpectedItem]
     public let expectedTotal: Money
-    /// Besteedbaar eind van de maand = `spendable` + `expectedTotal`.
+    /// Netto bedrag van alle open verrekeningen met spaar (gemarkeerde boekingen die nog niet in een afgevinkte
+    /// verrekening zitten), met teken vanuit de betaalrekening: positief = er komt nog geld van spaar naar betaal,
+    /// negatief = er moet nog geld van betaal naar spaar. Alleen in het lopende jaar, anders € 0,00.
+    public let pendingSettlement: Money
+    /// Besteedbaar eind van de maand = `spendable` + `expectedTotal` + `pendingSettlement`.
     public let spendableEndOfMonth: Money
 }
 
@@ -273,10 +277,11 @@ extension Insight {
             }
         }
         let expectedTotal = expected.map(\.plan).sum()
+        let pending = today.year == year ? try pendingSettlementNet(db) : .zero
         return Spendable(year: year, asOf: asOf, balance: balance, antiRood: budgetYear.antiRood,
                          tijdelijkAntiRood: borrowed, spendable: spendable,
-                         expectedItems: expected, expectedTotal: expectedTotal,
-                         spendableEndOfMonth: spendable + expectedTotal)
+                         expectedItems: expected, expectedTotal: expectedTotal, pendingSettlement: pending,
+                         spendableEndOfMonth: spendable + expectedTotal + pending)
     }
 
     /// Het jaaroverzicht (op de rekening op 1-1, IN, UIT, op de rekening, buffers, besteedbaar,

@@ -93,6 +93,14 @@ struct DashboardHero: View {
                 }
                 .font(.caption)
             }
+            if !spendable.pendingSettlement.isZero {
+                HStack(spacing: 6) {
+                    Text("Nog te verrekenen met spaar")
+                    Spacer(minLength: 4)
+                    Text(spendable.pendingSettlement.formatted(alwaysSign: true)).monospacedDigit()
+                }
+                .help("Uitgaven die nog uit een potje komen (of geld dat nog naar een potje moet). Hier telt het alvast mee alsof het verrekend is.")
+            }
             Divider()
             total("Nog te besteden", spendable.spendableEndOfMonth).help(Self.mainHelp)
 

@@ -1,6 +1,8 @@
 import SwiftUI
 import GRDB
 import HFCore
+import HFBudget
+import os
 
 /// De schermen in de zijbalk.
 enum Screen: String, CaseIterable, Identifiable, Hashable {
@@ -74,6 +76,7 @@ final class AppModel {
         self.fixedToday = today
         self.year = (today ?? Day.today()).year
         observe()
+        autoReconcile(announce: false)
     }
 
     // MARK: Database kiezen
@@ -120,7 +123,30 @@ final class AppModel {
         self.year = today.year
         self.selection = .transactions
         observe()
+        autoReconcile(announce: false)
         revision += 1
+    }
+
+    // MARK: Automatisch afstemmen
+
+    @ObservationIgnored private static let log = Logger(subsystem: "HomeFinance", category: "afstemmen")
+
+    /// Legt stil een afstemming vast voor elke volledig geboekte import die exact aansluit op het eindsaldo van
+    /// de bank (`BalanceService.autoReconcileAll`). Zonder `accountIds` voor alle rekeningen. Fouten komen niet
+    /// in beeld maar in het log. Met `announce` komt er een toast bij een nieuwe afstemming, achter een
+    /// eventuele melding die er al staat.
+    func autoReconcile(accountIds: [Int64]? = nil, announce: Bool = true) {
+        do {
+            let created: [Reconciliation] = try db.write { db in
+                let ids = try accountIds ?? Int64.fetchAll(db, sql: "SELECT id FROM account WHERE archived = 0")
+                return try ids.flatMap { try BalanceService.autoReconcileAll(db, accountId: $0) }
+            }
+            guard announce, let newest = created.max(by: { $0.day < $1.day }) else { return }
+            let text = "Afgestemd met de bank: \(newest.actualBalance.formatted()) op \(newest.day.dutch)"
+            toast = toast.map { "\($0) · \(text)" } ?? text
+        } catch {
+            Self.log.error("Automatisch afstemmen mislukt: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func observe() {

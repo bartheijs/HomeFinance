@@ -217,6 +217,9 @@ public struct SavingsTransferDetail: Identifiable, Equatable, Sendable {
     public let checkingBankConfirmed: Bool
     /// Aan de boekingen op de spaarrekening hangt een bankregel.
     public let savingsBankConfirmed: Bool
+    /// De oudste dag van een verrekeningsboeking waar nog geen bankregel aan hangt, of nil als alles bevestigd is
+    /// of de verrekening nog niet is afgevinkt. Een bankregel verschuift de boeking naar de dag van de bank.
+    public let unconfirmedSince: Day?
 
     /// Afgevinkt (zelfde als `done`).
     public var isDone: Bool { done }
@@ -225,48 +228,30 @@ public struct SavingsTransferDetail: Identifiable, Equatable, Sendable {
     public var bankConfirmed: Bool { amount.isZero || (checkingBankConfirmed && savingsBankConfirmed) }
 }
 
-/// Hoe `HFBudget` de boekingen van een verrekening met spaar herkenbaar maakt. Een verrekeningsboeking is:
-/// - een boeking met notitie "Verrekening met spaar #<id>";
-/// - een boeking die in de instelling `savingsTransfer.<id>.potEntries` staat;
-/// - een boeking van de banktransactie in `savingsTransfer.<id>.checkingTransaction` of `.savingsTransaction`;
-/// - een boeking op een spaarrekening met `savingsTransferId`.
+/// Hoe `HFBudget` de boekingen van een verrekening met spaar markeert (`SavingsTransferService.markDone`): de
+/// instelling `savingsTransfer.<id>.entries` bevat de id's van de boekingen die het afvinken heeft gemaakt (de
+/// potmutaties op de spaarrekening en de boeking op de betaalrekening). De notitie "Verrekening #<id>" is alleen
+/// voor de gebruiker; de koppeling hangt er niet van af. Een bankregel aan een kant is een `bankTransactionId` op
+/// de boekingen van die kant (`attach`).
 struct TransferMarkers {
-    static let notePrefix = "Verrekening met spaar #"
+    /// Boeking-id → id van de verrekening.
     var entryTransfer: [Int64: Int64] = [:]
-    var bankTransfer: [Int64: Int64] = [:]
-    var checkingBank: Set<Int64> = []
-    var savingsBank: Set<Int64> = []
 
     init(_ db: Database) throws {
-        for r in try Row.fetchAll(db, sql: "SELECT key, value FROM setting WHERE key LIKE 'savingsTransfer.%'") {
+        for r in try Row.fetchAll(db, sql: "SELECT key, value FROM setting WHERE key LIKE 'savingsTransfer.%.entries'") {
             let parts = (r["key"] as String).split(separator: ".")
             guard parts.count == 3, let transferId = Int64(parts[1]) else { continue }
-            let ids = (r["value"] as String).split(separator: ",").compactMap { Int64($0.trimmingCharacters(in: .whitespaces)) }
-            switch parts[2] {
-            case "potEntries": for id in ids { entryTransfer[id] = transferId }
-            case "checkingTransaction": for id in ids { bankTransfer[id] = transferId }; checkingBank.insert(transferId)
-            case "savingsTransaction": for id in ids { bankTransfer[id] = transferId }; savingsBank.insert(transferId)
-            default: break
+            for id in (r["value"] as String).split(separator: ",").compactMap({ Int64($0.trimmingCharacters(in: .whitespaces)) }) {
+                entryTransfer[id] = transferId
             }
         }
     }
 
-    func transferId(of row: EntryRow) -> Int64? {
-        if row.note.hasPrefix(Self.notePrefix), let id = Int64(row.note.dropFirst(Self.notePrefix.count)) { return id }
-        if let id = entryTransfer[row.id] { return id }
-        if let bank = row.bankTransactionId, let id = bankTransfer[bank] { return id }
-        if row.accountKind == .spaar, let id = row.savingsTransferId { return id }
-        return nil
-    }
+    func transferId(of row: EntryRow) -> Int64? { entryTransfer[row.id] }
 
-    /// SQL-voorwaarde die alle mogelijke verrekeningsboekingen selecteert.
+    /// SQL-voorwaarde die alle verrekeningsboekingen selecteert.
     var clause: String {
-        var parts = ["e.note LIKE '\(Self.notePrefix)%'", "(e.savingsTransferId IS NOT NULL AND a.kind = 'spaar')"]
-        if !entryTransfer.isEmpty { parts.append("e.id IN (\(entryTransfer.keys.map(String.init).joined(separator: ",")))") }
-        if !bankTransfer.isEmpty {
-            parts.append("e.bankTransactionId IN (\(bankTransfer.keys.map(String.init).joined(separator: ",")))")
-        }
-        return "(" + parts.joined(separator: " OR ") + ")"
+        entryTransfer.isEmpty ? "0" : "e.id IN (\(entryTransfer.keys.map(String.init).joined(separator: ",")))"
     }
 }
 
@@ -454,6 +439,17 @@ extension Insight {
         return result
     }
 
+    /// Netto bedrag van alle open verrekeningen met spaar: gemarkeerde boekingen op betaalrekeningen die nog niet in
+    /// een afgevinkte verrekening zitten (`fromSavings` − `toSavings`, dus positief = van spaar naar betaal).
+    static func pendingSettlementNet(_ db: Database) throws -> Money {
+        let sum = try Money.fetchOne(db, sql: """
+            SELECT COALESCE(SUM(e.amount), 0) FROM entry e
+            LEFT JOIN savingsTransfer t ON t.id = e.savingsTransferId
+            WHERE e.reimburse = 1 AND (e.savingsTransferId IS NULL OR t.done = 0) AND e.accountId IN \(Q.betaal)
+            """) ?? .zero
+        return -sum
+    }
+
     /// Gemarkeerde boekingen op betaalrekeningen die nog niet in een overboeking zitten: uitgaven (uit een pot) en
     /// bijschrijvingen (naar een pot), gesaldeerd, met het bedrag per pot en het potsaldo erna.
     public static func openReimbursements(_ db: Database) throws -> OpenReimbursements {
@@ -498,10 +494,9 @@ extension Insight {
                                          entriesTotal: own.map(\.amount).sum(),
                                          perPot: reimbursementPots(own, balances: nil), potEntries: potEntries,
                                          potMutationsBooked: !potEntries.isEmpty, bookings: made,
-                                         checkingBankConfirmed: markers.checkingBank.contains(t.id!)
-                                             || made.contains { $0.accountKind == .betaal && $0.bankTransactionId != nil },
-                                         savingsBankConfirmed: markers.savingsBank.contains(t.id!)
-                                             || made.contains { $0.accountKind == .spaar && $0.bankTransactionId != nil })
+                                         checkingBankConfirmed: made.contains { $0.accountKind == .betaal && $0.bankTransactionId != nil },
+                                         savingsBankConfirmed: made.contains { $0.accountKind == .spaar && $0.bankTransactionId != nil },
+                                         unconfirmedSince: t.done ? made.filter { $0.bankTransactionId == nil }.map(\.day).min() : nil)
         }
     }
 }

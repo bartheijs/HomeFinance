@@ -270,3 +270,84 @@ import Testing
         #expect(BudgetError.potNotEmpty(pot: "Vakantie", balance: c(1_000)).localizedDescription.contains("€ 10,00"))
     }
 }
+
+@Suite struct AutoReconcileTests {
+    /// Import op de betaalrekening met de gegeven transacties en eindsaldo; alles geboekt tenzij `leaveOpen`.
+    @discardableResult
+    private func importBatch(_ db: Database, _ fx: Fixture, lastDay: String, closing: Int64,
+                             _ items: [(String, Int64)], leaveOpen: Int = 0) throws -> ImportBatch {
+        var batch = ImportBatch(accountId: fx.betaal.id!, fileName: "test.csv", rowCount: items.count,
+                                newCount: items.count, firstDay: d(items[0].0), lastDay: d(lastDay),
+                                closingBalance: c(closing))
+        try batch.insert(db)
+        for (index, item) in items.enumerated() {
+            let t = try fx.tx(db, fx.betaal, item.0, item.1, batchId: batch.id)
+            if index >= items.count - leaveOpen { continue }
+            try BookingService.book(db, bankTransactionId: t.id!, allocations: [Allocation(amount: t.amount, label: "x")])
+        }
+        return batch
+    }
+
+    @Test func sluitendeImportWordtAfgestemd() throws {
+        let fx = try Fixture()
+        try fx.app.write { db in
+            // 1.000,00 − 50,00 − 20,00 = 930,00.
+            let batch = try importBatch(db, fx, lastDay: "2027-02-10", closing: 93_000, [("2027-02-01", -5_000), ("2027-02-10", -2_000)])
+            let r = try #require(try BalanceService.autoReconcile(db, batchId: batch.id!))
+            #expect(r.accountId == fx.betaal.id && r.day == d("2027-02-10"))
+            #expect(r.actualBalance == c(93_000) && r.calculatedBalance == c(93_000) && r.difference == .zero)
+            #expect(try BalanceService.history(db, accountId: fx.betaal.id!).count == 1)
+            // Tweede aanroep: er is al een afstemming op die dag.
+            #expect(try BalanceService.autoReconcile(db, batchId: batch.id!) == nil)
+            #expect(try BalanceService.autoReconcileAll(db, accountId: fx.betaal.id!).isEmpty)
+            #expect(try BalanceService.history(db, accountId: fx.betaal.id!).count == 1)
+        }
+    }
+
+    @Test func openTransactieOfVerschilGeeftGeenAfstemming() throws {
+        let fx = try Fixture()
+        try fx.app.write { db in
+            let open = try importBatch(db, fx, lastDay: "2027-02-10", closing: 93_000,
+                                       [("2027-02-01", -5_000), ("2027-02-10", -2_000)], leaveOpen: 1)
+            #expect(try BalanceService.autoReconcile(db, batchId: open.id!) == nil)
+            // Verschil van 1,00 met het eindsaldo van het bestand.
+            let off = try importBatch(db, fx, lastDay: "2027-03-10", closing: 90_100, [("2027-03-10", -3_000)])
+            #expect(try BalanceService.autoReconcile(db, batchId: off.id!) == nil)
+            #expect(try BalanceService.autoReconcileAll(db, accountId: fx.betaal.id!).isEmpty)
+            // Zonder eindsaldo valt er niets te vergelijken.
+            var zonder = ImportBatch(accountId: fx.spaar.id!, fileName: "leeg.csv")
+            try zonder.insert(db)
+            #expect(try BalanceService.autoReconcile(db, batchId: zonder.id!) == nil)
+            #expect(try BalanceService.history(db, accountId: fx.betaal.id!).isEmpty)
+        }
+    }
+
+    @Test func meerdereImportsNieuwsteEerstEnStoptBijAfgestemd() throws {
+        let fx = try Fixture()
+        try fx.app.write { db in
+            // Januari: 1.000 − 100 = 900. Februari: − 50 = 850. Maart: − 25 = 825.
+            let jan = try importBatch(db, fx, lastDay: "2027-01-31", closing: 90_000, [("2027-01-15", -10_000)])
+            let feb = try importBatch(db, fx, lastDay: "2027-02-28", closing: 85_000, [("2027-02-15", -5_000)])
+            let mrt = try importBatch(db, fx, lastDay: "2027-03-31", closing: 82_500, [("2027-03-15", -2_500)])
+            let created = try BalanceService.autoReconcileAll(db, accountId: fx.betaal.id!)
+            #expect(created.map(\.day) == [d("2027-03-31"), d("2027-02-28"), d("2027-01-31")])
+            #expect(created.map(\.actualBalance) == [c(82_500), c(85_000), c(90_000)])
+            #expect(try BalanceService.autoReconcileAll(db, accountId: fx.betaal.id!).isEmpty)
+
+            // Een nieuwe import erbij: alleen die wordt afgestemd; de oudere zijn al gedaan.
+            let apr = try importBatch(db, fx, lastDay: "2027-04-30", closing: 80_000, [("2027-04-15", -2_500)])
+            #expect(try BalanceService.autoReconcileAll(db, accountId: fx.betaal.id!).map(\.day) == [d("2027-04-30")])
+            #expect(try BalanceService.history(db, accountId: fx.betaal.id!).count == 4)
+
+            // Stopt bij de eerste afgestemde: een ouder gat blijft ongemoeid als nieuwere er al een hebben.
+            try db.execute(sql: "DELETE FROM reconciliation WHERE day = ?", arguments: [d("2027-01-31")])
+            try db.execute(sql: "DELETE FROM reconciliation WHERE day = ?", arguments: [d("2027-04-30")])
+            #expect(try BalanceService.autoReconcileAll(db, accountId: fx.betaal.id!).map(\.day) == [d("2027-04-30")])
+            #expect(jan.id != nil && feb.id != nil && mrt.id != nil && apr.id != nil)
+            // Een handmatige afstemming op die dag telt ook als afgestemd.
+            try db.execute(sql: "DELETE FROM reconciliation WHERE day = ?", arguments: [d("2027-04-30")])
+            try BalanceService.reconcile(db, accountId: fx.betaal.id!, day: d("2027-04-30"), actualBalance: c(80_000))
+            #expect(try BalanceService.autoReconcile(db, batchId: apr.id!) == nil)
+        }
+    }
+}

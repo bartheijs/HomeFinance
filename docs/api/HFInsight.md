@@ -119,6 +119,25 @@ Boekingen op een spaarrekening zonder pot zijn "niet toegewezen". Twee zulke boe
 zonder de opgeheven paren. De rekenregel van `SavingsAccountPots.unallocated` (saldo − potten) is niet veranderd:
 opgeheven boekingen tellen daar gewoon mee en zijn samen € 0,00. Boekingen met een pot doen niet mee.
 
+### Open verrekeningen in "nog te besteden"
+
+`Spendable.pendingSettlement` is het netto bedrag van alle open verrekeningen met spaar: gemarkeerde boekingen op
+betaalrekeningen die nog niet in een afgevinkte verrekening zitten (dezelfde berekening als `net` van
+`openReimbursements`). Het teken is vanuit de betaalrekening gezien: positief = er komt nog geld van spaar naar
+betaal, negatief = er moet nog geld van betaal naar spaar. Alleen in het lopende jaar (zoals `expectedItems`);
+anders € 0,00.
+
+`spendableEndOfMonth` = `spendable` + `expectedTotal` + `pendingSettlement`: het hoofdgetal gaat uit van een
+situatie waarin alles verrekend is. `spendable` (besteedbaar nu) verandert niet.
+
+### Samengevatte melding bij onbevestigde verrekeningen
+
+`AttentionItem.unconfirmedSettlements(count:total:oldestDay:)` vervangt de losse meldingen zodra er **meer dan
+één** afgevinkte verrekening is die na 5 dagen nog niet aan beide kanten in een bankbestand is gezien: aantal,
+samen (bedragen zonder teken) en de dag van de oudste. Tekst: "N verrekeningen (samen € …) zijn nog niet gezien
+in een bankbestand, de oudste van <dag>." Bij precies één blijft `unconfirmedSettlement(amount:day:)`.
+**Nieuwe `case`: schermen met een uitputtende `switch` op `AttentionItem` moeten hem afhandelen.**
+
 ### Verrekenen met spaar (twee richtingen)
 
 `Entry.reimburse` op een betaalrekening geldt voor uitgaven ("uit deze pot") én voor bijschrijvingen ("doorstorten
@@ -165,21 +184,25 @@ de spaarrekening en de tegenboeking op de betaalrekening. Bankregels worden er b
   nul altijd waar). `entries` bevat alleen de gemarkeerde boekingen, niet de verrekeningsboekingen.
 - `PotSummary.pendingSettlement` telt alleen gemarkeerde boekingen die nog niet in een afgevinkte verrekening
   zitten: open, of in een verrekening die nog niet is afgevinkt.
-- `AttentionItem.unconfirmedSettlement(amount:day:)`: een afgevinkte verrekening (netto niet nul) waar meer dan
-  `Insight.settlementConfirmationDays` (5) dagen na de dag van de verrekening nog niet aan beide kanten een
-  bankregel hangt. Tekst: "Verrekening van € 105,00 op 05-03-2027 is nog niet gezien in een bankbestand."
+- `AttentionItem.unconfirmedSettlement(amount:day:)`: een afgevinkte verrekening (netto niet nul) waar
+  `Insight.settlementConfirmationDays` (5) dagen na het boeken nog niet aan beide kanten een bankregel hangt. Tekst: "Verrekening van € 105,00 op 05-03-2027 is nog niet gezien in een bankbestand."
   **Nieuwe `case`: schermen met een uitputtende `switch` op `AttentionItem` moeten hem afhandelen.**
 
-**Hoe een verrekeningsboeking herkend wordt** (af te stemmen op `HFBudget`; elk van deze volstaat):
+**Hoe een verrekeningsboeking herkend wordt** (precies zoals `HFBudget` ze markeert, `SavingsTransferService.markDone`):
 
-1. de notitie is `Verrekening met spaar #<id van de verrekening>`;
-2. de boeking staat in de instelling `savingsTransfer.<id>.potEntries`;
-3. de boeking hoort bij de banktransactie in `savingsTransfer.<id>.checkingTransaction` of `.savingsTransaction`
-   (die kant geldt dan ook als bevestigd door de bank);
-4. de boeking staat op een spaarrekening en heeft `savingsTransferId`.
+- de instelling `savingsTransfer.<id>.entries` bevat de id's van de boekingen die het afvinken heeft gemaakt: de
+  potmutaties op de spaarrekening en de boeking op de betaalrekening. Alleen die lijst telt; de notitie
+  "Verrekening #<id>" is voor de gebruiker en wordt niet gelezen;
+- een kant (betaal of spaar) is door de bank bevestigd als een verrekeningsboeking op die rekeningsoort een
+  `bankTransactionId` heeft (`attach` hangt de bankregel aan de boekingen van die kant);
+- `SavingsTransferDetail.unconfirmedSince` is de oudste dag van een verrekeningsboeking zonder bankregel (een
+  bankregel verschuift de boeking naar de bankdag). De melding komt als die dag + `Insight.settlementConfirmationDays`
+  (5) op of voor vandaag ligt: dezelfde regel als `SavingsTransferService.unconfirmed`. Een afgevinkte verrekening
+  zonder verrekeningsboekingen (oude gegevens) geeft dus geen melding.
 
-Een kant is door de bank bevestigd als een verrekeningsboeking op die rekeningsoort een `bankTransactionId` heeft,
-of als de instelling van punt 3 bestaat.
+Het oude formaat (notitie "Verrekening met spaar #<id>" en de sleutels `.potEntries`, `.checkingTransaction`,
+`.savingsTransaction`) wordt niet meer gelezen. `Tests/IntegrationTests/SettlementMarkersTests.swift` gebruikt de
+echte `HFBudget`-weg, zodat de twee niet meer uit elkaar kunnen lopen.
 
 `PotSummary` heeft `balance`, `monthlyAmount`, `targetAmount`, `progress` (0…1, alleen weergave),
 `remainingToTarget`, `depositsThisYear`, `withdrawalsThisYear`, `lastMovement`. Alleen boekingen op de

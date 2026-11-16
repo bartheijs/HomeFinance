@@ -385,6 +385,13 @@ de ene tag ook voor de andere niet meer open.
 | `reconcile(db, accountId:, day:, actualBalance:) -> Reconciliation` | Legt de controle vast; `.difference` = berekend − werkelijk. |
 | `history(db, accountId:) -> [Reconciliation]` | Eerdere controles, nieuwste eerst. |
 | `importCheck(db, batchId:) -> ImportCheck` | Controle na import (spec Import stap 7). |
+| `autoReconcile(db, batchId:) -> Reconciliation?` | Legt een afstemming vast als de import helemaal verwerkt is en het berekende saldo op de laatste dag gelijk is aan het eindsaldo van het bestand. Anders `nil`; ook `nil` als die rekening op die dag al een afstemming heeft (idempotent). |
+| `autoReconcileAll(db, accountId:) -> [Reconciliation]` | `autoReconcile` voor de imports van een rekening, nieuwste eerst (op laatste dag); stopt bij de eerste die al afgestemd is. Geeft de nieuwe afstemmingen terug. |
+
+**Automatisch afstemmen.** `day` van de afstemming is de laatste dag van de import, `actualBalance` het
+eindsaldo van het bestand en `calculatedBalance` het berekende saldo; het verschil is dus altijd € 0,00. Een
+handmatige afstemming op dezelfde dag telt ook als afgestemd. De app roept `autoReconcileAll` stil aan bij het
+openen van de database en na elke boek-, oversla- of aanhangactie.
 
 `ImportCheck`: `newCount`, `processedCount`, `skippedCount`, `allHandled`, `closingBalance`,
 `calculatedBalance`, `difference`, `openUpToLastDay`, `skippedUpToLastDay`, `balanceIsMeaningful`,

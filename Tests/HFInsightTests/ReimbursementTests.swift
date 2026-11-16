@@ -139,6 +139,7 @@ private let today = Fixture.today
         #expect(new.perPot.allSatisfy { $0.balanceAfter == nil })
         #expect(!new.potMutationsBooked)
         #expect(new.potEntries.isEmpty)
+        #expect(new.unconfirmedSince == nil)                    // nog niet afgevinkt
         // De oude overboeking uit de fixture: 30 van spaar naar betaal (Cadeau −30 uit Kind A).
         let old = list[1]
         #expect(old.direction == .fromSavings)
@@ -147,8 +148,9 @@ private let today = Fixture.today
         #expect(old.perPot.map(\.amount) == [eur(30)])
 
         // De potmutaties worden geboekt op de spaarrekening en hangen aan de overboeking.
-        try mark("2027-03-05", -95, "Verrekening Auto", pot: f.potAuto, transfer: t2, account: f.spaar, reimburse: false)
-        try mark("2027-03-05", 200, "Verrekening Kind A", pot: f.potKind, transfer: t2, account: f.spaar, reimburse: false)
+        let pot1 = try mark("2027-03-05", -95, "Verrekening Auto", pot: f.potAuto, account: f.spaar, reimburse: false)
+        let pot2 = try mark("2027-03-05", 200, "Verrekening Kind A", pot: f.potKind, account: f.spaar, reimburse: false)
+        try f.db.write { db in try Setting.set(db, "savingsTransfer.\(t2).entries", "\(pot1),\(pot2)") }
         list = try f.db.read { try Insight.savingsTransfers($0) }
         #expect(list[0].potMutationsBooked)
         #expect(list[0].potEntries.map(\.amount) == [eur(-95), eur(200)])
@@ -161,7 +163,7 @@ private let today = Fixture.today
 
 /// Een verrekening wordt volledig geboekt zodra hij is afgevinkt. Verrekening van 5-3-2027:
 ///   Bril −95 (pot Auto) en Gift +200 (pot Kind A) → netto −105: van betaal naar spaar.
-///   Verrekeningsboekingen (notitie "Verrekening met spaar #<id>"):
+///   Verrekeningsboekingen (instelling `savingsTransfer.<id>.entries`, notitie "Verrekening #<id>"):
 ///     spaarrekening: Auto −95 · Kind A +200      betaalrekening: −105 (de tegenboeking, een gewone diverse boeking)
 @Suite struct SettlementBookingTests {
     let f: Fixture
@@ -185,16 +187,18 @@ private let today = Fixture.today
     private func markDone() throws -> (checking: Int64, pots: [Int64]) {
         try f.db.write { db in
             try db.execute(sql: "UPDATE savingsTransfer SET done = 1 WHERE id = ?", arguments: [transfer])
-            let note = "Verrekening met spaar #\(transfer)"
+            // Zoals `SavingsTransferService.markDone`: notitie "Verrekening #<id>" en de id's in de instelling.
+            let note = "Verrekening #\(transfer)"
             var ids: [Int64] = []
             for (account, amount, label, pot) in [
-                (f.spaar, Int64(-95), "Verrekening met spaar: Auto", f.potAuto as Int64?),
-                (f.spaar, 200, "Verrekening met spaar: Spaarpot Kind A", f.potKind),
-                (f.betaal, -105, "Overboeking naar spaar (verrekening)", nil),
+                (f.spaar, Int64(-95), "Verrekening spaar: Auto", f.potAuto as Int64?),
+                (f.spaar, 200, "Verrekening spaar: Spaarpot Kind A", f.potKind),
+                (f.betaal, -105, "Verrekening spaar", nil),
             ] {
                 var e = Entry(accountId: account, day: d("2027-03-05"), amount: eur(amount), label: label, potId: pot, note: note)
                 try e.insert(db); ids.append(e.id!)
             }
+            try Setting.set(db, "savingsTransfer.\(transfer).entries", ids.map(String.init).joined(separator: ","))
             return (ids[2], Array(ids[0...1]))
         }
     }
@@ -213,7 +217,7 @@ private let today = Fixture.today
     }
     private func unconfirmed(today day: Day = Fixture.today) throws -> [AttentionItem] {
         try f.db.read { try Insight.dashboard($0, today: day) }.attention.filter {
-            if case .unconfirmedSettlement(_, let on) = $0 { return on == d("2027-03-05") }; return false
+            switch $0 { case .unconfirmedSettlement, .unconfirmedSettlements: return true; default: return false }
         }
     }
     private func pending() throws -> [Money] {
@@ -270,17 +274,19 @@ private let today = Fixture.today
 
     @Test func unconfirmedAfterFiveDaysUntilBothSidesSeen() throws {
         let made = try markDone()
-        // 9 maart: 4 dagen na de verrekening, nog geen melding. 11 maart: 6 dagen, wel.
-        #expect(try unconfirmed(today: d("2027-03-09")).isEmpty)
-        #expect(try unconfirmed(today: d("2027-03-10")).isEmpty)        // precies 5 dagen
+        // Zoals `SavingsTransferService.unconfirmed`: 5 dagen na het boeken (5 maart) zonder bankregel.
+        #expect(try unconfirmed(today: d("2027-03-09")).isEmpty)        // 4 dagen
         let item = AttentionItem.unconfirmedSettlement(amount: eur(105), day: d("2027-03-05"))
+        #expect(try unconfirmed(today: d("2027-03-10")) == [item])      // precies 5 dagen
         #expect(try unconfirmed(today: d("2027-03-11")) == [item])
+        #expect(try detail().unconfirmedSince == d("2027-03-05"))
         #expect(item.message == "Verrekening van € 105,00 op 05-03-2027 is nog niet gezien in een bankbestand.")
 
         // De bankregel op de betaalrekening hangt eraan: nog niet aan beide kanten.
         try attachBank([made.checking], account: f.betaal, amount: -105, fingerprint: "fp-verrekening-betaal")
         #expect(try detail().checkingBankConfirmed)
         #expect(try !detail().savingsBankConfirmed)
+        // De bankregel verschuift de boeking naar de dag van de bank; wat nog open staat is de spaarkant.
         #expect(try unconfirmed() == [item])
         // Ook de spaarkant: bevestigd, de melding verdwijnt.
         try attachBank(made.pots, account: f.spaar, amount: 105, fingerprint: "fp-verrekening-spaar")
@@ -298,31 +304,152 @@ private let today = Fixture.today
         #expect(try unconfirmed().isEmpty)
     }
 
-    @Test func bookingsRecordedInSettingsAreRecognised() throws {
-        // De koppeling die HFBudget in instellingen bijhoudt: potboekingen en de banktransacties per kant.
+    @Test func bookingsAreRecognisedFromTheEntriesSetting() throws {
+        // Alleen de instelling `savingsTransfer.<id>.entries` telt; de notitie is voor de gebruiker.
         try f.db.write { db in
             try db.execute(sql: "UPDATE savingsTransfer SET done = 1 WHERE id = ?", arguments: [transfer])
             var pot = Entry(accountId: f.spaar, day: d("2027-03-05"), amount: eur(200), label: "Naar Kind A", potId: f.potKind)
             try pot.insert(db)
-            try Setting.set(db, "savingsTransfer.\(transfer).potEntries", "\(pot.id!)")
             var b = BankTransaction(accountId: f.betaal, day: d("2027-03-06"), amount: eur(-105),
                                     counterpartyName: "Eigen rekening Test", fingerprint: "fp-instelling", status: .verwerkt)
             try b.insert(db)
             var counter = Entry(accountId: f.betaal, bankTransactionId: b.id, day: d("2027-03-06"), amount: eur(-105),
-                                label: "Overboeking naar spaar (verrekening)")
+                                label: "Verrekening spaar")
             try counter.insert(db)
-            try Setting.set(db, "savingsTransfer.\(transfer).checkingTransaction", "\(b.id!)")
+            // Een boeking met de notitie maar zonder markering is geen verrekeningsboeking.
+            var loose = Entry(accountId: f.betaal, day: d("2027-03-06"), amount: eur(-1), label: "Los", note: "Verrekening #\(transfer)")
+            try loose.insert(db)
+            try Setting.set(db, "savingsTransfer.\(transfer).entries", "\(pot.id!),\(counter.id!)")
         }
         let t = try detail()
-        #expect(t.bookings.map(\.label) == ["Naar Kind A", "Overboeking naar spaar (verrekening)"])
+        #expect(t.bookings.map(\.label) == ["Naar Kind A", "Verrekening spaar"])
         #expect(t.potMutationsBooked)
         #expect(t.checkingBankConfirmed)
         #expect(!t.savingsBankConfirmed)
-        let row = try #require(try f.db.read { try Insight.searchEntries($0, filter: EntryFilter(text: "(verrekening)")) }.rows.first)
+        #expect(t.unconfirmedSince == d("2027-03-05"))          // de spaarkant heeft nog geen bankregel
+        let row = try #require(try f.db.read { try Insight.searchEntries($0, filter: EntryFilter(text: "Verrekening spaar")) }.rows.first)
         #expect(row.isSettlementBooking)
         #expect(row.settlementTransferId == transfer)
+        let loose = try #require(try f.db.read { try Insight.searchEntries($0, filter: EntryFilter(text: "Los")) }.rows.first)
+        #expect(!loose.isSettlementBooking)
         // Een gewone boeking is geen verrekeningsboeking.
         let plain = try #require(try f.db.read { try Insight.searchEntries($0, filter: EntryFilter(text: "Tandarts")) }.rows.first)
         #expect(!plain.isSettlementBooking)
+    }
+}
+
+/// "Nog te besteden" gaat uit van een situatie waarin alles verrekend is. Fixture op 15-3-2027:
+///   besteedbaar nu 3.040,00 · nog verwacht +2.400,00 · open verrekening Uit eten −75 en Tandarts −120.
+@Suite struct PendingSettlementTests {
+    let f: Fixture
+    init() throws { f = try Fixture() }
+
+    private func spendable(today day: Day = Fixture.today) throws -> Spendable {
+        try f.db.read { try Insight.spendable($0, year: 2027, today: day) }
+    }
+    private func mark(_ day: String, _ amount: Int64, _ label: String, transfer: Int64? = nil) throws {
+        try f.db.write { db in
+            var e = Entry(accountId: f.betaal, day: d(day), amount: eur(amount), label: label, reimburse: true,
+                          savingsTransferId: transfer)
+            try e.insert(db)
+        }
+    }
+
+    @Test func fromSavingsToChecking() throws {
+        let s = try spendable()
+        #expect(s.pendingSettlement == eur(195))                // er komt nog 195 van spaar naar betaal
+        #expect(s.spendable == eur(3040))                       // besteedbaar nu verandert niet
+        #expect(s.spendableEndOfMonth == eur(3040) + eur(2400) + eur(195))
+    }
+
+    @Test func fromCheckingToSavings() throws {
+        try mark("2027-03-11", 300, "Gift opa")                 // moet nog naar een potje: −105 netto
+        let s = try spendable()
+        // De gift staat al op de betaalrekening: besteedbaar nu 3040 + 300 = 3340.
+        #expect(s.spendable == eur(3340))
+        #expect(s.pendingSettlement == eur(-105))               // 195 − 300
+        // 3340 + 2400 − 105 = 5635: hetzelfde eindbedrag als zonder gift, want na verrekenen is de gift weg.
+        #expect(s.spendableEndOfMonth == eur(5635))
+    }
+
+    @Test func netZero() throws {
+        try mark("2027-03-11", 195, "Gift opa")
+        let s = try spendable()
+        // Besteedbaar nu 3040 + 195 = 3235; netto niets te verrekenen; de 195 die erbij kwam blijft staan:
+        // 3235 + 2400 = 5635.
+        #expect(s.spendable == eur(3235))
+        #expect(s.pendingSettlement == .zero)
+        #expect(s.spendableEndOfMonth == eur(5635))
+    }
+
+    @Test func markedDoneTransferNoLongerCounts() throws {
+        let transfer: Int64 = try f.db.write { db in
+            var t = SavingsTransfer(day: d("2027-03-12"), amount: eur(195), done: false)
+            try t.insert(db)
+            try db.execute(sql: "UPDATE entry SET savingsTransferId = ? WHERE reimburse = 1 AND savingsTransferId IS NULL",
+                           arguments: [t.id!])
+            return t.id!
+        }
+        // In een verrekening die nog niet is afgevinkt telt hij nog mee.
+        #expect(try spendable().pendingSettlement == eur(195))
+        try f.db.write { db in try db.execute(sql: "UPDATE savingsTransfer SET done = 1 WHERE id = ?", arguments: [transfer]) }
+        let s = try spendable()
+        #expect(s.pendingSettlement == .zero)
+        #expect(s.spendableEndOfMonth == eur(5440))
+    }
+
+    @Test func onlyInTheCurrentYear() throws {
+        // Voor een voorbij jaar is er geen simulatie, dus ook geen verrekening die meetelt.
+        let past = try spendable(today: d("2028-02-01"))
+        #expect(past.pendingSettlement == .zero)
+        #expect(past.spendableEndOfMonth == past.spendable)
+    }
+}
+
+/// Meer dan één onbevestigde verrekening wordt één melding. Fixture: de overboeking van 31-1 (30,00, afgevinkt)
+/// is nog in geen bankbestand gezien.
+@Suite struct UnconfirmedSummaryTests {
+    let f: Fixture
+    init() throws { f = try Fixture() }
+
+    private func items(today day: Day = Fixture.today) throws -> [AttentionItem] {
+        try f.db.read { try Insight.dashboard($0, today: day) }.attention.filter {
+            switch $0 { case .unconfirmedSettlement, .unconfirmedSettlements: return true; default: return false }
+        }
+    }
+    /// Een afgevinkte verrekening met de boeking op de betaalrekening, zoals `markDone` hem maakt (zonder bankregel).
+    private func addDone(_ day: String, _ amount: Int64) throws {
+        try f.db.write { db in
+            var t = SavingsTransfer(day: d(day), amount: eur(amount), done: true)
+            try t.insert(db)
+            var e = Entry(accountId: f.betaal, day: d(day), amount: eur(amount), label: "Verrekening spaar", note: "Verrekening #\(t.id!)")
+            try e.insert(db)
+            try Setting.set(db, "savingsTransfer.\(t.id!).entries", "\(e.id!)")
+        }
+    }
+
+    @Test func oneStaysSingle() throws {
+        // De overboeking van januari in de fixture is afgevinkt maar zonder boekingen: HFBudget kent hem niet als onbevestigd.
+        #expect(try items().isEmpty)
+        try addDone("2027-03-01", 45)
+        #expect(try items() == [.unconfirmedSettlement(amount: eur(45), day: d("2027-03-01"))])
+    }
+
+    @Test func severalBecomeOne() throws {
+        try addDone("2027-01-31", 30)
+        try addDone("2027-02-20", -80)      // van betaal naar spaar: telt met zijn bedrag zonder teken
+        try addDone("2027-03-01", 45)
+        let list = try items()
+        let summary = AttentionItem.unconfirmedSettlements(count: 3, total: eur(155), oldestDay: d("2027-01-31"))
+        #expect(list == [summary])
+        #expect(summary.message == "3 verrekeningen (samen € 155,00) zijn nog niet gezien in een bankbestand, de oudste van 31-01-2027.")
+    }
+
+    @Test func recentOnesDoNotCount() throws {
+        try addDone("2027-03-01", 45)
+        try addDone("2027-03-12", 60)       // 3 dagen geleden: nog geen reden tot melden
+        #expect(try items() == [.unconfirmedSettlement(amount: eur(45), day: d("2027-03-01"))])
+        try addDone("2027-03-08", 60)       // 7 dagen geleden
+        #expect(try items() == [.unconfirmedSettlements(count: 2, total: eur(105), oldestDay: d("2027-03-01"))])
     }
 }

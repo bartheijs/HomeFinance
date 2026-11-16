@@ -16,7 +16,7 @@ func d(_ iso: String) -> Day { Day(iso: iso)! }
 ///        · Geleend van spaar +250 (tijdelijk geleend)                                   → 4.560,00
 ///   besteedbaar op 15-3: 4560 − 500 − 250 = 3.810,00
 ///   nog verwacht in maart: Salaris +3000 (open) · Energie −150 (open) · Water −40 (te laat, dag 5)
-///   besteedbaar eind maart: 3810 + 3000 − 150 − 40 = 6.620,00
+///   besteedbaar eind maart: 3810 + 3000 − 150 − 40 = 6.620,00, plus de open verrekening van 120,00 = 6.740,00
 ///   uitgaven maart: −1.410,00 · plan uitgaven maart: −1.390,00 → 101%
 ///
 /// Spaarrekening (begin 1.000,00):

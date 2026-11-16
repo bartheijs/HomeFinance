@@ -51,6 +51,9 @@ struct DemoTx {
     var lines: [DemoLine]
     /// Overboeking tussen de eigen rekeningen: beide kanten hebben hetzelfde nummer.
     var link: Int? = nil
+    /// Index in `DemoPlan.transfers` van de spaaroverboeking (verrekening met spaar) waar deze bankregel bij hoort.
+    /// De boekingen zijn dan die van het afvinken ("Verrekening #<id>") met de bankregel eraan gehangen.
+    var transferIndex: Int? = nil
     /// Volgnummer binnen de rekening en saldo vóór de mutatie; ingevuld door `DemoPlan`.
     var sequence = 0
     var balanceBefore = Money.zero
@@ -411,15 +414,19 @@ struct DemoPlan {
                 }
             }
             guard !total.isZero else { continue }
+            // Zoals bij het afvinken van een verrekening: per pot één boeking op de spaarrekening en één diverse
+            // boeking "Verrekening spaar" op de betaalrekening, met de bankregels eraan gehangen.
+            let index = transfers.count
             transfers.append((transferDay, total))
             let description = "Vergoeding uitgaven uit potten"
             all.append(DemoTx(day: transferDay, amount: total, name: "Spaarrekening gezin", iban: Self.savingsIban,
                               description: description, code: "OVB",
-                              lines: [DemoLine(amount: total, label: "Vergoeding uit spaar")], link: nextLink))
+                              lines: [DemoLine(amount: total, label: "Verrekening spaar")], link: nextLink,
+                              transferIndex: index))
             all.append(DemoTx(onSavings: true, day: transferDay, amount: -total, name: "Ouder 1 en Ouder 2",
                               iban: Self.checkingIban, description: description, code: "OVB",
-                              lines: perPot.map { DemoLine(amount: -$0.amount, label: "Vergoeding \($0.pot)", potName: $0.pot) },
-                              link: nextLink))
+                              lines: perPot.map { DemoLine(amount: -$0.amount, label: "Verrekening spaar: \($0.pot)", potName: $0.pot) },
+                              link: nextLink, transferIndex: index))
             nextLink += 1
         }
         all += reimbursements

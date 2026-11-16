@@ -93,6 +93,45 @@ public enum BalanceService {
             """, arguments: [accountId])
     }
 
+    /// Legt automatisch een afstemming vast als een import helemaal verwerkt is en het berekende saldo op de
+    /// laatste dag van de import gelijk is aan het eindsaldo van het bestand (`importCheck` zegt dat het
+    /// vergelijken zinvol is en dat het klopt). `day` is de laatste dag van de import, `actualBalance` het
+    /// eindsaldo van het bestand. Doet niets (nil) als dat niet zo is, of als er voor die rekening op die dag al
+    /// een afstemming is: de functie is dus veilig vaker aan te roepen.
+    @discardableResult
+    public static func autoReconcile(_ db: Database, batchId: Int64) throws -> Reconciliation? {
+        try atomic(db) {
+            let check = try importCheck(db, batchId: batchId)
+            guard check.balanceIsMeaningful, check.balanceMatches == true,
+                  let day = check.lastDay, let closing = check.closingBalance else { return nil }
+            guard try !isReconciled(db, accountId: check.accountId, day: day) else { return nil }
+            return try reconcile(db, accountId: check.accountId, day: day, actualBalance: closing)
+        }
+    }
+
+    /// `autoReconcile` voor de imports van een rekening, nieuwste eerst (op laatste dag). Stopt bij de eerste
+    /// import die al afgestemd is: wat daarvoor lag is dan al gecontroleerd. Geeft de nieuwe afstemmingen terug.
+    @discardableResult
+    public static func autoReconcileAll(_ db: Database, accountId: Int64) throws -> [Reconciliation] {
+        try atomic(db) {
+            let batches = try ImportBatch.fetchAll(db, sql: """
+                SELECT * FROM importBatch WHERE accountId = ? AND lastDay IS NOT NULL AND closingBalance IS NOT NULL
+                ORDER BY lastDay DESC, id DESC
+                """, arguments: [accountId])
+            var created: [Reconciliation] = []
+            for batch in batches {
+                guard let day = batch.lastDay, try !isReconciled(db, accountId: accountId, day: day) else { break }
+                if let reconciliation = try autoReconcile(db, batchId: batch.id!) { created.append(reconciliation) }
+            }
+            return created
+        }
+    }
+
+    private static func isReconciled(_ db: Database, accountId: Int64, day: Day) throws -> Bool {
+        try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM reconciliation WHERE accountId = ? AND day = ?)",
+                          arguments: [accountId, day]) ?? false
+    }
+
     /// Controle na een import: zijn alle regels verwerkt of overgeslagen, en sluit het saldo?
     public static func importCheck(_ db: Database, batchId: Int64) throws -> ImportCheck {
         let batch = try Check.fetch(db, ImportBatch.self, batchId, "Import")

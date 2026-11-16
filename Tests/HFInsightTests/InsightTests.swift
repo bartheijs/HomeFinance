@@ -218,12 +218,14 @@ private let today = Fixture.today
         // Simulatie maart: nog verwacht en niet geboekt:
         //   Salaris +3000 · Energie −150 · RESERVERINGEN −250 (som RES-regels) · Lening −200 = +2400
         //   (Huur is al geboekt, Verzekering is in maart niet verwacht, RES-regels tellen niet mee)
-        // besteedbaar eind van de maand = 3040 + 2400 = 5.440,00
+        // Open verrekening met spaar: Uit eten −75 en Tandarts −120 komen nog uit spaar: +195 naar de betaalrekening.
+        // besteedbaar eind van de maand = 3040 + 2400 + 195 = 5.635,00
         #expect(s.expectedItems.map(\.label) == ["Salaris", "Energie", "RESERVERINGEN", "Lening"])
         #expect(s.expectedItems.map(\.plan) == [eur(3000), eur(-150), eur(-250), eur(-200)])
         #expect(s.expectedItems.map(\.isLate) == [false, false, true, false])
         #expect(s.expectedTotal == eur(2400))
-        #expect(s.spendableEndOfMonth == eur(5440))
+        #expect(s.pendingSettlement == eur(195))
+        #expect(s.spendableEndOfMonth == eur(5635))
     }
 
     @Test func spendableForPastYearUsesYearEnd() throws {
@@ -517,7 +519,7 @@ private let today = Fixture.today
     @Test func dashboard() throws {
         let dash = try f.db.read { try Insight.dashboard($0, today: today, recentLimit: 3) }
         #expect(dash.spendable?.spendable == eur(3040))
-        #expect(dash.spendable?.spendableEndOfMonth == eur(5440))
+        #expect(dash.spendable?.spendableEndOfMonth == eur(5635))
         #expect(dash.accounts.map(\.balance) == [eur(3540), eur(5335)])
         #expect((dash.paidCount, dash.openCount, dash.lateCount) == (1, 3, 1))
         #expect(dash.recentEntries.map(\.label) == ["Terugbetaling", "Tandarts", "Boodschappen"])
@@ -536,8 +538,6 @@ private let today = Fixture.today
             .newBankTransactions(count: 2),
             .unreviewedEntries(count: 1),
             .openReimbursements(amount: eur(195), count: 2, direction: .fromSavings),
-            // De overboeking van 31-1 (30,00) is afgevinkt maar nog in geen bankbestand gezien.
-            .unconfirmedSettlement(amount: eur(30), day: d("2027-01-31")),
             // Spaarrekening: afstemming van 31-1 heeft € 5 verschil en is 43 dagen oud (> 35).
             .reconciliationDiffers(accountId: f.spaar, accountName: "Spaarrekening", difference: eur(5), day: d("2027-01-31")),
             .reconciliationOld(accountId: f.spaar, accountName: "Spaarrekening", lastDay: d("2027-01-31"), daysAgo: 43),
