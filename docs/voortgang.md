@@ -60,7 +60,7 @@
 | Verrekenen per tag (Tanken) | Schema v3 staat erin. `SettlementService` (HFBudget) en de leesfuncties (HFInsight) waren in aanbouw bij de pauze; schermen nog niet. |
 | Totalen per omschrijving, aanvullen bij typen, bijna-dubbelen, samenvoegen | In aanbouw in HFInsight en HFBudget; schermen nog niet. |
 | Excel-historie importeren (`HFHistory`) | Gebouwd, 50 tests op nagebootste bestanden. **De proefdraai op de echte Excels is mislukt; er is niets geïmporteerd.** Zie hieronder. |
-| Tijdlijn van de samenwerking als HTML-pagina | Nog niet gemaakt; gevraagd door de gebruiker, te doen na de lopende aanpassingen. |
+| Tijdlijn van de samenwerking als HTML-pagina | Klaar: `docs/tijdlijn.html` (actieve tijd als één dag vanaf 08:30, met release notes). |
 
 ## Proefdraai Excel-historie: wat er misging en hoe het moet
 

@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>HomeFinance in één dag</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f4ef; --surface:#ffffff; --ink:#1d1f22; --muted:#666b73; --line:#dcd8cf;
+  --build:#2f6f5e; --build-soft:#e3efe9;
+  --test:#3d5f9e; --test-soft:#e4eaf6;
+  --impl:#7a4f9a; --impl-soft:#efe6f5;
+  --nudge:#a8621a; --nudge-soft:#f8ead8;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141618; --surface:#1d2023; --ink:#ece9e3; --muted:#9aa0a8; --line:#2f3337;
+    --build:#7cc2ac; --build-soft:#1f2f2a;
+    --test:#8fb0e8; --test-soft:#1f2735;
+    --impl:#c4a0e0; --impl-soft:#2a2233;
+    --nudge:#e8ad6a; --nudge-soft:#33271a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141618; --surface:#1d2023; --ink:#ece9e3; --muted:#9aa0a8; --line:#2f3337;
+  --build:#7cc2ac; --build-soft:#1f2f2a;
+  --test:#8fb0e8; --test-soft:#1f2735;
+  --impl:#c4a0e0; --impl-soft:#2a2233;
+  --nudge:#e8ad6a; --nudge-soft:#33271a;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:48px max(16px,env(safe-area-inset-right)) 64px max(16px,env(safe-area-inset-left))}
+h1,h2{font-family:Fraunces,Georgia,serif;font-weight:650;letter-spacing:-.01em}
+h1{font-size:clamp(32px,6vw,48px);line-height:1.08;margin:0 0 12px}
+h2{font-size:24px;margin:56px 0 16px}
+.lede{color:var(--muted);font-size:18px;margin:0 0 28px;max-width:60ch}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:0 0 8px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.stat b{display:block;font-family:Fraunces,Georgia,serif;font-size:28px;font-weight:650}
+.stat span{color:var(--muted);font-size:13px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
+.card h3{margin:0 0 8px;font-size:16px}
+.card ul{margin:0;padding-left:20px}
+.card li{margin:4px 0}
+.legend{display:flex;flex-wrap:wrap;gap:16px;color:var(--muted);font-size:13px;margin:0 0 20px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+/* tijdlijn */
+.tl{list-style:none;margin:0;padding:0;position:relative}
+.tl::before{content:"";position:absolute;left:66px;top:8px;bottom:8px;width:2px;background:var(--line)}
+.tl li{display:grid;grid-template-columns:52px 28px 1fr;align-items:start}
+.tl time{font:500 13px/24px "JetBrains Mono",ui-monospace,monospace;color:var(--muted);text-align:right}
+.dot{width:12px;height:12px;border-radius:50%;margin:6px auto 0;background:var(--surface);border:2px solid var(--c);position:relative;z-index:1}
+.ph{margin:0 0 14px 4px;padding:10px 14px;border-radius:10px;background:var(--soft);border-left:3px solid var(--c)}
+.ph .tag{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--c)}
+.ph .tag em{font-style:normal;color:var(--muted);font-weight:500;margin-left:6px;letter-spacing:0;text-transform:none;font-family:"JetBrains Mono",ui-monospace,monospace}
+.ph p{margin:2px 0 0}
+.b{--c:var(--build);--soft:var(--build-soft)}
+.t{--c:var(--test);--soft:var(--test-soft)}
+.i{--c:var(--impl);--soft:var(--impl-soft)}
+.n{--c:var(--nudge);--soft:var(--nudge-soft)}
+.n .dot{width:16px;height:16px;margin-top:4px;background:var(--nudge);border-color:var(--nudge)}
+.n .ph{background:transparent;border-left:none;padding:4px 0 4px 2px}
+.n .ph p{font-family:Fraunces,Georgia,serif;font-size:19px;font-weight:500;line-height:1.35}
+.done{margin-top:6px;font-size:14px;color:var(--muted)}
+.done::before{content:"✓ ";color:var(--c);font-weight:600}
+.notes h3{margin-top:22px}
+.notes h3:first-child{margin-top:0}
+.method{color:var(--muted);font-size:14px;margin-top:40px;border-top:1px solid var(--line);padding-top:16px}
+@media (max-width:520px){
+  .tl::before{left:54px}
+  .tl li{grid-template-columns:42px 24px 1fr}
+}
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<h1>HomeFinance in één dag</h1>
+<p class="lede">Van twee Excel-werkmappen naar een eigen macOS-app voor de gezinsbegroting.</p>
+
+<div class="stats">
+  <div class="stat"><b>5u 34m</b><span>actieve tijd, 08:30–14:04</span></div>
+  <div class="stat"><b>2u 51m</b><span>bouwtijd: Claude en bouwsessies aan het werk</span></div>
+  <div class="stat"><b>2u 43m</b><span>feedback: lezen, testen en reageren</span></div>
+  <div class="stat"><b>459</b><span>geautomatiseerde tests, alle groen</span></div>
+</div>
+
+<h2>Startpunt</h2>
+<div class="card">
+  <h3>Wat de opdrachtgever meegaf</h3>
+  <ul>
+    <li>De twee Excel-werkmappen die tot nu toe het huishoudboekje waren: het maandoverzicht IN/UIT en de spaarrekening met potten.</li>
+    <li>Bankexports (zip met CSV per rekening) om de import op te bouwen</li>
+  </ul>
+  <h3 style="margin-top:16px">Werkwijze</h3>
+  <ul>
+    <li>De opdrachtgever praat alleen met de orchestrator. Die verdeelt het werk over bouwsessies die naast elkaar draaien, controleert hun werk en houdt het overzicht.</li>
+    <li>Echte gegevens blijven buiten de code: testdata is verzonnen en bankbestanden gaan nooit de repository in.</li>
+  </ul>
+</div>
+
+<h2>Tijdlijn</h2>
+<div class="legend">
+  <span><i style="background:var(--build)"></i>bouwen</span>
+  <span><i style="background:var(--test)"></i>testen</span>
+  <span><i style="background:var(--impl)"></i>testresultaten implementeren</span>
+  <span><i style="background:var(--nudge);border-radius:50%"></i>nudge van de opdrachtgever</span>
+</div>
+
+<ol class="tl">
+  <li class="n"><time>08:30</time><span class="dot"></span><div class="ph"><p>“Maak app. Impress me. Yolo!”</p></div></li>
+
+  <li class="b"><time>08:45</time><span class="dot"></span><div class="ph"><span class="tag">Bouwen<em>08:45–09:14</em></span>
+    <p>Keuze voor een native Mac-app (Swift, SwiftUI, SQLite). Fundament: geld en datums, database, bankimport, regels, begroting en de eerste schermen, verdeeld over parallelle bouwsessies.</p>
+    <div class="done">Eerste versie draait, tests groen</div></div></li>
+
+  <li class="t"><time>09:19</time><span class="dot"></span><div class="ph"><span class="tag">Testen<em>09:19–09:23</em></span>
+    <p>Screenshots bekeken door de opdrachtgever.</p></div></li>
+
+  <li class="n"><time>09:23</time><span class="dot"></span><div class="ph"><p>“Te veel op één scherm. Mijn dag begint in de bank-app.”</p></div></li>
+
+  <li class="i"><time>09:24</time><span class="dot"></span><div class="ph"><span class="tag">Implementeren<em>09:24–10:14</em></span>
+    <p>Rustiger ontwerp, Transacties als startscherm, acties per transactie. Gereserveerd geld naar spaar, tijdelijk anti-rood.</p>
+    <div class="done">App in de map Apps, eerste push naar GitHub</div></div></li>
+
+  <li class="b"><time>10:17</time><span class="dot"></span><div class="ph"><span class="tag">Bouwen<em>10:17–10:48</em></span>
+    <p>Back-up naar iCloud, telefoondashboard, overstapplan vanuit Excel, verrekenen van tanken, omschrijvingen met aanvullen.</p></div></li>
+
+  <li class="n"><time>10:50</time><span class="dot"></span><div class="ph"><p>“Start gewoon met beginstanden, zonder geschiedenis.”</p></div></li>
+
+  <li class="b"><time>10:50</time><span class="dot"></span><div class="ph"><span class="tag">Bouwen<em>10:50–11:43</em></span>
+    <p>Potten met beginbedrag, spaardoelen, vooruitblik, vaste stortingen, afvinken, wat-als en export naar Excel.</p></div></li>
+
+  <li class="t"><time>11:48</time><span class="dot"></span><div class="ph"><span class="tag">Testen<em>11:48–12:04</em></span>
+    <p>Eigen administratie ingericht en de eerste echte bankimport gedaan.</p>
+    <div class="done">Import sluit aan op het beginsaldo</div></div></li>
+
+  <li class="n"><time>12:02</time><span class="dot"></span><div class="ph"><p>“Als ik afvink, moet het meteen goed staan.”</p></div></li>
+
+  <li class="i"><time>12:04</time><span class="dot"></span><div class="ph"><span class="tag">Implementeren<em>12:04–12:41</em></span>
+    <p>Verrekenen met spaar in twee richtingen, tags bij het nakijken, boekingen die elkaar opheffen als divers.</p></div></li>
+
+  <li class="t"><time>12:52</time><span class="dot"></span><div class="ph"><span class="tag">Testen<em>12:52–13:16</em></span>
+    <p>App naast de bijgewerkte Excels en de Excel-forecast gelegd.</p></div></li>
+
+  <li class="n"><time>13:15</time><span class="dot"></span><div class="ph"><p>“Wat ik wil zien: wat ik deze maand nog kan uitgeven.”</p></div></li>
+
+  <li class="i"><time>13:16</time><span class="dot"></span><div class="ph"><span class="tag">Implementeren<em>13:16–14:00</em></span>
+    <p>“Nog te besteden deze maand” als hoofdgetal, administratie hersteld, potten per persoon met spaardoelen, automatisch afstemmen.</p>
+    <div class="done">Saldi en potten gelijk aan de Excel, verschil € 0,00</div></div></li>
+
+  <li class="b"><time>14:04</time><span class="dot"></span><div class="ph"><span class="tag">Klaar</span>
+    <p>Alles gecommit, gepusht en geïnstalleerd.</p></div></li>
+</ol>
+
+<h2>Release notes</h2>
+<div class="card notes">
+  <h3>Dagelijks gebruik</h3>
+  <ul>
+    <li><b>Transacties als startscherm</b>, zoals in de bank-app. Per transactie: post kiezen, tag geven, notitie, laten meetellen in een andere maand.</li>
+    <li><b>Importeren en nakijken:</b> zip, CSV of PDF van de bank erop slepen. De app controleert de saldoketen, slaat dubbele regels over en vindt de aansluiting met de vorige import op saldo.</li>
+    <li><b>Regels die bijleren:</b> zekere voorstellen boek je in één keer; bij twijfel kies je zelf en de app onthoudt het.</li>
+    <li><b>Automatisch afstemmen</b> na een import die sluit, met een melding als het niet klopt.</li>
+  </ul>
+  <h3>Begroting</h3>
+  <ul>
+    <li><b>Maandgrid</b> zoals het vertrouwde jaaroverzicht, met <b>afvinken</b> per post per maand.</li>
+    <li><b>Dashboard</b> met “Nog te besteden deze maand” als hoofdgetal, inclusief open verrekeningen; “Besteedbaar nu” eronder.</li>
+    <li><b>Maandbalans met wat-als</b>: zie wat er overblijft bij een ander loon of een extra uitgave.</li>
+    <li><b>Totalen per omschrijving</b>, aanvullen bij typen, bijna-dubbelen samenvoegen.</li>
+  </ul>
+  <h3>Sparen</h3>
+  <ul>
+    <li><b>Potten</b> met beginbedrag; potten mogen even in de min.</li>
+    <li><b>Spaardoelen</b> met bedrag en datum, eventueel opgebouwd uit onderdelen; de app rekent uit wat er per maand bij moet.</li>
+    <li><b>Vooruitblik</b> per pot, met projecten en verwachte bedragen.</li>
+    <li><b>Vaste stortingen</b> met verdeling over potten en herkenning bij import.</li>
+    <li><b>Verrekenen met spaar</b> in twee richtingen: boekt bij afvinken, koppelt bij de volgende import.</li>
+    <li><b>Verrekenen per tag</b>, bijvoorbeeld tanken, en tijdelijk lenen van spaar.</li>
+  </ul>
+  <h3>Veiligheid en delen</h3>
+  <ul>
+    <li><b>Back-up en herstel</b> naar een map naar keuze, zoals iCloud Drive.</li>
+    <li><b>Export naar Excel</b> en CSV.</li>
+    <li><b>Telefoondashboard</b> als bestand in een cloudmap, zonder hosting.</li>
+    <li><b>Voorbeelddata</b> met een verzonnen gezin, om rond te kijken.</li>
+  </ul>
+  <h3>Onder de motorkap</h3>
+  <ul>
+    <li>Swift 6, SwiftUI en SQLite via GRDB; negen modules die elkaar niet kennen; geld altijd in centen.</li>
+    <li>Acht databasemigraties; 459 tests op verzonnen data.</li>
+  </ul>
+</div>
+
+
+</main>
+</body>
+</html>
