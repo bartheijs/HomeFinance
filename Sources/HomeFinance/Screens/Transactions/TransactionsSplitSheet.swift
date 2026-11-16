@@ -140,3 +140,26 @@ struct TransactionsNoteSheet: View {
         .onAppear { text = row.note; focused = true }
     }
 }
+
+/// Sheet voor een nieuwe tag vanuit een menu; de tag komt meteen op de gekozen boekingen.
+struct TransactionsNewTagSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let store: TransactionsStore
+    let target: TransactionsNewTagTarget
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TransactionsNewTagForm(tagCount: store.lookups.tags.count) { name, color, settles in
+                let ok = store.createTag(model, name: name, color: color, settles: settles, ids: target.ids) != nil
+                if ok { dismiss() }
+                return ok
+            }
+            HStack {
+                Spacer()
+                Button("Annuleer") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, 14).padding(.bottom, 12)
+        }
+    }
+}

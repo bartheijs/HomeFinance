@@ -9,6 +9,8 @@ struct PotsData: Equatable {
     var overview: PotOverview?
     /// Boekingen op de spaarrekening zonder pot.
     var unallocated: [EntryRow] = []
+    /// Boekingen zonder pot die elkaar opheffen en dus geen pot nodig hebben.
+    var cancelledPairs: [CancelledPair] = []
     /// Boekingen uit `unallocated` die precies de maandelijkse storting zijn en dus verdeeld kunnen worden.
     var distributable: Set<Int64> = []
     /// Saldo per maandeinde, per spaarrekening (voor het lijntje in de kop).
@@ -47,7 +49,9 @@ struct PotsData: Equatable {
                 .compactMap { a in a.id.map { PotsAccountRef(id: $0, name: a.name, archived: a.archived, openingDate: a.openingDate) } }
             let overview = try Insight.potOverview(db, accountId: accountId, today: asOf)
             data.overview = overview
-            data.unallocated = try Insight.unallocatedSavingsEntries(db, accountId: accountId)
+            let unallocated = try Insight.unallocatedSavingsOverview(db, accountId: accountId)
+            data.unallocated = unallocated.entries
+            data.cancelledPairs = unallocated.cancelledPairs
             for entry in data.unallocated where entry.amount > .zero && entry.bank?.amount == entry.amount {
                 if try PotService.distribution(db, for: entry.amount, accountId: entry.accountId) != nil {
                     data.distributable.insert(entry.id)

@@ -193,6 +193,10 @@ struct PotsScreen: View {
                 }
             }
 
+            if !data.cancelledPairs.isEmpty {
+                PotsCancelledLine(pairs: data.cancelledPairs)
+            }
+
             if !data.unallocated.isEmpty {
                 PotsUnallocatedCard(entries: data.unallocated, distributable: data.distributable,
                                     pots: data.allPots, assign: assign, distribute: distribute)

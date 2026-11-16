@@ -412,6 +412,58 @@ struct PotsUnallocatedCard: View {
     }
 }
 
+// MARK: - Boekingen die elkaar opheffen
+
+/// Eén rustige, grijze regel: deze boekingen hebben geen pot nodig. Geen waarschuwing.
+struct PotsCancelledLine: View {
+    let pairs: [CancelledPair]
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                    Text(pairs.count == 1 ? "2 boekingen heffen elkaar op en hebben geen pot nodig"
+                         : "\(pairs.count * 2) boekingen heffen elkaar op en hebben geen pot nodig")
+                }
+                .font(.callout).foregroundStyle(.secondary)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Twee boekingen zonder pot met precies tegengestelde bedragen strepen elkaar weg. Ze veranderen niets aan de verdeling over de potten.")
+
+            if expanded {
+                VStack(spacing: 0) {
+                    ForEach(pairs) { pair in
+                        VStack(spacing: 0) {
+                            line(pair.first)
+                            line(pair.second)
+                        }
+                        .padding(.vertical, 4)
+                        if pair.id != pairs.last?.id { Divider() }
+                    }
+                }
+                .padding(.leading, 20)
+            }
+        }
+    }
+
+    private func line(_ entry: EntryRow) -> some View {
+        HStack(spacing: 12) {
+            Text(entry.day.short(withYear: true)).monospacedDigit().frame(width: 100, alignment: .leading)
+            Text(entry.label.isEmpty ? "Zonder omschrijving" : entry.label).lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(entry.amount.formatted(alwaysSign: true)).monospacedDigit()
+        }
+        .font(.callout).foregroundStyle(.secondary)
+        .padding(.vertical, 2)
+    }
+}
+
 // MARK: - Beginstand
 
 /// Rustig blok zolang er nog niets geïmporteerd is: potten + niet toegewezen = rekening.

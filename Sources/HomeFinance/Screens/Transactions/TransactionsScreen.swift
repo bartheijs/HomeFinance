@@ -83,6 +83,9 @@ struct TransactionsScreen: View {
         .sheet(item: $store.settleTarget) { target in
             TransactionsSettleSheet(store: store, target: target).environment(model)
         }
+        .sheet(item: $store.newTagTarget) { target in
+            TransactionsNewTagSheet(store: store, target: target).environment(model)
+        }
         .sheet(item: $store.noteTarget) { row in
             TransactionsNoteSheet(store: store, row: row).environment(model)
         }

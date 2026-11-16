@@ -314,6 +314,12 @@ struct TransactionsSplitTarget: Identifiable {
     var id: Int64 { transaction.id ?? 0 }
 }
 
+/// Waarvoor de sheet Nieuwe tag opent (vanuit een menu): de tag komt op deze regels.
+struct TransactionsNewTagTarget: Identifiable {
+    let ids: [TransactionsItemID]
+    let id = UUID()
+}
+
 /// Waarvoor de sheet Verrekenen opent: een tag, optioneel met een bijschrijving als terugstorting.
 struct TransactionsSettleTarget: Identifiable {
     let tagId: Int64
@@ -355,6 +361,7 @@ final class TransactionsStore {
     /// Tags die verrekend worden en waar nog iets van openstaat.
     private(set) var settlements: [TagSettlementSummary] = []
     var settleTarget: TransactionsSettleTarget?
+    var newTagTarget: TransactionsNewTagTarget?
     /// Gemarkeerde boekingen die nog met spaar verrekend moeten worden, gesaldeerd.
     private(set) var openReimbursements: HFInsight.OpenReimbursements?
 
@@ -786,6 +793,34 @@ final class TransactionsStore {
                 try EntryService.setTags(db, entryId: row.id, tagIds: tags)
             }
         }
+    }
+
+    /// Maakt een nieuwe tag (met op verzoek verrekenen aan vanaf de begindatum van de rekening) en zet hem
+    /// meteen op de geboekte regels in `ids`. Geeft het id van de tag terug, of nil bij een fout
+    /// (de melding staat dan in beeld).
+    @discardableResult
+    func createTag(_ model: AppModel, name: String, color: String, settles: Bool, ids: [TransactionsItemID]) -> Int64? {
+        let rows = entries(in: ids)
+        let accountId = accountId
+        var created: Int64?
+        let ok = run(model, {
+            var text = "Tag ‘\(name)’ aangemaakt"
+            if !rows.isEmpty { text += rows.count == 1 ? " en gezet" : " en gezet op \(TransactionsFormat.entries(rows.count))" }
+            if settles { text += "; verrekenen staat aan" }
+            return text
+        }) { db in
+            let tag = try TagService.create(db, name: name, color: color)
+            created = tag.id
+            guard let tagId = tag.id else { return }
+            if settles {
+                let from = try accountId.flatMap { try Account.fetchOne(db, key: $0)?.openingDate } ?? Day.today()
+                try SettlementService.enable(db, tagId: tagId, from: from)
+            }
+            for row in rows {
+                try EntryService.setTags(db, entryId: row.id, tagIds: row.tags.map(\.id) + [tagId])
+            }
+        }
+        return ok ? created : nil
     }
 
     func setTags(_ model: AppModel, row: EntryRow, _ tagIds: Set<Int64>) {

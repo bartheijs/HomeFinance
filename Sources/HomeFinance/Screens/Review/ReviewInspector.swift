@@ -187,6 +187,7 @@ private struct ReviewDetail: View {
                 ReviewTargetPicker(year: row.tx.day.year, selection: draft.target).controlSize(.large)
                 Text(hint).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
+            tagRow
             if store.kind == .betaal, !draft.wrappedValue.isSplit {
                 ReviewSettlePicker(isExpense: isExpense, allowsWithoutPot: true, selection: Binding(
                     get: { draft.wrappedValue.reimburse ? (draft.wrappedValue.reimbursePotId ?? ReviewSettlePicker.withoutPot) : nil },
@@ -199,6 +200,18 @@ private struct ReviewDetail: View {
             }
             if store.kind == .betaal { periodChoice }
         }
+    }
+
+    /// Tags direct bij de hand, ook als er nog geen bestaan: een tag maak je hier meteen aan.
+    private var tagRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Tags").font(.callout).foregroundStyle(.secondary)
+            ReviewFlow(spacing: 6) {
+                ForEach(store.tags) { tag in ReviewTagChip(tag: tag, isOn: tagBinding(tag.id ?? 0)) }
+                ReviewNewTagButton(row: row)
+            }
+        }
+        .help("Tags volgen een soort uitgave (tanken, uit eten) dwars door de posten heen. Ze tellen niet als extra uitgave.")
     }
 
     /// Het gestorte bedrag wijkt af van de vaste storting: waar gaat het verschil heen?
@@ -260,15 +273,6 @@ private struct ReviewDetail: View {
                 Text("Omschrijving").font(.callout).foregroundStyle(.secondary)
                 ReviewLabelField(text: draft.label)
                     .help("De leesbare naam van deze boeking. De tekst van de bank blijft bewaard.")
-            }
-            if !store.tags.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Tags").font(.callout).foregroundStyle(.secondary)
-                    ReviewFlow(spacing: 6) {
-                        ForEach(store.tags) { tag in ReviewTagChip(tag: tag, isOn: tagBinding(tag.id ?? 0)) }
-                    }
-                }
-                .help("Tags volgen een soort uitgave (tanken, uit eten) dwars door de posten heen. Ze tellen niet als extra uitgave.")
             }
             if store.kind == .betaal, !draft.wrappedValue.isSplit {
                 VStack(alignment: .leading, spacing: 4) {
@@ -418,7 +422,7 @@ struct ReviewTargetPicker: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .help(store.kind == .betaal
               ? "Een vaste post is een rij in het maandgrid (salaris, huur). Divers is alles wat geen vaste post is."
-              : "Een pot is een deel van het saldo van de spaarrekening. Niet toegewezen telt wel mee in het saldo, maar hoort bij geen pot.")
+              : "Een pot is een deel van het saldo van de spaarrekening. Geen pot (divers) telt wel mee in het saldo, maar hoort bij geen pot.")
     }
 }
 
@@ -583,5 +587,78 @@ struct ReviewSettlePicker: View {
         }
         .font(.callout).controlSize(.small)
         .help("Voor iets dat je van de betaalrekening hebt betaald maar uit een pot hoort te komen, of geld dat binnenkomt en door moet naar een pot. Je maakt het later in één keer over bij Spaaroverboekingen.")
+    }
+}
+
+/// "+ Nieuwe tag…": naam, kleur en eventueel verrekenen; de tag wordt meteen op deze transactie gezet.
+struct ReviewNewTagButton: View {
+    @Environment(AppModel.self) private var model
+    @Environment(ReviewStore.self) private var store
+    let row: ReviewRow
+    @State private var open = false
+    @State private var name = ""
+    @State private var color = ReviewNewTagButton.palette[0]
+    @State private var settles = false
+    @State private var error: String?
+
+    static let palette = ["#E8912D", "#D1493F", "#8E5BC9", "#3F7FD1", "#2E9E73", "#C9588F", "#3C9AA8", "#7A8590"]
+
+    var body: some View {
+        Button { open = true } label: {
+            Label("Nieuwe tag…", systemImage: "plus").font(.caption.weight(.medium))
+                .padding(.horizontal, 9).padding(.vertical, 4)
+                .background(.quaternary.opacity(0.6), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Maak een tag, bijvoorbeeld Tanken of Uit eten, en zet hem meteen op deze transactie.")
+        .popover(isPresented: $open, arrowEdge: .bottom) { form }
+        .onChange(of: open) { _, isOpen in if isOpen { error = nil } }
+    }
+
+    private var form: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Nieuwe tag").font(.headline)
+            TextField("Naam, bijvoorbeeld Tanken", text: $name)
+                .textFieldStyle(.roundedBorder).frame(width: 240)
+                .onSubmit(create)
+            HStack(spacing: 8) {
+                ForEach(Self.palette, id: \.self) { hex in
+                    Button { color = hex } label: {
+                        Circle().fill(Color(hex: hex)).frame(width: 18, height: 18)
+                            .overlay(Circle().strokeBorder(Color.primary, lineWidth: color == hex ? 2 : 0).padding(-3))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Kleur")
+                }
+            }
+            if store.kind == .betaal {
+                VStack(alignment: .leading, spacing: 3) {
+                    Toggle("Verrekenen", isOn: $settles)
+                    Text("Voor uitgaven die je later terugstort op de betaalrekening, zoals tanken.")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle.fill").font(.callout).foregroundStyle(Theme.negative)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack {
+                Spacer()
+                Button("Annuleren") { open = false }.keyboardShortcut(.cancelAction)
+                Button("Maak tag", action: create).buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(16).frame(width: 280)
+    }
+
+    private func create() {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { error = "Geef de tag een naam."; return }
+        if let message = store.createTag(name: trimmed, color: color, settles: settles, for: row, model) {
+            error = message
+        } else {
+            name = ""; settles = false; error = nil; open = false
+        }
     }
 }

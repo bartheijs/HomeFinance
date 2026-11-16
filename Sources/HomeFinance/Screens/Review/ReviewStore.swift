@@ -234,7 +234,7 @@ final class ReviewStore {
 
     func title(of target: ReviewTarget, kind: AccountKind) -> String {
         switch target {
-        case .none: kind == .betaal ? "Divers" : "Niet toegewezen"
+        case .none: kind == .betaal ? "Divers" : "Geen pot (divers)"
         case .item(let id): itemsById[id]?.label ?? "Onbekende post"
         case .pot(let id): potsById[id]?.name ?? "Onbekende pot"
         }
@@ -401,6 +401,29 @@ final class ReviewStore {
             }
         }
         if ok { drafts[row.id] = nil; load(model) }
+    }
+
+    /// Maakt een tag (en zet verrekenen aan vanaf de begindatum van de rekening) en zet hem op deze transactie.
+    /// Geeft een Nederlandse foutmelding terug, of nil als het gelukt is.
+    func createTag(name: String, color: String, settles: Bool, for row: ReviewRow, _ model: AppModel) -> String? {
+        let from = account?.openingDate ?? row.tx.day
+        var created: Tag?
+        do {
+            try model.db.write { db in
+                let tag = try TagService.create(db, name: name, color: color)
+                if settles, let id = tag.id { try SettlementService.enable(db, tagId: id, from: from) }
+                created = tag
+            }
+        } catch {
+            return error.localizedDescription
+        }
+        guard let id = created?.id else { return nil }
+        model.read(()) { db in tags = try Tag.fetchAll(db, sql: "SELECT * FROM tag ORDER BY sortOrder, id") }
+        var d = draft(for: row)
+        d.tagIds.insert(id)   // gaat zo ook mee in de Correction voor RuleEngine.learn
+        setDraft(d, for: row)
+        model.toast = settles ? "Tag \"\(name)\" gemaakt met verrekenen" : "Tag \"\(name)\" gemaakt"
+        return nil
     }
 
     /// De drie maanden rond de datum van de transactie, als (periode, naam); nil = de maand van de datum zelf.

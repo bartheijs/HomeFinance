@@ -86,41 +86,135 @@ struct TransactionsSubtlePill: View {
     }
 }
 
-/// Tags aan- en uitzetten door erop te klikken.
+/// Vaste kleuren voor nieuwe tags.
+enum TransactionsTagPalette {
+    static let colors = ["#1F7A5C", "#2D6CDF", "#D98E04", "#B0447F", "#6B5BD2", "#3C9AA8", "#C0562B", "#7A8590"]
+}
+
+/// Formulier voor een nieuwe tag: naam, kleur uit een vast palet en de schakelaar Verrekenen.
+/// `create` geeft terug of het gelukt is; bij een fout (bv. naam bestaat al) blijft het formulier open.
+struct TransactionsNewTagForm: View {
+    let tagCount: Int
+    var autoFocus = true
+    let create: (_ name: String, _ color: String, _ settles: Bool) -> Bool
+
+    @State private var name = ""
+    @State private var color = ""
+    @State private var settles = false
+    @FocusState private var focused: Bool
+
+    private var trimmed: String { name.trimmingCharacters(in: .whitespaces) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Nieuwe tag").font(.headline)
+            TextField("Naam, bv. Tanken", text: $name)
+                .textFieldStyle(.roundedBorder)
+                .focused($focused)
+                .onSubmit(add)
+            HStack(spacing: 8) {
+                ForEach(TransactionsTagPalette.colors, id: \.self) { hex in
+                    Button { color = hex } label: {
+                        Circle().fill(Color(hex: hex)).frame(width: 18, height: 18)
+                            .overlay(Circle().strokeBorder(Color.primary.opacity(color == hex ? 0.9 : 0), lineWidth: 2).padding(-3))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Kleur \(hex)")
+                    .accessibilityAddTraits(color == hex ? .isSelected : [])
+                }
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle("Verrekenen", isOn: $settles)
+                Text("Uitgaven met deze tag stort je later terug op de betaalrekening; wat openstaat zie je boven de lijst.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack {
+                Spacer()
+                Button("Maak aan", action: add)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(trimmed.isEmpty)
+            }
+        }
+        .padding(14)
+        .frame(width: 280)
+        .onAppear {
+            if color.isEmpty { color = TransactionsTagPalette.colors[tagCount % TransactionsTagPalette.colors.count] }
+            if autoFocus { focused = true }
+        }
+    }
+
+    private func add() {
+        guard !trimmed.isEmpty else { return }
+        if create(trimmed, color, settles) { name = ""; settles = false }
+    }
+}
+
+/// De chip "+ Nieuwe tag…" met zijn popover.
+struct TransactionsNewTagChip: View {
+    let tagCount: Int
+    let create: (_ name: String, _ color: String, _ settles: Bool) -> Bool
+    @State private var open = false
+
+    var body: some View {
+        Button { open = true } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "plus").imageScale(.small)
+                Text("Nieuwe tag…")
+            }
+            .font(.callout)
+            .foregroundStyle(Theme.accent)
+            .padding(.horizontal, 9).padding(.vertical, 3)
+            .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.45), style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Maak een nieuwe tag en zet hem meteen op deze boeking")
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            TransactionsNewTagForm(tagCount: tagCount) { name, color, settles in
+                let ok = create(name, color, settles)
+                if ok { open = false }
+                return ok
+            }
+        }
+    }
+}
+
+/// Tags aan- en uitzetten door erop te klikken, altijd met de chip om een nieuwe tag te maken.
 struct TransactionsTagEditor: View {
     let tags: [HFCore.Tag]
     @Binding var selection: Set<Int64>
     var disabled = false
+    /// Maakt een nieuwe tag; nil laat de chip weg.
+    var onCreate: ((_ name: String, _ color: String, _ settles: Bool) -> Bool)?
 
     var body: some View {
-        if tags.isEmpty {
-            Text("Nog geen tags. Maak ze aan bij Instellingen › Tags.")
-                .font(.caption).foregroundStyle(.secondary)
-        } else {
-            TransactionsFlowLayout(spacing: 6) {
-                ForEach(tags) { tag in
-                    let id = tag.id ?? 0
-                    let isOn = selection.contains(id)
-                    let color = Color(hex: tag.color)
-                    Button {
-                        if isOn { selection.remove(id) } else { selection.insert(id) }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                                .imageScale(.small)
-                                .foregroundStyle(isOn ? color : Color.secondary.opacity(0.6))
-                            Text(tag.name).lineLimit(1)
-                        }
-                        .font(.callout)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(isOn ? color.opacity(0.18) : Color.primary.opacity(0.05), in: Capsule())
-                        .overlay(Capsule().strokeBorder(isOn ? color.opacity(0.5) : Color.clear))
-                        .contentShape(Capsule())
+        TransactionsFlowLayout(spacing: 6) {
+            ForEach(tags) { tag in
+                let id = tag.id ?? 0
+                let isOn = selection.contains(id)
+                let color = Color(hex: tag.color)
+                Button {
+                    if isOn { selection.remove(id) } else { selection.insert(id) }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                            .imageScale(.small)
+                            .foregroundStyle(isOn ? color : Color.secondary.opacity(0.6))
+                        Text(tag.name).lineLimit(1)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(disabled)
-                    .accessibilityAddTraits(isOn ? .isSelected : [])
+                    .font(.callout)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(isOn ? color.opacity(0.18) : Color.primary.opacity(0.05), in: Capsule())
+                    .overlay(Capsule().strokeBorder(isOn ? color.opacity(0.5) : Color.clear))
+                    .contentShape(Capsule())
                 }
+                .buttonStyle(.plain)
+                .disabled(disabled)
+                .accessibilityAddTraits(isOn ? .isSelected : [])
+            }
+            if let onCreate, !disabled {
+                TransactionsNewTagChip(tagCount: tags.count, create: onCreate)
             }
         }
     }

@@ -111,6 +111,30 @@ public struct PotOverview: Equatable, Sendable {
     public let negativePotCount: Int
 }
 
+/// Twee boekingen zonder pot op dezelfde spaarrekening met exact tegengestelde bedragen: ze heffen elkaar op.
+public struct CancelledPair: Identifiable, Equatable, Sendable {
+    public var id: String { "\(first.id)-\(second.id)" }
+    /// De oudste van de twee (bij gelijke dag de eerst geboekte).
+    public let first: EntryRow
+    public let second: EntryRow
+    /// Het bedrag zonder teken.
+    public var amount: Money { first.amount.magnitude }
+}
+
+/// Boekingen op spaarrekeningen zonder pot, zonder de paren die elkaar opheffen. Het saldo "niet toegewezen" van
+/// een rekening (`SavingsAccountPots.unallocated`) verandert hier niet door: opgeheven boekingen tellen daar
+/// gewoon mee en zijn samen € 0,00.
+public struct UnallocatedSavings: Equatable, Sendable {
+    /// De boekingen zonder pot die niet zijn opgeheven, nieuwste eerst.
+    public let entries: [EntryRow]
+    /// De paren die elkaar opheffen, nieuwste paar eerst.
+    public let cancelledPairs: [CancelledPair]
+    /// Som van `entries`.
+    public let remainingTotal: Money
+    /// Aantal opgeheven boekingen (2 × het aantal paren).
+    public let cancelledCount: Int
+}
+
 /// Boeking van een pot met het saldo van de pot ná die boeking.
 public struct PotHistoryRow: Identifiable, Equatable, Sendable {
     public var id: Int64 { entry.id }
@@ -346,13 +370,56 @@ extension Insight {
         }
     }
 
-    /// Boekingen op spaarrekeningen zonder pot (nieuwste eerst). `accountId` nil = alle spaarrekeningen.
+    /// Boekingen op spaarrekeningen zonder pot die elkaar niet opheffen (nieuwste eerst), dus de `entries` van
+    /// `unallocatedSavingsOverview`. `accountId` nil = alle spaarrekeningen.
     public static func unallocatedSavingsEntries(_ db: Database, accountId: Int64? = nil) throws -> [EntryRow] {
+        try unallocatedSavingsOverview(db, accountId: accountId).entries
+    }
+
+    /// Boekingen op spaarrekeningen zonder pot, met de paren die elkaar opheffen apart gehouden. Twee boekingen
+    /// zonder pot op dezelfde spaarrekening heffen elkaar op als hun bedragen exact tegengesteld zijn en hun dagen
+    /// hooguit 45 dagen uit elkaar liggen. Per bedrag wordt greedy gekoppeld aan de dichtstbijzijnde dag
+    /// (bij gelijke afstand de oudste eerst); elke boeking zit in hoogstens één paar.
+    /// `accountId` nil = alle spaarrekeningen; paren worden nooit over rekeningen heen gekoppeld.
+    public static func unallocatedSavingsOverview(_ db: Database, accountId: Int64? = nil) throws -> UnallocatedSavings {
         var clause = "a.kind = 'spaar' AND e.potId IS NULL"
         var args: [(any DatabaseValueConvertible)?] = []
         if let accountId { clause += " AND e.accountId = ?"; args.append(accountId) }
-        return try entryRows(db, where: clause, arguments: args)
+        let all = try entryRows(db, where: clause, arguments: args)
+
+        // Kandidaten: positieve en negatieve boeking met hetzelfde bedrag op dezelfde rekening.
+        struct Key: Hashable { let account: Int64; let cents: Int64 }
+        var positives: [Key: [EntryRow]] = [:], negatives: [Key: [EntryRow]] = [:]
+        for e in all where !e.amount.isZero {
+            let key = Key(account: e.accountId, cents: abs(e.amount.cents))
+            if e.amount > .zero { positives[key, default: []].append(e) } else { negatives[key, default: []].append(e) }
+        }
+        var candidates: [(distance: Int, plus: EntryRow, minus: EntryRow)] = []
+        for (key, plus) in positives {
+            for p in plus {
+                for m in negatives[key] ?? [] {
+                    let distance = abs(Q.daysBetween(p.day, m.day))
+                    if distance <= cancellationWindowDays { candidates.append((distance, p, m)) }
+                }
+            }
+        }
+        candidates.sort { ($0.distance, min($0.plus.day, $0.minus.day), $0.plus.id, $0.minus.id)
+            < ($1.distance, min($1.plus.day, $1.minus.day), $1.plus.id, $1.minus.id) }
+        var used = Set<Int64>()
+        var pairs: [CancelledPair] = []
+        for c in candidates where !used.contains(c.plus.id) && !used.contains(c.minus.id) {
+            used.insert(c.plus.id); used.insert(c.minus.id)
+            let (first, second) = (c.plus.day, c.plus.id) <= (c.minus.day, c.minus.id) ? (c.plus, c.minus) : (c.minus, c.plus)
+            pairs.append(CancelledPair(first: first, second: second))
+        }
+        pairs.sort { ($0.first.day, $0.first.id) > ($1.first.day, $1.first.id) }
+        let remaining = all.filter { !used.contains($0.id) }
+        return UnallocatedSavings(entries: remaining, cancelledPairs: pairs, remainingTotal: remaining.map(\.amount).sum(),
+                                  cancelledCount: used.count)
     }
+
+    /// Hoeveel dagen twee tegengestelde boekingen zonder pot hooguit uit elkaar mogen liggen om als opgeheven te gelden.
+    public static let cancellationWindowDays = 45
 
     /// Groepeert gemarkeerde boekingen per pot, in volgorde van eerste voorkomen.
     static func reimbursementPots(_ entries: [EntryRow], balances: [Int64: Money]?) -> [ReimbursementPotTotal] {

@@ -387,9 +387,9 @@ struct TransactionsTagMenuItems: View {
                 if isOn { Label(tag.name, systemImage: "checkmark") } else { Text(tag.name) }
             }
         }
-        if store.lookups.tags.isEmpty {
-            Text("Nog geen tags; maak ze bij Instellingen › Tags")
-        }
+        if !store.lookups.tags.isEmpty { Divider() }
+        Button("+ Nieuwe tag…") { store.newTagTarget = TransactionsNewTagTarget(ids: ids) }
+            .disabled(rows.isEmpty)
     }
 }
 
@@ -505,6 +505,7 @@ struct TransactionsSettleMenuItems: View {
 private struct TransactionsTagPopover: View {
     @Environment(AppModel.self) private var model
     let store: TransactionsStore
+    @State private var creating = false
 
     var body: some View {
         let ids = Array(store.selection)
@@ -533,8 +534,28 @@ private struct TransactionsTagPopover: View {
                 .buttonStyle(.plain)
                 .disabled(rows.isEmpty)
             }
+            if !store.lookups.tags.isEmpty { Divider().padding(.vertical, 2) }
+            if creating {
+                TransactionsNewTagForm(tagCount: store.lookups.tags.count) { name, color, settles in
+                    let ok = store.createTag(model, name: name, color: color, settles: settles, ids: ids) != nil
+                    if ok { creating = false }
+                    return ok
+                }
+                .padding(-14)
+            } else {
+                Button {
+                    creating = true
+                } label: {
+                    Label("Nieuwe tag…", systemImage: "plus").foregroundStyle(Theme.accent)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 3)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(rows.isEmpty)
+            }
         }
         .padding(14)
-        .frame(width: 220)
+        .frame(width: creating ? 280 : 220)
     }
 }

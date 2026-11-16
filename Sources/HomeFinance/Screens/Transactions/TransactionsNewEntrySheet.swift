@@ -57,7 +57,11 @@ struct TransactionsNewEntrySheet: View {
                         }
                     }
                     LabeledContent("Tags") {
-                        TransactionsTagEditor(tags: store.lookups.tags, selection: $draft.tagIds)
+                        TransactionsTagEditor(tags: store.lookups.tags, selection: $draft.tagIds) { name, color, settles in
+                            guard let id = store.createTag(model, name: name, color: color, settles: settles, ids: []) else { return false }
+                            draft.tagIds.insert(id)
+                            return true
+                        }
                             .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                     TextField("Notitie", text: $draft.note, prompt: Text("Optioneel"), axis: .vertical)

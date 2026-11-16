@@ -94,9 +94,30 @@ als vandaag in het gevraagde jaar valt.
 |---|---|
 | `potOverview(db, accountId:today:)` | `PotOverview`: `accounts` (saldo, `potTotal`, `unallocated`, `pots`), `byKind`, `byOwner`, totalen |
 | `potHistory(db, potId:)` | `[PotHistoryRow]`: boekingen oudste eerst met `runningBalance` |
-| `unallocatedSavingsEntries(db, accountId:)` | boekingen op spaarrekeningen zonder pot |
+| `unallocatedSavingsOverview(db, accountId:)` | `UnallocatedSavings`: boekingen zonder pot, met de paren die elkaar opheffen apart |
+| `unallocatedSavingsEntries(db, accountId:)` | alleen `entries` van het overzicht hierboven (**gewijzigde betekenis**, zie onder) |
 | `openReimbursements(db)` | `OpenReimbursements`: de open gemarkeerde boekingen, gesaldeerd (zie "Verrekenen met spaar") |
 | `savingsTransfers(db)` | `[SavingsTransferDetail]`: overboekingen (nieuwste eerst) met richting, boekingen, `perPot` en potmutaties |
+
+### Boekingen zonder pot en opgeheven paren
+
+Boekingen op een spaarrekening zonder pot zijn "niet toegewezen". Twee zulke boekingen die elkaar wegstrepen
+(iets voorgeschoten en teruggekregen) horen niet als "nog geen pot" gemeld te worden.
+
+`unallocatedSavingsOverview(db, accountId:)` geeft `UnallocatedSavings`:
+
+- `entries`: de boekingen zonder pot die niet zijn opgeheven, nieuwste eerst;
+- `cancelledPairs: [CancelledPair]` (`first`, `second`, `amount`): paren van twee boekingen zonder pot op dezelfde
+  spaarrekening met exact tegengestelde bedragen, hooguit `Insight.cancellationWindowDays` (45) dagen uit elkaar.
+  Per bedrag wordt greedy gekoppeld aan de dichtstbijzijnde dag (bij gelijke afstand de oudste eerst); elke
+  boeking zit in hoogstens één paar; nooit over rekeningen heen. `first` is de oudste van het paar;
+- `remainingTotal`: de som van `entries`;
+- `cancelledCount`: aantal opgeheven **boekingen** (2 × het aantal paren), dus het getal dat het scherm eerder als
+  "boekingen zonder pot" meldde.
+
+**Gewijzigde betekenis:** `unallocatedSavingsEntries` geeft voortaan alleen `entries` van dit overzicht terug, dus
+zonder de opgeheven paren. De rekenregel van `SavingsAccountPots.unallocated` (saldo − potten) is niet veranderd:
+opgeheven boekingen tellen daar gewoon mee en zijn samen € 0,00. Boekingen met een pot doen niet mee.
 
 ### Verrekenen met spaar (twee richtingen)
 

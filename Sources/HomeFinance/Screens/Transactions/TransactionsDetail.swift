@@ -74,8 +74,10 @@ private struct TransactionsSingleDetail: View {
                             actionRow
                             if let p = pending, let match = store.matchChoice {
                                 TransactionsDistributionSection(store: store, pending: p, match: match)
+                                tagsRow
                             } else {
                                 assignment
+                                tagsRow
                                 if canSettle { settleRow }
                             }
                             if store.kind == .betaal { periodRow }
@@ -218,6 +220,25 @@ private struct TransactionsSingleDetail: View {
         }
     }
 
+    // MARK: Tags
+
+    /// Altijd zichtbaar, ook zonder tags: kiezen of meteen een nieuwe maken.
+    private var tagsRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                Text("Tags").font(.headline)
+                Image(systemName: "questionmark.circle").font(.caption).foregroundStyle(.tertiary)
+                    .help("Tags volgen waar het geld heen gaat (bv. tanken). Ze tellen niet als extra uitgave.")
+            }
+            TransactionsTagEditor(tags: store.lookups.tags, selection: tagBinding, disabled: locked) { name, color, settles in
+                guard let id = store.createTag(model, name: name, color: color, settles: settles, ids: ids) else { return false }
+                // Een nieuwe transactie is nog niet geboekt: de tag gaat mee in de keuzes bij het boeken.
+                if pending != nil { store.draft.tagIds.insert(id) }
+                return true
+            }
+        }
+    }
+
     // MARK: Verrekenen met spaar
 
     private var settleRow: some View {
@@ -348,8 +369,6 @@ private struct TransactionsSingleDetail: View {
 
     private var moreSummary: String {
         var parts: [String] = []
-        let tagCount = pending != nil ? store.draft.tagIds.count : (row?.tags.count ?? 0)
-        if tagCount > 0 { parts.append(tagCount == 1 ? "1 tag" : "\(tagCount) tags") }
         if !(row?.note ?? store.draft.note).isEmpty { parts.append("notitie") }
         if row?.temporaryLoan ?? store.draft.temporaryLoan { parts.append("tijdelijk geleend") }
         if store.extra.parts.count > 1 { parts.append("gesplitst") }
@@ -371,9 +390,6 @@ private struct TransactionsSingleDetail: View {
                         TransactionsAmountInput(isIncome: $store.draft.isIncome, magnitude: $store.draft.magnitude)
                             .id(store.draftVersion)
                     }
-                }
-                field("Tags", help: "Tags volgen waar het geld heen gaat (bv. tanken). Ze tellen niet als extra uitgave.") {
-                    TransactionsTagEditor(tags: store.lookups.tags, selection: tagBinding)
                 }
                 field("Notitie") {
                     TextField("Notitie", text: $store.draft.note, axis: .vertical)
