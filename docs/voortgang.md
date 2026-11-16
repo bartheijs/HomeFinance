@@ -11,6 +11,21 @@
 - "Tijdelijk anti-rood" volgt uit boekingen met de markering *tijdelijk geleend van spaar*.
 - Back-up naar iCloud Drive; dashboard voor de telefoon als bestand in een cloudmap (geen hosting).
 
+## 16 november 2026
+
+- Dashboard: "Nog te besteden deze maand" (besteedbaar eind van de maand) is het hoofdgetal; "Besteedbaar nu" staat eronder.
+- Administratie van de gebruiker hersteld (met kopie `homefinance-voor-herstel-november.sqlite`): 11 posten voor
+  november afgevinkt die vóór de start op 8 november betaald waren, 3 posten afgevinkt als "vervalt in november"
+  (kindgebonden budget, schoonmaak, zang- en dansles), kinderbijslag op € 283,33 per maand (€ 850 / 3) op zijn
+  verzoek: telt zo in het maandoverzicht en in de forecast.
+- Vergelijking met de Excel van de gebruiker: saldi en alle 35 potten gelijk aan zijn Excel (2). "Nog te besteden" in
+  november wijkt € 448,25 af van zijn Excel-forecast: + € 283,33 kinderbijslag per maand, + € 187,50 rente-reservering
+  die in de Excel apart op de betaalrekening staat (in de app hoort die in een pot op spaar; nog niet overgemaakt),
+  − € 22,58 werkelijke tegen geplande bedragen.
+- Open punten: open verrekeningen met spaar tellen nog niet mee in "nog te besteden"; in de voorbeelddata staan
+  verrekeningen zonder bankregel, waardoor het Dashboard daar vijf meldingen "nog niet gezien in een bankbestand"
+  toont (alleen voorbeelddata); meerdere van die meldingen zouden beter als één regel samengevat kunnen worden.
+
 ## Stand op 14 november 2026, einde van de dag
 
 - De gebruiker is gestart: 2 rekeningen, 31 posten, 35 potten met beginbedrag en een vaste storting staan in zijn
