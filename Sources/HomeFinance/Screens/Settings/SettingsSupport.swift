@@ -22,7 +22,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .jaar: "Buffers en vaste posten van het begrotingsjaar."
         case .rekeningen: "Je betaal- en spaarrekeningen, en de controle met het banksaldo."
-        case .tags: "Trackingcategorieën om uitgaven te volgen."
+        case .tags: "Kenmerken om uitgaven te volgen, zoals tanken of uit eten."
         case .backup: "Reservekopieën van je administratie."
         case .telefoon: "Je belangrijkste cijfers als pagina op je telefoon."
         case .over: "Waar je gegevens staan en welke je bekijkt."

@@ -107,7 +107,7 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
         case .temporaryLoanOnSavings:
             return "'Tijdelijk geleend van spaar' kan alleen bij een boeking op een betaalrekening."
         case .inSavingsTransfer:
-            return "Deze boeking zit in een spaaroverboeking. Verwijder eerst die spaaroverboeking."
+            return "Deze boeking zit in een verrekening met spaar. Maak die eerst ongedaan bij Verrekenen met spaar."
         case .bankEntryImmutable:
             return "Bedrag, datum en rekening van een boeking uit een banktransactie liggen vast. "
                 + "Boek de transactie opnieuw om bedragen te wijzigen."
@@ -159,7 +159,7 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
         case let .depositInvalid(message):
             return message
         case .savingsTransferBooking:
-            return "Dit is een boeking van een verrekening met spaar. Maak die ongedaan bij Spaaroverboekingen "
+            return "Dit is een boeking van een verrekening met spaar. Maak die ongedaan bij Verrekenen met spaar "
                 + "(bankregel loskoppelen, heropenen of verwijderen)."
         case let .periodInvalid(period):
             return "'\(period)' is geen geldige maand. Gebruik de vorm jjjj-mm, bv. 2027-12."

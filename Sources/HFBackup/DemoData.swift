@@ -34,6 +34,11 @@ public struct DemoSummary: Equatable, Sendable {
 /// Verzonnen voorbeelddata: het gezin "Ouder 1", "Ouder 2", "Kind 1" en "Kind 2", met verzonnen bedrijven en
 /// IBAN's (`NL00TEST…`). Dezelfde `today` geeft altijd precies dezelfde data.
 public enum DemoData {
+    /// Versie van de voorbeelddata. Hoog dit op bij elke wijziging in `DemoPlan` of `seed`: de app vult een
+    /// bestaande voorbeelddatabase dan opnieuw (`DemoSupport.openDemo`). 2 = potten per kind, spaardoel met
+    /// onderdelen en vaste stortingen (november 2026).
+    public static let version = 2
+
     /// IBAN van de betaalrekening in de voorbeelddata.
     public static let checkingIban = DemoPlan.checkingIban
     /// IBAN van de spaarrekening in de voorbeelddata.
@@ -53,6 +58,29 @@ public enum DemoData {
             }
             return try insert(plan, into: database, leaveRecentForImport: leaveRecentForImport)
         }
+    }
+
+    /// Instelling met de versie van de voorbeelddata in een voorbeelddatabase.
+    public static let versionKey = "voorbeeld.versie"
+
+    /// Opent de voorbeelddatabase op `url` met voorbeelddata van deze `version`. Bij het eerste gebruik wordt hij
+    /// gevuld; staat er voorbeelddata van een andere versie in, dan wordt dit bestand leeggemaakt en opnieuw gevuld.
+    /// Weigert de eigen administratie (`AppDatabase.defaultURL`).
+    public static func openDemo(at url: URL, today: Day, leaveRecentForImport: Bool = true) throws -> AppDatabase {
+        guard url.standardizedFileURL != AppDatabase.defaultURL.standardizedFileURL else {
+            throw CocoaError(.fileWriteNoPermission)
+        }
+        var db = try AppDatabase.open(at: url)
+        let (accounts, stored) = try db.read { (try Account.fetchCount($0), try Setting.get($0, versionKey)) }
+        if accounts > 0, stored != String(version) {
+            try db.writer.erase()
+            db = try AppDatabase(db.writer)
+        }
+        if try db.read({ try Account.fetchCount($0) }) == 0 {
+            _ = try seed(into: db, today: today, leaveRecentForImport: leaveRecentForImport)
+            try db.write { try Setting.set($0, versionKey, String(version)) }
+        }
+        return db
     }
 
     /// Bestandsnaam voor de voorbeeld-CSV, bv. `voorbeeld-betaalrekening-2027-06-18.csv`.
@@ -111,11 +139,18 @@ public enum DemoData {
         // Potten
         var potIds: [String: Int64] = [:]
         for (index, def) in DemoPlan.pots.enumerated() {
+            let isGoal = def.name == DemoPlan.goalPot.name
             var pot = Pot(accountId: savingsId, name: def.name, kind: def.kind, owner: def.owner,
                           monthlyAmount: Money(cents: def.monthly), targetAmount: def.target.map(Money.init(cents:)),
-                          sortOrder: index + 1)
+                          sortOrder: index + 1, targetDate: isGoal ? DemoPlan.goalDate(year: year) : nil)
             try pot.insert(db)
             potIds[def.name] = pot.id
+        }
+        // Het spaardoel uit onderdelen; het doelbedrag van de pot is de som ervan.
+        for (index, part) in DemoPlan.goalParts.enumerated() {
+            var record = GoalPart(potId: potIds[DemoPlan.goalPot.name]!, label: part.label, quantity: part.quantity,
+                                  unitAmount: Money(cents: part.unit), sortOrder: index + 1)
+            try record.insert(db)
         }
 
         // Vaste posten: eerst IN en UIT, daarna de RES-regels onder RESERVERINGEN.
@@ -133,11 +168,52 @@ public enum DemoData {
             try item.insert(db)
             itemIds[def.label] = item.id
         }
-        for def in DemoPlan.reservePots {
+        for def in DemoPlan.reserveLines {
             sortOrder += 1
             var item = BudgetItem(yearId: budgetYear.id!, label: def.name, direction: .RES,
                                   planAmount: Money(cents: -def.monthly), potId: potIds[def.name], sortOrder: sortOrder)
             try item.insert(db)
+        }
+
+        // Vaste stortingen van de betaal- naar de spaarrekening, gekoppeld aan hun post: RESERVERINGEN (verdeeld
+        // over alle potten met een RES-regel) en elke spaarpost apart. Zo tonen spaardoelen en de vooruitblik wat
+        // er per maand bij komt.
+        var distributionOrder = 0
+        func insertDistribution(_ name: String, itemLabel: String, lines: [DemoPot]) throws {
+            distributionOrder += 1
+            var distribution = Distribution(name: name, accountId: savingsId, sortOrder: distributionOrder,
+                                            sourceAccountId: checkingId)
+            try distribution.insert(db)
+            for (index, def) in lines.enumerated() {
+                var line = DistributionLine(distributionId: distribution.id!, potId: potIds[def.name]!,
+                                            amount: Money(cents: def.monthly), sortOrder: index + 1)
+                try line.insert(db)
+            }
+            try db.execute(sql: "UPDATE budgetItem SET distributionId = ? WHERE id = ?",
+                           arguments: [distribution.id, itemIds[itemLabel]])
+        }
+        try insertDistribution(DemoPlan.reserveDistributionName, itemLabel: DemoPlan.reserveLabel, lines: DemoPlan.reserveLines)
+        for def in DemoPlan.items {
+            guard case .saving(let potName) = def.kind,
+                  let pot = DemoPlan.pots.first(where: { $0.name == potName }) else { continue }
+            try insertDistribution(def.label, itemLabel: def.label, lines: [pot])
+        }
+
+        // Vooruitblik voor de rentepot: de rente van de komende maanden gaat eraf, de schenking van volgend jaar
+        // komt erbij. Zo zie je of de reservering het jaar rondkomt.
+        if let loan = DemoPlan.items.first(where: { $0.label == DemoPlan.loanLabel }) {
+            let potId = potIds[DemoPlan.loanPot.name]!
+            var month = plan.today.month + (plan.today.day >= loan.day ? 1 : 0)
+            while month <= 12 {
+                var expected = ForecastItem(potId: potId, day: Day(year: year, month: month, day: loan.day)!,
+                                            amount: Money(cents: loan.cents),
+                                            label: "Rente \(Day.monthNames[month - 1])", createdAt: stamp)
+                try expected.insert(db)
+                month += 1
+            }
+            var gift = ForecastItem(potId: potId, day: Day(year: year + 1, month: 1, day: 5)!,
+                                    amount: Money(cents: -loan.cents * 12), label: "Schenking \(year + 1)", createdAt: stamp)
+            try gift.insert(db)
         }
 
         // Tags
@@ -173,7 +249,13 @@ public enum DemoData {
         }
         for (child, iban, cents) in DemoPlan.children {
             rules.append(Rule(name: "Zakgeld \(child)", priority: 20, accountId: checkingId, counterpartyIban: iban,
-                              amount: Money(cents: cents), entryLabel: "Zakgeld \(child)"))
+                              amount: Money(cents: cents), targetPotId: potIds["Zakgeld \(child)"],
+                              entryLabel: "Zakgeld \(child)", reimburse: true))
+            // Rijles: de rijschool is dezelfde, het kind staat in de omschrijving.
+            rules.append(Rule(name: "Rijles \(child)", priority: 40, accountId: checkingId,
+                              counterpartyContains: DemoPlan.drivingSchool.name, descriptionContains: child,
+                              targetPotId: potIds[DemoPlan.goalPot.name], entryLabel: "Rijles \(child)",
+                              tagIds: String(tagIds["Rijbewijs \(child)"]!), reimburse: true))
         }
         rules.append(Rule(name: "Tankstation Demo", priority: 50, accountId: checkingId,
                           counterpartyContains: "Tankstation Demo", entryLabel: "Tanken",

@@ -208,7 +208,7 @@ struct RulesEditor: View {
             }
             Toggle(isOn: $draft.reimburse) {
                 Text("Vergoeden uit spaar")
-                Text("De uitgave komt op de lijst Spaaroverboekingen.")
+                Text("De uitgave komt bij Verrekenen met spaar.")
             }
         } header: {
             Text("Dan")

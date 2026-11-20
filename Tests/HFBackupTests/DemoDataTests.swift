@@ -310,7 +310,9 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
             let items = try BudgetItem.fetchAll(database)
             #expect(items.count == summary.budgetItemCount)
             let res = items.filter { $0.direction == .RES }
-            #expect(res.count == 20)
+            // 20 reserveringspotten, plus kleedgeld en zakgeld per kind en het spaardoel studie en rijbewijs.
+            #expect(res.count == 25)
+            #expect(res.count == DemoPlan.reserveLines.count)
             #expect(res.allSatisfy { $0.potId != nil && $0.planAmount.isNegative })
             let total = items.filter(\.isReserveTotal)
             #expect(total.count == 1)
@@ -323,11 +325,17 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
 
             let pots = try Pot.fetchAll(database)
             #expect(pots.filter { $0.kind == .reservering }.count == 21)
-            #expect(pots.filter { $0.kind == .reservering }.map(\.monthlyAmount).sum() == -total[0].planAmount)
+            let resPots = Set(res.compactMap(\.potId))
+            #expect(pots.filter { resPots.contains($0.id!) }.map(\.monthlyAmount).sum() == -total[0].planAmount)
             #expect(Set(pots.filter { $0.kind == .spaar }.compactMap(\.owner)) == ["Kind 1", "Kind 2", "Ouder 1", "Ouder 2"])
-            #expect(pots.filter { $0.kind == .spaar }.allSatisfy { $0.targetAmount != nil })
+            // Spaardoelen: spaargeld per kind, de doelen per ouder, de buffer en studie en rijbewijs; kleed- en
+            // zakgeld hebben geen doel.
+            let goals = pots.filter { $0.targetAmount != nil }.map(\.name)
+            #expect(goals == ["Spaargeld Kind 1", "Spaargeld Kind 2", "Studie Ouder 1", "Nieuwe fiets Ouder 2",
+                              "Buffer gezin", "Studie en rijbewijs"])
 
-            #expect(try Tag.fetchAll(database).map(\.name) == ["Tanken", "Uit eten", "Cadeau", "Vakantie"])
+            #expect(try Tag.fetchAll(database).map(\.name) == ["Tanken", "Uit eten", "Cadeau", "Vakantie",
+                                                                "Rijbewijs Kind 1", "Rijbewijs Kind 2"])
             #expect(try Rule.fetchCount(database) > 30)
             #expect(try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM rule WHERE hitCount > 0")! > 20)
 
@@ -358,7 +366,7 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
             for entry in reserveEntries {
                 let counter = try Entry.fetchAll(database, sql:
                     "SELECT * FROM entry WHERE counterEntryId = ?", arguments: [entry.id])
-                #expect(counter.count == 20)
+                #expect(counter.count == 25)
                 #expect(counter.map(\.amount).sum() == -entry.amount)
                 #expect(counter.allSatisfy { $0.accountId == summary.savingsAccountId && $0.potId != nil })
                 #expect(counter.contains { $0.id == entry.counterEntryId })
@@ -459,5 +467,137 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
         #expect(first == (0..<20).map { _ in b.int(1...1_000) })
         #expect(first != (0..<20).map { _ in c.int(1...1_000) })
         #expect(first.allSatisfy { (1...1_000).contains($0) })
+    }
+}
+
+/// Wat de gebruiker zelf ook heeft ingericht: potten per kind, een spaardoel uit onderdelen met een tag per kind,
+/// vaste stortingen en de pot voor de rente op de privélening met een vooruitblik.
+@Suite struct DemoDataPotsTests {
+    @Test(arguments: demoDays)
+    func everyChildHasSavingsClothingAndPocketMoney(today: Day) throws {
+        let (db, summary) = try seeded(today)
+        try db.read { database in
+            for child in ["Kind 1", "Kind 2"] {
+                let pots = try Pot.filter(Column("owner") == child).order(Column("sortOrder")).fetchAll(database)
+                #expect(pots.map(\.name) == ["Spaargeld \(child)", "Kleedgeld \(child)", "Zakgeld \(child)"])
+                #expect(pots.allSatisfy { $0.kind == .spaar && $0.accountId == summary.savingsAccountId && $0.monthlyAmount > .zero })
+                // Zakgeld en kleding van dit kind gaan van de betaalrekening en worden vergoed uit zijn eigen pot.
+                for (label, pot) in [("Zakgeld \(child)", pots[2]), ("Kleding \(child)", pots[1])] {
+                    let entries = try Entry.filter(Column("label") == label).fetchAll(database)
+                    #expect(entries.allSatisfy { $0.accountId == summary.checkingAccountId && $0.reimburse
+                                                 && $0.potId == pot.id && $0.amount.isNegative && $0.budgetItemId == nil })
+                    if today >= Day(year: today.year, month: 3, day: 15)! { #expect(!entries.isEmpty, "\(label)") }
+                }
+            }
+            // De regel voor het zakgeld stelt vergoeden uit de pot van het kind voor.
+            let rule = try #require(try Rule.filter(Column("name") == "Zakgeld Kind 1").fetchOne(database))
+            let pot = try #require(try Pot.filter(Column("name") == "Zakgeld Kind 1").fetchOne(database))
+            #expect(rule.reimburse && rule.targetPotId == pot.id)
+        }
+    }
+
+    @Test(arguments: demoDays)
+    func goalIsBuiltFromPartsWithATagPerChild(today: Day) throws {
+        let (db, summary) = try seeded(today)
+        try db.read { database in
+            let pot = try #require(try Pot.filter(Column("name") == "Studie en rijbewijs").fetchOne(database))
+            let parts = try GoalPart.filter(Column("potId") == pot.id).order(Column("sortOrder")).fetchAll(database)
+            #expect(parts.count == 4)
+            #expect(parts.map(\.label).contains("Rijlessen Kind 1") && parts.map(\.label).contains("Rijlessen Kind 2"))
+            #expect(pot.targetAmount == parts.map(\.amount).sum())
+            #expect(pot.targetDate == Day(year: today.year + 1, month: 8, day: 31))
+            #expect(pot.owner == nil && pot.kind == .spaar)
+
+            // Rijlessen en examen: van de betaalrekening, vergoed uit deze pot, met de tag van het kind.
+            for child in ["Kind 1", "Kind 2"] {
+                let tag = try #require(try Tag.filter(Column("name") == "Rijbewijs \(child)").fetchOne(database))
+                let tagged = try Entry.fetchAll(database, sql: """
+                    SELECT e.* FROM entry e JOIN entryTag et ON et.entryId = e.id WHERE et.tagId = ? ORDER BY e.day
+                    """, arguments: [tag.id])
+                #expect(tagged.allSatisfy { $0.potId == pot.id && $0.reimburse && $0.accountId == summary.checkingAccountId
+                                            && $0.label.hasSuffix(child) })
+                let rule = try #require(try Rule.filter(Column("name") == "Rijles \(child)").fetchOne(database))
+                #expect(rule.descriptionContains == child && rule.targetPotId == pot.id && rule.reimburse)
+                #expect(rule.tagIds == String(tag.id!))
+                if today == testToday {
+                    // Kind 1 heeft om de twee weken rijles sinds 4 februari en deed theorie-examen; Kind 2 sinds 11 mei.
+                    #expect(tagged.count == (child == "Kind 1" ? 10 : 3))
+                }
+            }
+        }
+    }
+
+    @Test(arguments: demoDays)
+    func fixedDepositsMatchTheirItems(today: Day) throws {
+        let (db, summary) = try seeded(today)
+        try db.read { database in
+            let distributions = try Distribution.order(Column("sortOrder")).fetchAll(database)
+            #expect(distributions.map(\.name) == ["Maandelijkse reserveringen", "Sparen Kind 1", "Sparen Kind 2", "Sparen buffer"])
+            for distribution in distributions {
+                #expect(distribution.accountId == summary.savingsAccountId)
+                #expect(distribution.sourceAccountId == summary.checkingAccountId)
+                let lines = try DistributionLine.filter(Column("distributionId") == distribution.id).fetchAll(database)
+                let item = try #require(try BudgetItem.filter(Column("distributionId") == distribution.id).fetchOne(database))
+                #expect(item.planAmount == -lines.map(\.amount).sum())
+            }
+            // De verdeling van RESERVERINGEN is precies die van de RES-regels.
+            let reserve = try #require(try BudgetItem.filter(Column("isReserveTotal") == true).fetchOne(database))
+            let lines = try DistributionLine.filter(Column("distributionId") == reserve.distributionId).fetchAll(database)
+            let res = try BudgetItem.filter(Column("direction") == Direction.RES.rawValue).fetchAll(database)
+            #expect(Dictionary(uniqueKeysWithValues: lines.map { ($0.potId, $0.amount) })
+                    == Dictionary(uniqueKeysWithValues: res.map { ($0.potId!, -$0.planAmount) }))
+        }
+    }
+
+    @Test(arguments: demoDays)
+    func interestPotLooksAhead(today: Day) throws {
+        let (db, _) = try seeded(today)
+        try db.read { database in
+            let pot = try #require(try Pot.filter(Column("name") == "Rente privélening").fetchOne(database))
+            let expected = try ForecastItem.filter(Column("potId") == pot.id).order(Column("day")).fetchAll(database)
+            #expect(expected.allSatisfy { $0.day > today && !$0.isRealized })
+            let gift = try #require(expected.last)
+            #expect(gift.day == Day(year: today.year + 1, month: 1, day: 5) && gift.amount == Money(euros: 3_000))
+            #expect(expected.dropLast().allSatisfy {
+                $0.amount == Money(euros: -250) && $0.day.day == 28 && $0.day.year == today.year
+            })
+            // Op 18 juni: de rente van juni t/m december en de schenking van volgend jaar.
+            if today == testToday { #expect(expected.count == 8) }
+        }
+    }
+}
+
+/// De app vult een bestaande voorbeelddatabase opnieuw zodra de voorbeelddata een nieuwe versie heeft.
+@Suite struct DemoDatabaseFileTests {
+    @Test func oldDemoDataIsReplacedAndCurrentDataKept() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("hf-demo-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("voorbeeld.sqlite")
+
+        // Eerste keer: gevuld, met de versie erbij.
+        var db: AppDatabase? = try DemoData.openDemo(at: url, today: testToday)
+        let pots = try db!.read { try Pot.fetchCount($0) }
+        #expect(pots == DemoPlan.pots.count)
+        let version = try db!.read { try Setting.get($0, DemoData.versionKey) }
+        #expect(version == String(DemoData.version))
+
+        // Zelfde versie: niets opnieuw; wat de gebruiker in het voorbeeld deed blijft staan.
+        try db!.write { try $0.execute(sql: "UPDATE pot SET name = 'Uitgeprobeerd' WHERE id = 1") }
+        db = nil
+        db = try DemoData.openDemo(at: url, today: testToday)
+        let kept = try db!.read { try String.fetchOne($0, sql: "SELECT name FROM pot WHERE id = 1") }
+        #expect(kept == "Uitgeprobeerd")
+
+        // Oudere versie: het bestand wordt leeggemaakt en opnieuw gevuld.
+        try db!.write { try Setting.set($0, DemoData.versionKey, "1") }
+        db = nil
+        db = try DemoData.openDemo(at: url, today: testToday)
+        try db!.read { database throws in
+            #expect(try Pot.fetchCount(database) == DemoPlan.pots.count)
+            #expect(try Pot.filter(Column("name") == "Uitgeprobeerd").fetchCount(database) == 0)
+            #expect(try Account.fetchCount(database) == 2)
+            #expect(try Setting.get(database, DemoData.versionKey) == String(DemoData.version))
+        }
     }
 }

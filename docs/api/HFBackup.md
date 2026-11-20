@@ -167,6 +167,8 @@ Dezelfde `today` geeft altijd exact dezelfde data (eigen generator, vaste tijdst
 | Functie | Doet |
 |---|---|
 | `DemoData.seed(into:today:leaveRecentForImport:) -> DemoSummary` | Vult een lege database. Gooit `DemoDataError.databaseNotEmpty` als er al rekeningen of een jaar zijn. |
+| `DemoData.openDemo(at:today:leaveRecentForImport:) -> AppDatabase` | Opent de voorbeelddatabase op een pad. Leeg: vullen. Voorbeelddata van een andere `DemoData.version` (instelling `voorbeeld.versie`): het bestand leegmaken en opnieuw vullen. Weigert `AppDatabase.defaultURL`. |
+| `DemoData.version` | Versie van de voorbeelddata; ophogen bij elke wijziging, dan krijgt de app de nieuwe voorbeelddata. Nu 2. |
 | `DemoData.sampleCSV(today:) -> String` | Bank-CSV voor de betaalrekening met de transacties van de laatste 10 dagen. |
 | `DemoData.sampleCSVFileName(today:)` | `voorbeeld-betaalrekening-<dag>.csv` |
 | `DemoData.checkingIban`, `DemoData.savingsIban` | De twee eigen IBAN's. |
@@ -178,18 +180,27 @@ Wat erin zit, van 1 januari van het jaar van `today` t/m `today`:
 
 - Betaalrekening (beginsaldo € 6.850) en spaarrekening; jaar met anti-rood € 4.500 (`reserveBase` blijft 0).
 - 20 vaste posten (salarissen, kinderbijslag en sportvereniging per kwartaal, hypotheek, verzekeringen, energie,
-  telecom, streaming, privélening, RESERVERINGEN, drie spaarposten) en 20 RES-regels,
-  elk gekoppeld aan een reserveringspot. 5 spaarpotten met doel, waarvan 4 met eigenaar.
+  telecom, streaming, privélening, RESERVERINGEN, drie spaarposten) en 25 RES-regels, elk gekoppeld aan een pot:
+  de 20 reserveringspotten, kleedgeld en zakgeld per kind en het spaardoel "Studie en rijbewijs".
+- Spaarpotten per persoon: per kind "Spaargeld", "Kleedgeld" en "Zakgeld" (eigenaar Kind 1 of Kind 2), een
+  spaardoel per ouder, "Buffer gezin" en "Studie en rijbewijs". Dat laatste is een spaardoel uit onderdelen
+  (`GoalPart`: studie Kind 1, rijlessen per kind, examens) met doeldatum 31 augustus van het volgende jaar.
+- Vier vaste stortingen (`Distribution`, van betaal naar spaar), elk gekoppeld aan zijn post:
+  "Maandelijkse reserveringen" (de 25 potten met een RES-regel, zelfde bedragen) en "Sparen Kind 1",
+  "Sparen Kind 2" en "Sparen buffer" (één pot elk).
 - De spaarrekening heeft beginsaldo € 0,00; wat er op 1 januari staat is per pot geboekt als handboeking
   "Beginsaldo <pot>". De eerste banktransactie heeft als saldo vóór mutatie de som van die boekingen.
 - Eén boeking op de spaarrekening heeft geen pot: de rentebijschrijving van 2 januari (€ 12,84). "Niet
   toegewezen" is daarmee precies dat bedrag.
-- Tags Tanken, Uit eten, Cadeau, Vakantie; regels voor alle terugkerende tegenpartijen.
+- Tags Tanken, Uit eten, Cadeau, Vakantie, Rijbewijs Kind 1 en Rijbewijs Kind 2; regels voor alle terugkerende
+  tegenpartijen. De regels "Rijles Kind 1/2" herkennen de rijschool met het kind in de omschrijving.
 - Banktransacties met sluitende saldoketen en per maand een importbatch. Geboekt t/m `today − 10`; daarna
   status `nieuw`. De laatste zes geboekte transacties op de betaalrekening staan op "nog nakijken".
 - Afwijkingen van het plan (energie in maart, mobiel in februari, salaris met vakantiegeld in mei,
   zorgverzekering in augustus) en één ontbrekende betaling (Water) voor een "te laat".
-- Wekelijks zakgeld, tanken en uit eten met tag, eenmalige inkomsten.
+- Wekelijks zakgeld (vergoed uit de zakgeldpot van het kind), kleding per kind (uit het kleedgeld), rijlessen om
+  de twee weken voor Kind 1 (vanaf februari, plus theorie-examen) en Kind 2 (vanaf mei), uit "Studie en
+  rijbewijs" met de tag van het kind; tanken en uit eten met tag, eenmalige inkomsten.
 - Uitgaven met `reimburse` en pot: elke maand op de 27e verrekend in één afgeronde `SavingsTransfer`, zoals
   `SavingsTransferService` (HFBudget) dat maakt: de gemarkeerde uitgaven hebben `savingsTransferId`; op de dag
   van de overboeking staan de boekingen van het afvinken (notitie `Verrekening #<id>`: per pot een boeking
@@ -202,7 +213,9 @@ Wat erin zit, van 1 januari van het jaar van `today` t/m `today`:
   dat bedrag naar de pot "Rente privélening" op de spaarrekening (reserveringspot zonder maandbedrag en zonder
   RES-regel, gekoppeld via `counterEntryId`). Elke rentebetaling (de 28e) heeft `reimburse` met die pot en zit
   in de spaaroverboeking van de maand erna; de laatste staat altijd open. De regel "Privélening" stelt dit voor.
-- De maandelijkse reservering: één boeking op de betaalrekening, op de spaarrekening gesplitst over de 20
+  In de vooruitblik van de pot staan de rentebetalingen van de rest van het jaar (−) en de schenking van volgend
+  jaar op 5 januari (+), als `ForecastItem`.
+- De maandelijkse reservering: één boeking op de betaalrekening, op de spaarrekening gesplitst over de 25
   potten en gekoppeld via `counterEntryId`. Jaarrekeningen worden rechtstreeks uit een pot betaald.
 - Eén afstemming met verschil € 0,00 op `bookedThrough`.
 

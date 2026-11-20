@@ -318,7 +318,7 @@ het saldo op de dagen tussen het afvinken en de bankregel kan verschuiven. Gewei
 is afgevinkt, de banktransactie niet `nieuw` is, die kant al een bankregel heeft of de som niet gelijk is aan
 het bankbedrag. `attachAll` slaat twijfelgevallen en niet afgevinkte verrekeningen over.
 
-**Bescherming.** Boekingen van het afvinken worden bij Spaaroverboekingen beheerd:
+**Bescherming.** Boekingen van het afvinken worden bij Verrekenen met spaar beheerd:
 
 - `BookingService.book` / `unbook` op een aangehangen bankregel, `EntryService.delete`, en een wijziging van
   bedrag, rekening, dag of pot via `EntryService.update` worden geweigerd met

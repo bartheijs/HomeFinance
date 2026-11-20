@@ -406,7 +406,7 @@ struct TransactionsContextMenu: View {
         let expenses = rows.filter { $0.accountKind == .betaal && !$0.amount.isZero }
         let locked = chosen.contains { store.isLocked($0) }
         if chosen.contains(where: { $0.entry?.isSettlementBooking == true || $0.pending?.transferMatch != nil }) {
-            Button("Naar Spaaroverboekingen", systemImage: "arrow.triangle.swap") { model.selection = .reimbursements }
+            Button("Naar Verrekenen met spaar", systemImage: "arrow.triangle.swap") { model.selection = .reimbursements }
         } else {
         Group {
             if news.contains(where: \.hasSuggestion) {

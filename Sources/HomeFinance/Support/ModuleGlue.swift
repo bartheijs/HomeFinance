@@ -7,14 +7,11 @@ import HFBackup
 // hoe voorbeelddata en back-ups precies worden aangeroepen.
 
 enum DemoSupport {
-    /// Opent de voorbeelddatabase en vult hem bij het eerste gebruik.
+    /// Opent de voorbeelddatabase en vult hem bij het eerste gebruik. Staat er voorbeelddata van een oudere versie
+    /// in, dan wordt dit voorbeeldbestand opnieuw gevuld. De laatste dagen blijven buiten de database: die
+    /// importeer je zelf met het voorbeeldbestand.
     static func openDemo(at url: URL) throws -> AppDatabase {
-        let db = try AppDatabase.open(at: url)
-        if try db.read({ try Account.fetchCount($0) }) == 0 {
-            // De laatste dagen blijven buiten de database: die importeer je zelf met het voorbeeldbestand.
-            _ = try DemoData.seed(into: db, today: Day.today(), leaveRecentForImport: true)
-        }
-        return db
+        try DemoData.openDemo(at: url, today: Day.today(), leaveRecentForImport: true)
     }
 
     /// Volledige voorbeelddata, met transacties die nog nagekeken moeten worden (voor snapshots).

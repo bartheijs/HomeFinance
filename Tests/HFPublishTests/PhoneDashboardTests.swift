@@ -134,8 +134,9 @@ private func snapshot(_ fixture: Fixture) throws -> PhoneSnapshot {
     @Test func showsTheNumbersInDutchFormat() throws {
         let html = try page()
         #expect(html.contains("Bijgewerkt op <strong>15 mrt 2027</strong> om 14:03"))
-        #expect(html.contains("€&nbsp;3.810<span class=\"cents\">,00</span>"))
-        #expect(html.contains("Eind van de maand <strong>€&nbsp;6.740,00</strong>"))
+        #expect(html.contains("€&nbsp;6.740<span class=\"cents\">,00</span>"))
+        #expect(html.contains("Nog te besteden deze maand"))
+        #expect(html.contains("Besteedbaar nu <strong>€&nbsp;3.810,00</strong>"))
         #expect(html.contains("Uitgaven in maart"))
         #expect(html.contains("101% van €&nbsp;1.390,00 gepland"))
         #expect(html.contains("Tijdelijk geleend van spaar"))
@@ -159,7 +160,7 @@ private func snapshot(_ fixture: Fixture) throws -> PhoneSnapshot {
         let html = try page(withYear: false)
         #expect(html.contains("Er is nog geen begroting voor 2027."))
         #expect(html.contains("Maak het jaar aan in HomeFinance op je Mac"))
-        #expect(!html.contains("Eind van de maand"))
+        #expect(!html.contains("Besteedbaar nu"))
         #expect(html.contains("Rekeningen"))
     }
 
@@ -185,8 +186,12 @@ private func snapshot(_ fixture: Fixture) throws -> PhoneSnapshot {
     @Test func negativeSpendableIsMarked() throws {
         let fixture = try Fixture()
         try fixture.db.write { try $0.execute(sql: "UPDATE budgetYear SET antiRood = 900000") }
-        let html = PhoneDashboard.html(try snapshot(fixture), timeZone: amsterdam)
-        #expect(html.contains("<div class=\"big neg\">−€&nbsp;4.690"))
+        let phone = try snapshot(fixture)
+        let html = PhoneDashboard.html(phone, timeZone: amsterdam)
+        // Het hoofdgetal (nog te besteden) en besteedbaar nu staan allebei in het rood.
+        #expect(try #require(phone.budget).spendableEndOfMonth.isNegative)
+        #expect(html.contains("<div class=\"big neg\">−€&nbsp;"))
+        #expect(html.contains("Besteedbaar nu <strong class=\"neg\">−€&nbsp;4.690,00</strong>"))
     }
 
     /// Schrijft de pagina van de fixture weg om hem te bekijken: HF_PUBLISH_EXAMPLE=<pad> swift test …

@@ -232,7 +232,7 @@ struct SettingsTagRow: View {
                 .onSubmit { commit() }
                 .settingsInlineField()
             Text(usage == 0 ? "niet gebruikt" : SettingsFormat.count(usage, "boeking", "boekingen"))
-                .font(.callout).monospacedDigit().foregroundStyle(usage == 0 ? .tertiary : .secondary)
+                .font(.callout).monospacedDigit().foregroundStyle(.secondary)
                 .frame(width: 110, alignment: .trailing)
             HStack(spacing: 2) {
                 Button { onMove(-1) } label: { Image(systemName: "chevron.up") }.disabled(isFirst).help("Omhoog")
