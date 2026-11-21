@@ -65,3 +65,9 @@ Algemeen: **te veel informatie**.
      of kleur en teken);
    - **duidelijk of een post deze maand al verwerkt is of nog moet komen** (bijv. groepen "Nog te komen" en
      "Verwerkt", of een duidelijke status per regel).
+
+## Incidentele transacties (pagina achter het kaartje Incidenteel)
+
+- Een **lijst met alle incidentele transacties** (alles zonder vaste post) van de gekozen maand.
+- **Sorteren op datum en op bedrag**, oplopend en aflopend.
+- **Filteren op inkomsten / uitgaven** (en alles).
