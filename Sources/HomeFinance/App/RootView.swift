@@ -52,6 +52,7 @@ struct RootView: View {
         case .dashboard: DashboardScreen().onAppear { SelfTest.screenAppeared(.dashboard) }
         case .review: ReviewScreen().onAppear { SelfTest.screenAppeared(.review) }
         case .transactions: TransactionsScreen().onAppear { SelfTest.screenAppeared(.transactions) }
+        case .advances: AdvancesScreen().onAppear { SelfTest.screenAppeared(.advances) }
         case .grid: GridScreen().onAppear { SelfTest.screenAppeared(.grid) }
         case .budget: BudgetScreen().onAppear { SelfTest.screenAppeared(.budget) }
         case .pots: PotsScreen().onAppear { SelfTest.screenAppeared(.pots) }

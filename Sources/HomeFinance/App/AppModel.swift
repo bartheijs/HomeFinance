@@ -6,7 +6,7 @@ import os
 
 /// De schermen in de zijbalk, in de volgorde van de zijbalk (zie `SidebarGroup.all`).
 enum Screen: String, CaseIterable, Identifiable, Hashable {
-    case dashboard, review, transactions, grid, budget, pots, distributions, reimbursements, reports, settings
+    case dashboard, review, transactions, advances, grid, budget, pots, distributions, reimbursements, reports, settings
     var id: String { rawValue }
 
     var title: String {
@@ -14,6 +14,7 @@ enum Screen: String, CaseIterable, Identifiable, Hashable {
         case .dashboard: "Dashboard"
         case .review: "Importeren en nakijken"
         case .transactions: "Transacties"
+        case .advances: "Voorgeschoten"
         case .grid: "Maandgrid"
         case .budget: "Posten"
         case .pots: "Potjes"
@@ -29,6 +30,7 @@ enum Screen: String, CaseIterable, Identifiable, Hashable {
         case .dashboard: "gauge.with.dots.needle.50percent"
         case .review: "tray.and.arrow.down"
         case .transactions: "list.bullet.rectangle"
+        case .advances: "arrow.uturn.backward.circle"
         case .grid: "tablecells"
         case .budget: "list.bullet.clipboard"
         case .pots: "square.grid.3x3.topleft.filled"
@@ -48,7 +50,7 @@ struct SidebarGroup: Identifiable {
 
     static let all: [SidebarGroup] = [
         SidebarGroup(title: "Vandaag", screens: [.dashboard]),
-        SidebarGroup(title: "Bijwerken", screens: [.review, .transactions]),
+        SidebarGroup(title: "Bijwerken", screens: [.review, .transactions, .advances]),
         SidebarGroup(title: "Begroting", screens: [.grid, .budget]),
         SidebarGroup(title: "Sparen", screens: [.pots, .distributions, .reimbursements]),
         SidebarGroup(title: "Inzicht", screens: [.reports]),

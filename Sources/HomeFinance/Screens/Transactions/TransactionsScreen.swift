@@ -235,6 +235,9 @@ struct TransactionsScreen: View {
             Button("Het geld is terug…") { store.startSettle(tagId: settlement.id) }
                 .buttonStyle(.link)
                 .help("Geef aan dat je het voorgeschoten geld hebt teruggekregen, en met welke bijschrijving")
+            Button("Naar Voorgeschoten") { model.selection = .advances }
+                .buttonStyle(.link)
+                .help("Het overzicht van alles wat je hebt voorgeschoten en nog terugkrijgt, per tag")
             Spacer(minLength: 0)
         }
         .font(.callout)

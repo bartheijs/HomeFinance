@@ -1,6 +1,7 @@
 import Foundation
 import GRDB
 import HFCore
+import HFInsight
 import HFBackup
 import HFPublish
 
@@ -60,6 +61,9 @@ enum SidebarBadges {
             return model.read(0) { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM bankTransaction WHERE status = 'nieuw'") ?? 0 }
         case .transactions:
             return model.read(0) { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM entry WHERE reviewed = 0") ?? 0 }
+        case .advances:
+            // Tags waarvan je nog voorgeschoten geld terugkrijgt (D3).
+            return model.read(0) { try Insight.settlementOverview($0, today: model.today).filter { $0.outstanding > .zero }.count }
         case .reimbursements:
             return model.read(0) {
                 try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM entry WHERE reimburse = 1 AND savingsTransferId IS NULL") ?? 0
