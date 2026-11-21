@@ -110,6 +110,12 @@ rekenwerk (handig voor lijsten). `RuleMatcher.match(rule, transaction, ignoreEna
   ",PAS123 NR:… 12.11.27/14:03"), landcode achteraan, bij pinbetalingen ook plaats en filiaalnummer, rechtsvormen
   (B.V., BV, N.V., VOF, C.V., GmbH, Ltd, Inc, LLC) en hoofdletters ("BAKKERIJ DE KORENAAR" → "Bakkerij de Korenaar").
   Tekst met gemengde hoofdletters blijft zoals hij is.
+  Pinnamen met plaats en datum na ">" (6j): "Winkel Plaats >Plaats13.11.2026" → "Winkel Plaats",
+  "857 A POINT SEAT S>AMSTERDAM11.11.2026" → "A Point Seat" (deel vanaf ">", losse letter achteraan en een
+  voorloopnummer van twee of meer cijfers vervallen; alleen een nummer vóór ">" → de plaats). Alleen als na ">"
+  niets dan een plaats en/of datum staat, en de plaats aan ">" vastzit of er een datum is. Zo'n naam telt als
+  pinbetaling (dus geen eigen tekst in `suggestedLabel`, wel bruikbaar als trefwoord in `derive`). Regels matchen
+  nog steeds op de ruwe tegenpartij; bestaande boekingen worden niet hernoemd.
 - `LabelCleaner.cleanLabel(counterparty:description:)`: de tegenpartij, of bij een lege naam een naam uit de
   omschrijving (pinbetaling, `/NAME/…/`, `Naam: …`; anders de omschrijving zelf, hoogstens 40 tekens).
 - `LabelCleaner.suggestedLabel(counterparty:description:transactionCode:)` (6b), ook als `suggestedLabel(for: tx)`:

@@ -11,6 +11,8 @@ struct ReimbData: Equatable {
     var transfers: [SavingsTransferDetail] = []
     /// Potten waarmee verrekend kan worden.
     var pots: [PotSummary] = []
+    /// Dezelfde potten in de volgorde van een pot-kiezer (per soort op alfabet).
+    var potChoices: [PotSummary] { Insight.pickerOrder(pots) }
     /// Naam per spaarrekening.
     var savingsNames: [Int64: String] = [:]
     /// Afgevinkte verrekeningen die na 5 dagen nog niet in een bankbestand zijn gezien.

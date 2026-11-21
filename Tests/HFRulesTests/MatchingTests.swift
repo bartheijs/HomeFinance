@@ -35,6 +35,18 @@ import HFCore
         }
     }
 
+    /// 6j: een pinnaam met plaats en datum na ">" matcht op de ruwe tekst; het voorstel is de nette naam.
+    @Test func pinNameWithPlaceAndDateStillMatches() throws {
+        try f.db.write { d in
+            try f.rule(d, Rule(name: "Winkel", counterpartyContains: "Winkel Voorbeeld", targetItemLabel: "Energie"))
+            let t = try f.tx(d, name: "857 WINKEL VOORBEELD S>DORPSTAD13.11.2027", cents: -1250, code: "BA")
+            let s = try RuleEngine.suggest(for: t, d)
+            #expect(s.confidence == .midden)
+            #expect(s.budgetItemId == f.energieId)
+            #expect(s.label == "Winkel Voorbeeld")
+        }
+    }
+
     @Test func counterpartyWithoutAmountIsMidden() throws {
         try f.db.write { d in
             try f.rule(d, Rule(name: "Bakker", counterpartyContains: "Korenaar", tagIds: "3,5", reimburse: true))

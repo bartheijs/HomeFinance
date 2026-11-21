@@ -46,7 +46,7 @@ struct PotsScreen: View {
                 PotsOpeningSheet(accountId: id, accountName: data?.accountName(id) ?? "de spaarrekening")
             case .move(let pot):
                 PotsMoveSheet(from: pot,
-                              candidates: (data?.allPots ?? []).filter { $0.accountId == pot.accountId && $0.id != pot.id && !$0.archived },
+                              candidates: (data?.pickerPots ?? []).filter { $0.accountId == pot.accountId && $0.id != pot.id && !$0.archived },
                               today: model.today)
             }
         }
@@ -199,7 +199,7 @@ struct PotsScreen: View {
 
             if !data.unallocated.isEmpty {
                 PotsUnallocatedCard(entries: data.unallocated, distributable: data.distributable,
-                                    pots: data.allPots, assign: assign, distribute: distribute)
+                                    pots: data.pickerPots, assign: assign, distribute: distribute)
             }
 
             if !reserve.isEmpty {

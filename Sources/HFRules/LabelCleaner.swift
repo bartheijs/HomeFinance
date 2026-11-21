@@ -163,6 +163,26 @@ public enum LabelCleaner {
             }
         }
 
+        // 1b. Pinnaam met plaats en datum na ">" (6j): "Winkel Plaats >Plaats13.11.2026",
+        // "857 A POINT SEAT S>AMSTERDAM11.11.2026". Alleen als na ">" niets anders staat dan een plaats en/of
+        // een datum, en de plaats direct aan ">" vastzit of er een datum staat ("Pijl > Boog" blijft staan).
+        // Het deel ervoor is vaak afgekapt; een losse letter achteraan ("S") is dan een restje.
+        if let r = s.range(of: #"\s*>\s*([\p{L}'.\- ]*?)\s*(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})?\s*$"#,
+                           options: .regularExpression),
+           r.lowerBound > s.startIndex,
+           case let tail = String(s[r]).drop(while: { $0 != ">" }).dropFirst(),
+           tail.contains(where: \.isNumber) || tail.first.map({ !$0.isWhitespace }) == true {
+            let place = TextNormalizer.collapse(String(tail.prefix(while: { !$0.isNumber })))
+            var name = trimPunctuation(String(s[..<r.lowerBound]))
+            if let l = name.range(of: #"\s+\p{L}$"#, options: .regularExpression),
+               name[..<l.lowerBound].split(separator: " ").count >= 2 {
+                name.removeSubrange(l)
+            }
+            // Alleen een nummer vóór ">": dan is de plaats de zinnigste naam.
+            if !name.contains(where: \.isLetter), !place.isEmpty { name = place }
+            if !name.isEmpty { s = name; terminal = true }
+        }
+
         // 2. Alles vanaf het eerste automaatkenmerk (pasnummer, terminal, datum met tijd) vervalt.
         let marker = #"[,\s]*(\bPAS\s?\d{3}\b|\bNR:\s*\S+|\bTERM(INAL)?:|\bTRANSACTIE:|\bPASVOLGNR|\bKAART:|\b\d{2}[.\-]\d{2}[.\-]\d{2,4}[/ ]\d{2}[:.]\d{2}).*$"#
         if let r = s.range(of: marker, options: ci), r.lowerBound > s.startIndex {
@@ -190,6 +210,11 @@ public enum LabelCleaner {
                 break
             }
             if let r = s.range(of: #"\s+\d{3,}$"#, options: .regularExpression), r.lowerBound > s.startIndex {
+                s.removeSubrange(r)
+            }
+            // Los filiaalnummer vooraan (6j), alleen als er daarna nog letters staan.
+            if let r = s.range(of: #"^\d{2,}\s+"#, options: .regularExpression),
+               s[r.upperBound...].contains(where: \.isLetter) {
                 s.removeSubrange(r)
             }
         }

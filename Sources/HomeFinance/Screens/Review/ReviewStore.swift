@@ -298,7 +298,7 @@ final class ReviewStore {
             accounts = try Account.fetchAll(db, sql: "SELECT * FROM account WHERE archived = 0 ORDER BY sortOrder, id")
             if accountId == nil || !accounts.contains(where: { $0.id == accountId }) { accountId = accounts.first?.id }
             tags = try Tag.fetchAll(db, sql: "SELECT * FROM tag ORDER BY sortOrder, id")
-            pots = try Pot.fetchAll(db, sql: "SELECT * FROM pot WHERE archived = 0 ORDER BY sortOrder, id")
+            pots = Insight.pickerOrder(try Pot.fetchAll(db, sql: "SELECT * FROM pot WHERE archived = 0 ORDER BY sortOrder, id"))
             potsById = Dictionary(uniqueKeysWithValues: pots.compactMap { p in p.id.map { ($0, p) } })
 
             let years = try BudgetYear.fetchAll(db)
@@ -377,6 +377,7 @@ final class ReviewStore {
         selection = selection.intersection(ids)
         if selection.isEmpty, let first = rows.first { selection = [first.id] }
         if cursor == nil || !selection.contains(cursor!) { cursor = rows.first { selection.contains($0.id) }?.id }
+        SelfTest.potPickerLoaded(.review, kinds: pots.map(\.kind), names: pots.map(\.name))
     }
 
     private static func group(_ s: Suggestion, hasProposal: Bool) -> ReviewGroup {

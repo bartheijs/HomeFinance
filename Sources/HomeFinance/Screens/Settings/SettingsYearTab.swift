@@ -27,7 +27,7 @@ struct SettingsYearData: Equatable {
     static func load(_ db: Database, year: Int, today: Day) throws -> SettingsYearData {
         var d = SettingsYearData()
         d.allYears = try Int.fetchAll(db, sql: "SELECT year FROM budgetYear ORDER BY year")
-        d.pots = try Pot.order(Column("accountId"), Column("sortOrder"), Column("id")).fetchAll(db)
+        d.pots = Insight.pickerOrder(try Pot.order(Column("accountId"), Column("sortOrder"), Column("id")).fetchAll(db))
         d.distributions = try Insight.distributions(db, today: today).map {
             SettingsDistributionOption(id: $0.id, name: $0.name, archived: $0.archived)
         }

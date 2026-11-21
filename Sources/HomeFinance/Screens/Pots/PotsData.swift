@@ -25,6 +25,8 @@ struct PotsData: Equatable {
     static func empty(asOf: Day) -> PotsData { PotsData(asOf: asOf) }
 
     var allPots: [PotSummary] { overview?.accounts.flatMap(\.pots) ?? [] }
+    /// Alle potten in de volgorde van een pot-kiezer (per soort op alfabet); het overzicht zelf blijft per persoon.
+    var pickerPots: [PotSummary] { Insight.pickerOrder(allPots) }
 
     func pot(_ id: Int64?) -> PotSummary? {
         guard let id else { return nil }

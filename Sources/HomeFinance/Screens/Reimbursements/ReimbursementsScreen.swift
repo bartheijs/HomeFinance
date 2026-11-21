@@ -185,7 +185,7 @@ struct ReimbursementsScreen: View {
             ReimbPanel {
                 ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
                     if index > 0 { Divider().padding(.leading, 18) }
-                    ReimbOpenRow(entry: entry, selected: !deselected.contains(entry.id), pots: data.pots,
+                    ReimbOpenRow(entry: entry, selected: !deselected.contains(entry.id), pots: data.potChoices,
                                  toggle: { toggle(entry.id) },
                                  setPot: { setPot(entry, potId: $0) },
                                  stopSettling: { stopSettling(entry) })

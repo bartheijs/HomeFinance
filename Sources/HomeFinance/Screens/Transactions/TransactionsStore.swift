@@ -189,7 +189,8 @@ struct TransactionsLookups: Equatable {
         for item in items {
             if let year = yearById[item.yearId] { l.itemsByYear[year, default: []].append(item) }
         }
-        l.pots = try Pot.order(Column("accountId"), Column("sortOrder"), Column("name")).fetchAll(db)
+        // Per soort op alfabet, voor alle pot-kiezers op dit scherm (Insight.pickerOrder, 6c).
+        l.pots = Insight.pickerOrder(try Pot.order(Column("accountId"), Column("sortOrder"), Column("name")).fetchAll(db))
         l.tags = try HFCore.Tag.order(Column("sortOrder"), Column("name")).fetchAll(db)
         l.doneTransferIds = Set(try SavingsTransfer.filter(Column("done") == true).fetchAll(db).compactMap(\.id))
         return l
@@ -408,6 +409,7 @@ final class TransactionsStore {
 
     func reload(_ model: AppModel) {
         lookups = model.read(lookups) { try TransactionsLookups.fetch($0, today: model.today) }
+        SelfTest.potPickerLoaded(.transactions, kinds: lookups.pots.map(\.kind), names: lookups.pots.map(\.name))
         if lookups.account(accountId) == nil {
             accountId = (lookups.accounts.first { $0.kind == .betaal } ?? lookups.accounts.first)?.id
         }

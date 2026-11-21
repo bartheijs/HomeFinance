@@ -27,6 +27,20 @@ import Testing
         ("SumUp *Koffiebar Voorbeeld", "Koffiebar Voorbeeld"),
         ("Webwinkel Voorbeeld, NL", "Webwinkel Voorbeeld"),
         ("BEA, Apple Pay Boekhandel Voorbeeld Den Haag,PAS012", "Boekhandel Voorbeeld"),
+        // Pinnamen met plaats en datum na ">" (6j).
+        ("Winkel Voorbeeld >Dorpstad13.11.2026", "Winkel Voorbeeld"),
+        ("Winkel Voorbeeld>Dorpstad13.11.2026", "Winkel Voorbeeld"),
+        ("WINKEL VOORBEELD > DORPSTAD 13.11.2026", "Winkel Voorbeeld"),
+        ("857 A POINT SEAT S>AMSTERDAM11.11.2026", "A Point Seat"),
+        ("042 BAKKERIJ VOORBEELD >ZWOLLE02.03.2027", "Bakkerij Voorbeeld"),
+        ("Snackbar Voorbeeld >Dorpstad", "Snackbar Voorbeeld"),
+        ("857 >AMSTERDAM11.11.2026", "Amsterdam"),
+        ("857>11.11.2026", "857"),
+        // Zonder ">" blijft een naam zoals hij was, ook met een nummer vooraan.
+        ("Winkel Voorbeeld", "Winkel Voorbeeld"),
+        ("123 Inkt Voorbeeld", "123 Inkt Voorbeeld"),
+        ("1234", "1234"),
+        ("Pijl > Boog Voorbeeld", "Pijl > Boog Voorbeeld"),
         // Niets weghalen als er dan niets overblijft.
         ("BV", "BV"),
         ("", ""),
@@ -61,6 +75,9 @@ import Testing
     @Test func structuredFlagOnlyForRecognisableDescriptions() {
         #expect(LabelCleaner.derive(fromDescription: "Bedankt voor het lenen").structured == false)
         #expect(LabelCleaner.derive(fromDescription: "BEA, Betaalpas SLAGERIJ VOORBEELD,PAS123").structured)
+        // 6j: een pinnaam met ">" is herkenbaar; het trefwoord bevat geen plaats of datum.
+        let pin = LabelCleaner.derive(fromDescription: "Winkel Voorbeeld >Dorpstad13.11.2026")
+        #expect(pin.structured && pin.text == "Winkel Voorbeeld")
     }
 
     @Test func normalizer() {

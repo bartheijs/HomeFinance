@@ -171,6 +171,22 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
    `learn` is niet aangepast (de app gebruikt het niet meer).
    Testronde met voorbeelddata: GESLAAGD (508 tests, zelftest 31 OK). Nog: testronde op een kopie, installeren,
    en de gebruiker laten kijken bij een overboeking met een eigen tekst en bij "Onthoud als regel".
+6c. **Potten op alfabet in alle pot-kiezers** — opnieuw gebouwd, klaar (21 november), nog niet geïnstalleerd.
+   In elke keuzelijst met potten staan binnen de groepen (Reserveringspotten, Spaarpotten) de potten op
+   alfabet, hoofdletterongevoelig en op Nederlandse sortering; "Nee", "Geen pot" en "Kies een pot" blijven
+   bovenaan. Eén functie: `Insight.pickerOrder` (`HFInsight/PickerOrder.swift`, 6 tests in `PickerOrderTests`).
+   De schermen sorteren bij het laden van hun gegevens, niet in de views: Transacties (`TransactionsLookups`,
+   dus ook filter, detail, nieuwe boeking, splitsen, verrekenen en het menu "Pot"), Nakijken (`ReviewStore`),
+   Regels en de regeleditor (`RulesData`), Instellingen › Jaar (`SettingsYearData`), Vaste stortingen
+   (`PotsDistData`), Verrekenen met spaar (`ReimbData.potChoices`) en bij Potten het menu bij boekingen zonder
+   pot en "Verplaats naar andere pot" (`PotsData.pickerPots`). Het overzicht Potten en sparen (per persoon)
+   en de lijst per pot bij Verrekenen met spaar zijn niet veranderd.
+   Verschil met `16b21a1`: de databasequery's zijn ongewijzigd (ook op het startscherm Transacties); er wordt
+   alleen achteraf in het geheugen gesorteerd. De zelftest controleert zelf (los van `pickerOrder`) dat de
+   pot-kiezers van Transacties en Nakijken laden met per soort alfabetische potten en logt alleen het aantal en
+   "volgorde OK/FOUT". Aangetoond: zonder de sortering op Transacties faalt de zelftest.
+   Testronde met voorbeelddata: GESLAAGD (514 tests, zelftest 33 OK). Nog: testronde op een kopie, installeren,
+   en de gebruiker een paar pot-kiezers laten openen (Transacties, Nakijken, Regels).
 6e. **Vaste storting niet herkennen bij een heel ander bedrag** — klaar (21 november), nog niet geïnstalleerd.
    Wat er gebouwd is: `DistributionService.recognize` stelt aan de spaarkant geen verdeling meer voor als het
    bedrag minder dan de helft of meer dan anderhalf keer het totaal van de storting is (`isFarFromTotal`); het
@@ -228,6 +244,50 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
    - Nog te doen door de orchestrator: de 15 bestaande, automatisch geleerde regels wissen (eerst een kopie);
      de gebruiker maakt ze bij volgende imports met aandacht opnieuw.
    - Mogelijke vervolgstap: ook in Transacties "Onthoud als regel" bij het boeken van een nieuwe transactie.
+6j. **Namen van pinbetalingen opschonen** — klaar (21 november), nog niet geïnstalleerd of gecommit. De bank
+   levert pinnamen als "Winkel Plaats >Plaats13.11.2026" of "857 A POINT SEAT S>AMSTERDAM11.11.2026".
+   `LabelCleaner` haalt nu het deel vanaf ">" weg (plaats en datum, ook aan elkaar vast), een losse letter die
+   van het afkappen overblijft ("S") en een los voorloopnummer van twee of meer cijfers: "Winkel Plaats",
+   "A Point Seat". Staat er vóór ">" alleen een nummer, dan wordt de plaats de naam. Een ">" met een spatie
+   erna en zonder datum ("Pijl > Boog") blijft staan; zonder ">" verandert er niets (ook "123 Inkt" niet).
+   - Alleen nieuwe voorstellen veranderen (voorgestelde omschrijving, naam van een nieuwe regel). Bestaande
+     boekingen en regels houden hun tekst.
+   - Regels matchen niet op de opgeschoonde naam maar op de ruwe tegenpartij (genormaliseerd, "bevat"); dat is
+     ongewijzigd. Een regel met "Winkel Plaats" als tegenpartij matcht dus nog steeds. Wel een bestaande
+     beperking (niet door 6j): een **geleerde** regel voor zo'n pinnaam krijgt de hele ruwe naam mét datum als
+     voorwaarde en past daardoor niet op een volgend bezoek. Zie de vervolgsuggestie hieronder.
+   - Tests: `LabelCleanerTests` (met/zonder spatie, datum vast aan de plaats, voorloopnummer, zonder ">", alleen
+     een nummer) en `MatchingTests.pinNameWithPlaceAndDateStillMatches`.
+6k. **Geleerde regels voor pinnamen zonder plaats en datum** (voorstel, nog niet gepland). Bij leren uit een
+   pinbetaling met ">" de voorwaarde "tegenpartij bevat" vullen met het deel vóór ">" in plaats van de hele
+   ruwe naam, zodat de regel ook op een volgend bezoek past.
+6k. **Schermfixes van 20 november opnieuw, in vier aparte stappen** (afspraak 21 november; na 6g). Elk met
+   een eigen testronde en test door de gebruiker; bij problemen alleen die stap terugdraaien. Uit `70cab3b`
+   als voorbeeld (`git show 70cab3b`), niet blind overnemen. Die commit lag onder de misgelopen release.
+   1. Alleen teksten: overal "Verrekenen met spaar"; de Engelse tekst bij Tags in het Nederlands.
+   2. Leesbaarheid: te lichte grijze bijschriften iets donkerder.
+   3. Rapporten in een smal venster. Eerst de zelftest uitbreiden: elk scherm in gewone én kleinste
+      venstermaat, zijbalk na elke stap zichtbaar.
+   4. Instellingen in een smal venster.
+   Volgorde van de rondes: 6c (test), 6j, 6h, 6g, 6k-1 t/m 6k-4. Daarna nog te vragen: telefoondashboard
+   met "Nog te besteden deze maand", voorbeelddata versie 2.
+6l. **Telefoondashboard voor het gezin** (wens van 21 november; na 6k). Op de telefoonpagina (`HFPublish`):
+   1. hoofdgetal "Nog te besteden deze maand", met "Besteedbaar nu" eronder (zoals het Dashboard op de Mac);
+   2. de eigen potjes van elk kind (spaargeld, kleedgeld, inspreekgeld e.d.), per kind gegroepeerd, met saldo.
+      Niet de groep "Kids" (studie, rijbewijs, zorg): alleen potten met een kind als eigenaar. Welke eigenaren
+      erop komen is in te stellen;
+   3. de gezamenlijke spaarpot (bij de gebruiker "Spaar B&D"; in code: een instelbare pot, geen naam
+      hard-coden) met vooruitblik: verwachte stand over 3, 6 en 12 maanden (zelfde berekening als de
+      vooruitblik bij een pot).
+   Welke onderdelen en welke pot: in te stellen bij Instellingen › Telefoon. Na de bouw zet de orchestrator
+   het telefoondashboard samen met de gebruiker aan en laat het op een echte iPhone bekijken.
+6m. **Voorbeelddata versie 3, om te demonstreren** (wens van 21 november; als laatste, na 6l). De gebruiker wil
+   de app kunnen laten zien zonder zijn eigen situatie. Een verzonnen gezin waarmee alle onderdelen te tonen
+   zijn: import met een zip om na te kijken (inclusief een losse overboeking naar spaar en een verrekening),
+   potten per kind, spaardoel uit onderdelen, vaste stortingen, een paar regels gemaakt met "Onthoud als
+   regel", Tanken met startbedrag, het telefoondashboard. Neem uit `70cab3b` (versie 2) over wat bruikbaar is.
+   Alles verzonnen (IBAN's als NL00TEST…). Een oudere voorbeelddatabase wordt vanzelf vernieuwd; de eigen
+   administratie nooit.
 6d. **Versie zichtbaar in Instellingen › Over** — klaar (21 november). `scripts/run.sh` zet bij elke build de
    korte commit-hash (met een `+` als er niet-gecommitte wijzigingen waren) en de bouwdatum in `Info.plist`
    (`HFBuildCommit`, `HFBuildDate`; `CFBundleVersion` is het aantal commits). Over toont bv. "Versie 1.0 ·

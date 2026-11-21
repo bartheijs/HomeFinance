@@ -259,6 +259,15 @@ elk met `lastBankDay` = datum van de laatste banktransactie en `fromDay`), `from
   één bestand per rekening) van A en B, van … tot en met …"), `note` (waar de begindag vandaan komt en dat overlap
   geen kwaad kan) en `perAccount` (per rekening de laatste banktransactie, voor de uitleg bij het aanwijzen).
 
+### Volgorde in pot-kiezers (`pickerOrder`)
+
+`Insight.pickerOrder(_:)` (voor `[Pot]` en `[PotSummary]`, of generiek met `kind:` en `name:`;
+`Sources/HFInsight/PickerOrder.swift`) zet potten in de volgorde van een keuzelijst: eerst reserveringspotten, dan
+spaarpotten, binnen elke groep op alfabet (hoofdletter- en accentongevoelig, Nederlandse sortering, "Pot 2" vóór
+"Pot 10"; gelijke namen houden hun oude volgorde). Alle pot-kiezers in de app gebruiken deze ene functie; "Nee",
+"Geen pot" en dergelijke zet de kiezer zelf bovenaan. Het overzicht Potten en sparen (per persoon) gebruikt hem
+niet. `Insight.compareNames(_:_:)` is de vergelijking die erachter zit. Tests in `PickerOrderTests`.
+
 ## Verrekenen per tag
 
 Voor tags met `Tag.settles`. Openstaand = − som van de boekingen op betaalrekeningen met die tag en zonder

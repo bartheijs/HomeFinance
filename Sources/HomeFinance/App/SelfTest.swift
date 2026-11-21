@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import HFCore
+import HFInsight
 
 /// Zelftest van de echte app: `HomeFinance --database <kopie> --zelftest <logbestand>` (of met `--voorbeeld`).
 ///
@@ -35,6 +36,24 @@ enum SelfTest {
     static func sidebarRowAppeared(_ screen: Screen) {
         guard isOn else { return }
         sidebarRows.insert(screen)
+    }
+
+    /// Laatst geladen pot-kiezer per scherm: aantal potten en of ze in kiezervolgorde staan (6c). Geen namen.
+    private static var potPickers: [Screen: (count: Int, ordered: Bool)] = [:]
+
+    /// Een scherm meldt de potten van zijn pot-kiezers na het laden. Controleert zelf, los van `pickerOrder`, dat
+    /// eerst de reserveringspotten en dan de spaarpotten komen, elk op alfabet.
+    static func potPickerLoaded(_ screen: Screen, kinds: [PotKind], names: [String]) {
+        guard isOn else { return }
+        var ordered = kinds.count == names.count
+        for i in names.indices.dropFirst() where ordered {
+            if kinds[i - 1] == kinds[i] {
+                ordered = Insight.compareNames(names[i - 1], names[i]) != .orderedDescending
+            } else {
+                ordered = kinds[i - 1] == .reservering && kinds[i] == .spaar
+            }
+        }
+        potPickers[screen] = (names.count, ordered)
     }
 
     /// Laatst gemeten plek (in venstercoördinaten, oorsprong linksboven) van views met `.selfTestProbe(_:)`.
@@ -117,6 +136,14 @@ enum SelfTest {
             check(model.errorMessage == nil, "geen foutmelding in beeld op \(screen.rawValue)"
                   + (model.errorMessage.map { ": \($0)" } ?? ""))
             model.errorMessage = nil
+        }
+
+        // 3a. Pot-kiezers op Transacties en Nakijken staan per soort op alfabet (6c).
+        for screen in [Screen.transactions, .review] {
+            let picker = potPickers[screen]
+            write("     pot-kiezer \(screen.rawValue): \(picker.map { "\($0.count) potten, volgorde \($0.ordered ? "OK" : "FOUT")" } ?? "niet geladen")")
+            check(picker.map { $0.count > 0 && $0.ordered } ?? false,
+                  "pot-kiezer \(screen.rawValue) verscheen met potten per soort op alfabet")
         }
 
         // 3b. Transacties: de kop blijft zichtbaar en het downloadblok (6a) staat eronder, ook in het kleinste venster.
