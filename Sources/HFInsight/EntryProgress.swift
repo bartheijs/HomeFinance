@@ -42,7 +42,7 @@ public struct EntryProgress: Equatable, Sendable {
                 ? "Zit in een vastgelegde overboeking die nog niet is afgevinkt. Maak het bedrag over en vink hem af."
                 : "Dit is het totaal van alle open boekingen: zet het in één overboeking recht en vink hem af.")
         case .toReceive(_, let name):
-            return "Dit krijg je terug. Het bedrag is het totaal dat nog openstaat voor \(name)."
+            return "Het totaal dat nog openstaat voor \(name). Komt het geld binnen, geef de bijschrijving dan de tag \(name)."
         }
     }
 }

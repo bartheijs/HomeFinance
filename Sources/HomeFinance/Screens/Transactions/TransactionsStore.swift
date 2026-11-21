@@ -1124,19 +1124,14 @@ final class TransactionsStore {
 
     // MARK: Extra herkenning (D2)
 
-    /// "Is dit je € … van Tanken terug?": boekt deze bijschrijving en legt de terugbetaling meteen vast.
+    /// "Is dit je € … van Tanken terug?": boekt deze bijschrijving als overig met de tag; daarmee telt ze af van
+    /// wat er voor de tag openstaat (UX-feedback: geen aparte terugbetaling meer).
     func bookAsDeposit(_ model: AppModel, _ p: TransactionsPending, _ candidate: SettlementService.DepositCandidate) {
         let label = p.proposal?.proposedLabel ?? (p.suggestion.label.isEmpty ? "Terugbetaling \(candidate.tagName)" : p.suggestion.label)
         if selection.contains(.bank(p.id)) { reselectBankId = p.id }
-        var result: SettlementResult?
-        run(model, {
-            var text = "Terugbetaling van \(candidate.tagName) vastgelegd: \((result?.settlement.amount ?? candidate.outstanding).formatted())"
-            if let difference = result?.difference, !difference.isZero {
-                text += difference > .zero ? " (\(difference.formatted()) te veel terug)" : " (\(difference.magnitude.formatted()) te weinig terug)"
-            }
-            return text
-        }) { db in
-            result = try SettlementService.bookAsDeposit(db, bankTransactionId: p.id, tagId: candidate.tagId, label: label)
+        run(model, { "Geboekt met de tag \(candidate.tagName)" }) { db in
+            _ = try BookingService.book(db, bankTransactionId: p.id, allocations: [
+                Allocation(amount: p.transaction.amount, label: label, tagIds: [candidate.tagId], reviewed: true)])
         }
     }
 

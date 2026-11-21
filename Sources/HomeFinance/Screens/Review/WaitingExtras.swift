@@ -7,7 +7,7 @@ import HFBudget
 /// overboeking. Alleen weergave; boeken doen de stores met `SettlementService.bookAsDeposit`.
 struct WaitingExtras: View {
     let proposal: WaitingProposal
-    /// Boek als terugbetaling voor deze tag (één klik).
+    /// Boek als overig met deze tag (één klik): daarmee staat er voor de tag niets meer open.
     let onDeposit: (SettlementService.DepositCandidate) -> Void
     /// Ga naar de andere helft (alleen als die nog wacht).
     let onShowOther: (() -> Void)?
@@ -27,13 +27,12 @@ struct WaitingExtras: View {
         VStack(alignment: .leading, spacing: 6) {
             Label("Is dit je \(c.outstanding.formatted()) van \(c.tagName) terug?", systemImage: "arrow.uturn.backward.circle")
                 .fontWeight(.medium)
-            Text(c.exact
-                 ? "Dit is precies wat je voor \(c.tagName) nog terugkrijgt."
-                 : "Dit is bijna wat je voor \(c.tagName) nog terugkrijgt (\((proposal.transaction.amount - c.outstanding).formatted(alwaysSign: true)) verschil).")
-                .font(.callout).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Button("Ja, het geld van \(c.tagName) is terug") { onDeposit(c) }
-                .help("Boekt deze bijschrijving als overig en legt de terugbetaling vast voor alle openstaande boekingen van \(c.tagName). Daarna staat er voor \(c.tagName) niets meer open.")
+            if !c.exact {
+                Text("\((proposal.transaction.amount - c.outstanding).formatted(alwaysSign: true)) verschil")
+                    .font(.callout)
+            }
+            Button("Tag \(c.tagName)") { onDeposit(c) }
+                .help("Boekt deze bijschrijving als overig met de tag \(c.tagName). Daarna staat er voor \(c.tagName) niets meer open.")
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -720,29 +720,23 @@ final class ReviewStore {
         finish(model, handled: [row.id])
     }
 
-    /// "Is dit je € … van Tanken terug?": boekt deze bijschrijving en legt de terugbetaling meteen vast (D2).
+    /// "Is dit je € … van Tanken terug?": boekt deze bijschrijving als overig met de tag; daarmee telt ze af van
+    /// wat er voor de tag openstaat (UX-feedback: geen aparte terugbetaling meer).
     func bookAsDeposit(_ candidate: SettlementService.DepositCandidate, row: ReviewRow, _ model: AppModel) {
         let label = draft(for: row).label.trimmingCharacters(in: .whitespaces)
-        var result: SettlementResult?
         let ok = model.perform {
             try model.db.write { db in
-                result = try SettlementService.bookAsDeposit(db, bankTransactionId: row.id, tagId: candidate.tagId,
-                                                             label: label.isEmpty ? row.cleanLabel : label)
+                _ = try BookingService.book(db, bankTransactionId: row.id, allocations: [
+                    Allocation(amount: row.tx.amount, label: label.isEmpty ? row.cleanLabel : label,
+                               tagIds: [candidate.tagId], reviewed: true)])
             }
         }
         guard ok else { return }
-        var text = "Terugbetaling van \(candidate.tagName) vastgelegd: \((result?.settlement.amount ?? candidate.outstanding).formatted())"
-        if let difference = result?.difference, !difference.isZero {
-            text += difference > .zero ? " (\(difference.formatted()) te veel terug)" : " (\(difference.magnitude.formatted()) te weinig terug)"
-        }
+        let text = "Geboekt met de tag \(candidate.tagName)"
         model.toast = text
-        let settlementId = result?.settlement.id
         notice = ReviewNotice(text: text) { [weak self] model in
             let done = model.perform("Ongedaan gemaakt") {
-                try model.db.write { db in
-                    if let settlementId { try SettlementService.delete(db, settlementId: settlementId) }
-                    try BookingService.unbook(db, bankTransactionId: row.id)
-                }
+                try model.db.write { db in try BookingService.unbook(db, bankTransactionId: row.id) }
             }
             if done { self?.notice = nil; self?.load(model) }
         }

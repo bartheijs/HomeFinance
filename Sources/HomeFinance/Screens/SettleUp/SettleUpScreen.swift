@@ -37,8 +37,6 @@ struct SettleUpData: Equatable {
 struct SettleUpScreen: View {
     @Environment(AppModel.self) private var model
     @State private var data: SettleUpData?
-    /// Alleen voor het venster "Het geld is terug…": dezelfde acties als in Transacties.
-    @State private var settleStore = TransactionsStore()
 
     private struct ReloadKey: Hashable { let revision: Int, year: Int }
 
@@ -65,9 +63,6 @@ struct SettleUpScreen: View {
         .task(id: ReloadKey(revision: model.revision, year: model.year)) {
             data = model.read(SettleUpData()) { try SettleUpData.read($0, today: model.today) }
             SelfTest.settleUpLoaded(blocks: 4, open: data?.openBlockCount ?? 0)
-        }
-        .sheet(item: $settleStore.settleTarget) { target in
-            TransactionsSettleSheet(store: settleStore, target: target).environment(model)
         }
     }
 
@@ -116,11 +111,8 @@ struct SettleUpScreen: View {
               empty: "Er komt niets meer terug.") {
             ForEach(data.advances) { tag in
                 step("Je krijgt nog \(tag.outstanding.formatted()) terug (\(tag.name))",
-                     detail: TransactionsFormat.entries(tag.openCount) + (tag.oldestOpenDay.map { ", de oudste van \($0.short())" } ?? "")) {
-                    Button("Het is binnen…") {
-                        settleStore.settleTarget = TransactionsSettleTarget(tagId: tag.id, tagName: tag.name)
-                    }
-                    .help("Geef aan dat je het geld van \(tag.name) hebt teruggekregen, en met welke bijschrijving.")
+                     detail: "Tag de terugbetaling met \(tag.name).") {
+                    EmptyView()
                 }
             }
             Button("Naar Tags") { model.selection = .tags }.buttonStyle(.link)

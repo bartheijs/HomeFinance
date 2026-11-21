@@ -41,16 +41,11 @@ struct TagsScreen: View {
     @State private var resetToken = 0
     @State private var newName = ""
     @State private var deleteTarget: Tag?
-    /// Alleen voor het venster "Ontvangen…": dezelfde acties als in Transacties.
-    @State private var settleStore = TransactionsStore()
 
     var body: some View {
         VStack(spacing: 0) {
             ScreenHeader("Tags")
             list
-        }
-        .sheet(item: $settleStore.settleTarget) { target in
-            TransactionsSettleSheet(store: settleStore, target: target).environment(model)
         }
     }
 
@@ -76,7 +71,6 @@ struct TagsScreen: View {
                                            onStart: { setStart(tag, amount: $0, day: $1) },
                                            onCounts: { setCounts(tag, $0) },
                                            onMove: { move(tag, by: $0) }, onShow: { show(tag) },
-                                           onReceived: { startSettle(tag) },
                                            onDelete: { deleteTarget = tag })
                                 .id("\(tag.id ?? 0)-\(resetToken)")
                             Divider().padding(.leading, 14)
@@ -179,11 +173,6 @@ struct TagsScreen: View {
         model.selection = .transactions
     }
 
-    private func startSettle(_ tag: Tag) {
-        guard let id = tag.id else { return }
-        settleStore.settleTarget = TransactionsSettleTarget(tagId: id, tagName: tag.name)
-    }
-
     private func delete(_ tag: Tag) {
         guard let id = tag.id else { return }
         _ = write("Tag ‘\(tag.name)’ verwijderd") { db in try TagService.delete(db, tagId: id) }
@@ -219,8 +208,6 @@ struct TagRow: View {
     var onMove: (Int) -> Void
     /// Opent Transacties met het filter op deze tag.
     var onShow: () -> Void
-    /// Opent het venster om vast te leggen dat het geld terug is.
-    var onReceived: () -> Void
     var onDelete: () -> Void
 
     @State private var name: String
@@ -236,10 +223,9 @@ struct TagRow: View {
          isFirst: Bool, isLast: Bool,
          onSave: @escaping (Tag) -> Void, onSettle: @escaping (Day?) -> Void,
          onStart: @escaping (Money, Day) -> Void, onCounts: @escaping (Bool) -> Void,
-         onMove: @escaping (Int) -> Void, onShow: @escaping () -> Void, onReceived: @escaping () -> Void,
-         onDelete: @escaping () -> Void) {
+         onMove: @escaping (Int) -> Void, onShow: @escaping () -> Void, onDelete: @escaping () -> Void) {
         self.tag = tag; self.usage = usage; self.outstanding = outstanding; self.today = today
-        self.month = month; self.year = year; self.onReceived = onReceived
+        self.month = month; self.year = year
         self.openingDay = openingDay
         self.isFirst = isFirst; self.isLast = isLast
         self.onSave = onSave; self.onSettle = onSettle; self.onStart = onStart; self.onCounts = onCounts
@@ -291,11 +277,7 @@ struct TagRow: View {
             if tag.settles {
                 Text("Nog terug te ontvangen: \(outstanding.formatted())").monospacedDigit()
                     .fontWeight(outstanding.isZero ? .regular : .semibold)
-                if outstanding > .zero {
-                    Button("Het is binnen…", action: onReceived)
-                        .controlSize(.small)
-                        .help("Geef aan dat je het geld hebt teruggekregen, en met welke bijschrijving.")
-                }
+                    .help("Komt het geld binnen, geef de bijschrijving dan de tag \(tag.name); daarna staat het niet meer open.")
             }
             Spacer(minLength: 0)
         }

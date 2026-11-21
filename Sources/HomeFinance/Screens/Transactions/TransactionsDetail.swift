@@ -290,10 +290,8 @@ private struct TransactionsSingleDetail: View {
                 Button("Naar Nog overboeken") { model.selection = .reimbursements }
                     .controlSize(.small)
                     .help("Open het scherm waar je de overboeking met spaar afvinkt")
-            case .toReceive(let tagId, let name):
-                Button("Het geld is terug…") { store.startSettle(tagId: tagId) }
-                    .controlSize(.small)
-                    .help("Open het venster waarin je aangeeft dat je het geld voor \(name) hebt teruggekregen")
+            case .toReceive:
+                EmptyView()
             }
         }
         .padding(12)

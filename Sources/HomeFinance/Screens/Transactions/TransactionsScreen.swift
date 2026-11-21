@@ -233,9 +233,6 @@ struct TransactionsScreen: View {
         HStack(spacing: 10) {
             Circle().fill(Color(hex: settlement.color)).frame(width: 7, height: 7)
             Text("\(settlement.name): nog terug te ontvangen: \(settlement.outstanding.formatted()) · \(TransactionsFormat.entries(settlement.openCount))")
-            Button("Het geld is terug…") { store.startSettle(tagId: settlement.id) }
-                .buttonStyle(.link)
-                .help("Geef aan dat je het geld hebt teruggekregen, en met welke bijschrijving")
             Button("Naar Tags") { model.selection = .tags }
                 .buttonStyle(.link)
                 .help("Per tag wat je nog terugkrijgt")

@@ -122,7 +122,7 @@ struct ReviewQueueRow: View {
             }
         } else if let candidate = row.proposal?.depositCandidates.first, !store.isEdited(row), draft.target == .none {
             label("Terug van \(candidate.tagName)?", attention: true)
-                .help("Dit bedrag is \(candidate.exact ? "precies" : "bijna") wat je voor \(candidate.tagName) nog terugkrijgt (\(candidate.outstanding.formatted())). Rechts leg je het met één klik vast als terugbetaling.")
+                .help("Dit bedrag is \(candidate.exact ? "precies" : "bijna") wat je voor \(candidate.tagName) nog terugkrijgt (\(candidate.outstanding.formatted())). Rechts tag je het met één klik.")
         } else if draft.isSplit {
             label("Gesplitst in \(draft.lines.count)")
         } else if draft.target == .none, row.pair != nil {
