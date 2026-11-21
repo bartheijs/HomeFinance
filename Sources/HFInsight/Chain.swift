@@ -154,7 +154,7 @@ public struct ReserveBuildup: Equatable, Sendable {
     /// Waarschuwing als de RES-regels en de storting uit elkaar lopen, anders nil.
     public var warning: String? {
         guard isOutOfStep, let distribution else { return nil }
-        return "Let op: de RES-regels tellen op tot \(reserveLineTotal.formatted()) per maand, Automatisch sparen: \(distribution.name) tot \(distributionTotal.formatted()). Het maandgrid en \"nog over deze maand\" rekenen \(itemLabel) nog met de RES-regels. Maak de RES-regels gelijk aan de overboeking om het verschil weg te werken."
+        return "Let op: de RES-regels tellen op tot \(reserveLineTotal.formatted()) per maand, Automatisch sparen: \(distribution.name) tot \(distributionTotal.formatted()). Het maandgrid en \"nog te besteden deze maand\" rekenen \(itemLabel) nog met de RES-regels. Maak de RES-regels gelijk aan de overboeking om het verschil weg te werken."
     }
 
     /// Uitleg bij de groep RES-regels in de begroting, als er een storting gekoppeld is.

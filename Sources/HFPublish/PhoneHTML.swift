@@ -114,7 +114,7 @@ extension PhoneDashboard {
         let main = budget.spendableEndOfMonth, now = budget.spendable
         let monthName = Day.monthNames[snapshot.today.month - 1]
         var lines = ["<section class=\"hero\">",
-                     "<div class=\"label\">Nog over deze maand</div>",
+                     "<div class=\"label\">Nog te besteden deze maand</div>",
                      "<div class=\"big\(main.isNegative ? " neg" : "")\">\(bigAmount(main))</div>",
                      "<div class=\"sub\">Als alle vaste lasten en inkomsten van \(monthName) binnen zijn.</div>",
                      "<div class=\"now\">Vrij te besteden <strong\(now.isNegative ? " class=\"neg\"" : "")>\(amount(now))</strong></div>"]
@@ -362,7 +362,7 @@ extension PhoneDashboard {
     static func yearMissingCard(_ snapshot: PhoneSnapshot) -> String {
         """
         <section class="hero">
-        <div class="label">Nog over deze maand</div>
+        <div class="label">Nog te besteden deze maand</div>
         <div class="missing">Er is nog geen begroting voor \(snapshot.today.year).</div>
         <div class="sub">Maak het jaar aan in HomeFinance op je Mac, bij Posten. Daarna staan hier weer je cijfers.</div>
         </section>

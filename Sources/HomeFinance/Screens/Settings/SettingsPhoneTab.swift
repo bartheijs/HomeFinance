@@ -113,7 +113,7 @@ struct SettingsPhoneTab: View {
     private var sectionsCard: some View {
         Card("Wat staat erop", icon: "list.bullet.rectangle") {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Nog over deze maand, vrij te besteden en de uitgaven van deze maand staan er altijd op.")
+                Text("Nog te besteden deze maand, vrij te besteden en de uitgaven van deze maand staan er altijd op.")
                     .font(.callout).foregroundStyle(.secondary)
                 optionToggle("Vaste posten van deze maand", \.showFixedItems)
                 optionToggle("Verloop van vrij te besteden per maand", \.showTrend)

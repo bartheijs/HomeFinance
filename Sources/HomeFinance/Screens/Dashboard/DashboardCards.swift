@@ -9,15 +9,15 @@ import HFInsight
 struct DashboardAttentionCard: View {
     @Environment(AppModel.self) private var model
     let items: [AttentionItem]
+    /// Opent een detail van het dashboard (bv. de vaste posten).
+    var openDetail: (DashboardDetail) -> Void = { _ in }
 
     var body: some View {
         DashboardCard("Aandacht", icon: "bell.badge") {
             if !items.isEmpty { Text("\(items.count)").font(.callout).foregroundStyle(.secondary).monospacedDigit() }
         } content: {
             if items.isEmpty {
-                DashboardQuietState(icon: "checkmark.circle.fill", title: "Alles is bijgewerkt",
-                                    message: "Er staat niets open. Importeer een nieuw bankbestand als er weer transacties zijn.",
-                                    tint: Theme.accent)
+                DashboardQuietState(icon: "checkmark.circle.fill", title: "Alles is bijgewerkt", tint: Theme.accent)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(items.enumerated()), id: \.offset) { index, item in
@@ -41,14 +41,17 @@ struct DashboardAttentionCard: View {
                 .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Button(look.action) { go(look) }
-                .controlSize(.small)
-                .help(look.help)
+            if let action = look.action {
+                Button(action) { go(look) }
+                    .controlSize(.small)
+                    .help(look.help)
+            }
         }
         .padding(.vertical, 9)
     }
 
     private func go(_ look: DashboardAttentionLook) {
+        if let detail = look.detail { openDetail(detail); return }
         if let tab = look.settingsTab { model.settingsTab = tab }
         model.selection = look.target
     }
@@ -58,10 +61,13 @@ struct DashboardAttentionCard: View {
 private struct DashboardAttentionLook {
     let icon: String
     let tint: Color
-    let action: String
+    /// Tekst van de knop; nil = geen knop.
+    let action: String?
     let help: String
     let target: Screen
     var settingsTab: String?
+    /// Opent dit detail van het dashboard in plaats van `target`.
+    var detail: DashboardDetail?
 
     init(_ item: AttentionItem) {
         switch item {
@@ -94,6 +100,25 @@ private struct DashboardAttentionLook {
         case .yearMissing:
             icon = "calendar.badge.plus"; tint = .secondary; action = "Aanmaken"; target = .budget
             help = "Maak het begrotingsjaar aan bij Posten."
+        case .fixedItemsLate:
+            icon = "clock"; tint = Theme.negative; action = "Bekijk"; target = .dashboard; detail = .fixedItems
+            help = "De verwachte dag is voorbij en er is nog niets geboekt."
+        case .largeExpenseComing:
+            icon = "exclamationmark.circle"; tint = Theme.warning; action = "Bekijk"; target = .dashboard; detail = .fixedItems
+            help = "Een grote uitgave die niet elke maand komt, wordt later deze maand verwacht."
+        case .bufferNotReached:
+            icon = "exclamationmark.triangle.fill"; tint = Theme.negative; action = nil; target = .dashboard
+            help = "Nog te besteden deze maand is negatief."
+        case .potGoalsBehind:
+            icon = "target"; tint = Theme.warning; action = "Bekijk"; target = .pots
+            help = "Met de huidige stortingen haal je dit spaardoel niet op tijd."
+        case .importBalanceDiffers:
+            icon = "exclamationmark.triangle.fill"; tint = Theme.negative; action = "Afstemmen"; target = .settings
+            settingsTab = "rekeningen"
+            help = "Het eindsaldo in het bankbestand is niet gelijk aan het saldo volgens de app."
+        case .importOld:
+            icon = "tray.and.arrow.down"; tint = .secondary; action = "Importeren"; target = .review
+            help = "Importeer een nieuw bankbestand."
         }
     }
 }
@@ -286,116 +311,6 @@ struct DashboardMonthCard: View {
                 }
             }
             .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-        }
-    }
-}
-
-// MARK: - Rekeningen
-
-/// Elke rekening met saldo, laatste afstemming en het verloop van dit jaar.
-struct DashboardAccountsCard: View {
-    @Environment(AppModel.self) private var model
-    let accounts: [AccountOverview]
-    let sparklines: [Int64: [BalancePoint]]
-
-    var body: some View {
-        DashboardCard("Rekeningen", icon: "building.columns") {
-            EmptyView()
-        } content: {
-            if accounts.isEmpty {
-                DashboardQuietState(icon: "building.columns", title: "Nog geen rekeningen",
-                                    message: "Voeg een betaal- of spaarrekening toe bij Instellingen.")
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
-                        if index > 0 { Divider() }
-                        row(account)
-                    }
-                    Spacer(minLength: 0)
-                }
-            }
-        }
-    }
-
-    private func row(_ account: AccountOverview) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: account.kind == .betaal ? "creditcard" : "banknote")
-                .foregroundStyle(account.kind == .betaal ? Theme.accent : Theme.info)
-                .frame(width: 22)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(account.name).font(.callout.weight(.medium)).lineLimit(1)
-                reconciliation(account)
-                if let last = account.lastImport {
-                    Text("Import \(Day(date: last.importedAt).short())" + (last.lastDay.map { ", t/m \($0.short())" } ?? ""))
-                        .font(.caption).foregroundStyle(.tertiary).lineLimit(1)
-                        .help("Laatste geïmporteerde bankbestand: \(last.fileName)")
-                }
-            }
-            .layoutPriority(1)
-            Spacer(minLength: 6)
-            DashboardSparkline(points: sparklines[account.id] ?? [],
-                               color: account.kind == .betaal ? Theme.accent : Theme.info)
-                .frame(width: 52, height: 26)
-                .help("Verloop van het saldo dit jaar")
-            MoneyText(account.balance, colored: account.balance.isNegative)
-                .font(.callout.weight(.semibold))
-                .frame(minWidth: 86, alignment: .trailing)
-        }
-        .padding(.vertical, 8)
-    }
-
-    @ViewBuilder private func reconciliation(_ account: AccountOverview) -> some View {
-        Group {
-            if let last = account.lastReconciliation {
-                if last.difference.isZero {
-                    Label("Afgestemd \(last.day.short())", systemImage: "checkmark.seal.fill")
-                        .foregroundStyle(.secondary)
-                        .help("Laatste afstemming: het berekende saldo was gelijk aan het saldo bij de bank.")
-                } else {
-                    Label("Verschil \(last.difference.formatted()) op \(last.day.short())", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(Theme.negative)
-                        .help("Bij de laatste afstemming was het berekende saldo niet gelijk aan het saldo bij de bank.")
-                }
-            } else {
-                Label("Nog niet afgestemd", systemImage: "questionmark.circle")
-                    .foregroundStyle(Theme.warning)
-                    .help("Afstemmen is het berekende saldo vergelijken met het saldo bij de bank.")
-            }
-        }
-        .font(.caption)
-        .labelStyle(DashboardTightLabelStyle())
-        .lineLimit(1)
-    }
-}
-
-private struct DashboardTightLabelStyle: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 3) { configuration.icon; configuration.title }
-    }
-}
-
-/// Klein lijntje zonder assen.
-private struct DashboardSparkline: View {
-    let points: [BalancePoint]
-    let color: Color
-
-    var body: some View {
-        if points.count > 1 {
-            let values = points.map(\.balance.doubleValue)
-            let low = values.min() ?? 0, high = values.max() ?? 1
-            let pad = max((high - low) * 0.1, 1)
-            Chart(points) { point in
-                LineMark(x: .value("Dag", point.day.date), y: .value("Saldo", point.balance.doubleValue))
-                    .interpolationMethod(.monotone)
-                    .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-                    .foregroundStyle(color)
-            }
-            .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
-            .chartYScale(domain: (low - pad)...(high + pad))
-            .chartLegend(.hidden)
-        } else {
-            Capsule().fill(Color.secondary.opacity(0.2)).frame(height: 1.5)
         }
     }
 }

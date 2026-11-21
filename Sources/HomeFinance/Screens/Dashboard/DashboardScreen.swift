@@ -10,20 +10,17 @@ struct DashboardData: Equatable {
     var chartYear: Int
     var spendableSeries: [SpendablePoint]
     var monthlyResults: [MonthResult]
-    /// Saldoverloop dit jaar per rekening, voor de kleine grafiekjes.
-    var sparklines: [Int64: [BalancePoint]]
 }
 
 /// Wat er achter een klik op het dashboard zit.
 enum DashboardDetail: String, Identifiable {
-    case fixedItems, month, accounts, year
+    case fixedItems, month, year
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .fixedItems: "Vaste posten"
         case .month: "Deze maand"
-        case .accounts: "Rekeningen"
         case .year: "Verloop van het jaar"
         }
     }
@@ -43,16 +40,10 @@ struct DashboardScreen: View {
                 detailHeader(detail)
             } else {
                 ScreenHeader("Dashboard", subtitle: DashboardFormat.headerSubtitle(model.today)) {
-                    HStack(spacing: 8) {
-                        Button { model.selection = .grid } label: {
-                            Label("Maandgrid", systemImage: "tablecells")
-                        }
-                        .help("Open het maandoverzicht met alle vaste posten (⌘G)")
-                        Button { model.selection = .review } label: {
-                            Label("Importeren", systemImage: "tray.and.arrow.down")
-                        }
-                        .help("Importeer een bankbestand en kijk de nieuwe transacties na (⌘I)")
+                    Button { model.selection = .review } label: {
+                        Label("Importeren", systemImage: "tray.and.arrow.down")
                     }
+                    .help("Importeer een bankbestand en kijk de nieuwe transacties na (⌘I)")
                 }
             }
             if let data {
@@ -101,14 +92,7 @@ struct DashboardScreen: View {
             // Een jaar zonder begroting heeft geen besteedbaar; de grafiek toont dan een uitleg.
             let series = (try? Insight.spendableSeries(db, year: year, today: today)) ?? []
             let months = try Insight.monthlyResults(db, year: year)
-            var sparklines: [Int64: [BalancePoint]] = [:]
-            if let start = Day(year: today.year, month: 1, day: 1) {
-                for account in dashboard.accounts {
-                    sparklines[account.id] = try Insight.balanceSeries(db, accountId: account.id, from: start, to: today, step: .daily)
-                }
-            }
-            return DashboardData(dashboard: dashboard, chartYear: year, spendableSeries: series,
-                                 monthlyResults: months, sparklines: sparklines)
+            return DashboardData(dashboard: dashboard, chartYear: year, spendableSeries: series, monthlyResults: months)
         }
     }
 }
@@ -128,31 +112,19 @@ private struct DashboardHome: View {
             if wide {
                 HStack(alignment: .top, spacing: 48) {
                     hero.frame(maxWidth: .infinity, alignment: .leading)
-                    DashboardAttentionCard(items: d.attention).frame(width: 400)
+                    DashboardAttentionCard(items: d.attention) { open($0) }.frame(width: 400)
                 }
             } else {
                 hero
-                DashboardAttentionCard(items: d.attention)
+                DashboardAttentionCard(items: d.attention) { open($0) }
             }
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: Theme.spacing) {
                     if let fixed = d.fixedItems {
-                        DashboardSummaryCard(title: "Vaste posten", value: "\(fixed.paidCount) van \(fixed.items.count) voldaan",
-                                             help: "Vaste posten zijn de inkomsten en uitgaven die elke maand, elk kwartaal of elk jaar terugkomen.") {
-                            if fixed.lateCount > 0 {
-                                Text("\(fixed.lateCount) te laat").foregroundStyle(Theme.negative)
-                                    + Text(" · \(fixed.openCount) nog verwacht").foregroundStyle(.secondary)
-                            } else {
-                                Text(fixed.openCount == 0 ? "Alles is binnen" : "\(fixed.openCount) nog verwacht").foregroundStyle(.secondary)
-                            }
-                        } action: { open(.fixedItems) }
+                        DashboardPeriodicCard(overview: fixed) { open(.fixedItems) }
                     }
-                    DashboardSummaryCard(title: "Deze maand", value: "\(d.monthExpenses.magnitude.formatted()) uitgegeven",
-                                         help: "Alles wat deze maand van de betaalrekening is gegaan.") {
-                        Text(d.planExpenses.isZero ? "Geen plan voor deze maand"
-                             : "\(DashboardFormat.percent(d.monthExpenses, of: d.planExpenses)) % van plan").foregroundStyle(.secondary)
-                    } action: { open(.month) }
-                    DashboardAccountsSummaryCard(accounts: d.accounts) { open(.accounts) }
+                    DashboardIncidentalCard(summary: d.incidental) { open(.month) }
+                    DashboardBalanceCard(dashboard: d)
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 Button { open(.year) } label: {
@@ -163,8 +135,8 @@ private struct DashboardHome: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("Grafieken: vrij te besteden per maand en IN en UIT per maand")
+                .foregroundStyle(Theme.accent)
+                .help("Grafieken: nog te besteden per maand en in en uit per maand")
             }
         }
         .padding(.top, 28)
@@ -207,8 +179,6 @@ private struct DashboardDetailView: View {
                     DashboardTopTagsCard(tags: d.topTags, month: d.today.month).frame(width: half)
                 }
                 DashboardRecentCard(entries: d.recentEntries, showAccount: width >= 900)
-            case .accounts:
-                DashboardAccountsCard(accounts: d.accounts, sparklines: data.sparklines).frame(width: min(width, 720))
             case .year:
                 DashboardSpendableChartCard(year: data.chartYear, points: data.spendableSeries)
                 DashboardInOutChartCard(year: data.chartYear, months: data.monthlyResults)
@@ -224,65 +194,109 @@ private struct DashboardDetailView: View {
     }
 }
 
-/// Kleine samenvatting met één kerngetal; een klik opent de details.
-struct DashboardSummaryCard<Caption: View>: View {
+/// Een kaartje op het dashboard met een titel en regels; met `action` is het aanklikbaar.
+struct DashboardSummaryCard<Content: View>: View {
     let title: String
-    let value: String
     var help: String?
-    @ViewBuilder var caption: Caption
-    let action: () -> Void
+    var action: (() -> Void)?
+    @ViewBuilder var content: Content
     @State private var hovering = false
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.subheadline).foregroundStyle(.secondary)
-                Text(value).font(.system(.title2, design: .rounded).weight(.semibold)).monospacedDigit()
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                caption.font(.callout)
-                Spacer(minLength: 8)
-                DashboardViewLink()
-            }
-            .dashboardSummaryStyle(hovering: hovering)
+        if let action {
+            Button(action: action) { card(link: true) }
+                .buttonStyle(.plain)
+                .onHover { hovering = $0 }
+                .help(help ?? "Bekijk de details")
+        } else {
+            card(link: false)
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help(help ?? "Bekijk de details")
+    }
+
+    private func card(link: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.headline)
+            content.font(.callout)
+            Spacer(minLength: 8)
+            if link { DashboardViewLink() }
+        }
+        .dashboardSummaryStyle(hovering: link && hovering)
     }
 }
 
-/// Samenvatting van de rekeningen: alleen naam en saldo.
-struct DashboardAccountsSummaryCard: View {
-    let accounts: [AccountOverview]
-    let action: () -> Void
-    @State private var hovering = false
+/// Eén regel in een kaartje: tekst links, bedrag of aantal rechts.
+struct DashboardCardRow<Value: View>: View {
+    let title: String
+    @ViewBuilder var value: Value
+
+    init(_ title: String, @ViewBuilder value: () -> Value) { self.title = title; self.value = value() }
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Rekeningen").font(.subheadline).foregroundStyle(.secondary)
-                if accounts.isEmpty {
-                    Text("Nog geen rekeningen").font(.callout).foregroundStyle(.secondary)
-                }
-                ForEach(accounts.prefix(3)) { account in
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(account.name).font(.callout).lineLimit(1)
-                        Spacer(minLength: 8)
-                        MoneyText(account.balance, colored: account.balance.isNegative)
-                            .font(.system(.body, design: .rounded).weight(.semibold))
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).lineLimit(1)
+            Spacer(minLength: 8)
+            value.monospacedDigit()
+        }
+    }
+}
+
+/// Periodieke transacties: de vaste posten van deze maand.
+struct DashboardPeriodicCard: View {
+    let overview: FixedItemsOverview
+    let action: () -> Void
+
+    var body: some View {
+        DashboardSummaryCard(title: "Periodieke transacties",
+                             help: "Vaste posten van deze maand: wat binnen is, wat te laat is en wat nog komt", action: action) {
+            Text("\(overview.paidCount) van \(overview.items.count) voldaan")
+                .font(.system(.title2, design: .rounded).weight(.semibold)).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.7)
+            DashboardCardRow("Te laat") {
+                Text("\(overview.lateCount)").foregroundStyle(overview.lateCount > 0 ? Theme.negative : Color.primary)
+            }
+            DashboardCardRow("Nog verwacht") { Text("\(overview.openCount)") }
+            Divider()
+            DashboardCardRow("In") { MoneyText(overview.incomeBooked) }
+            DashboardCardRow("Uit") { MoneyText(overview.expensesBooked.magnitude) }
+        }
+    }
+}
+
+/// Incidentele transacties: alles zonder vaste post deze maand, met de grootste uitgaven.
+struct DashboardIncidentalCard: View {
+    let summary: IncidentalSummary
+    let action: () -> Void
+
+    var body: some View {
+        DashboardSummaryCard(title: "Incidentele transacties",
+                             help: "Alles zonder vaste post deze maand", action: action) {
+            DashboardCardRow("In") { MoneyText(summary.income) }
+            DashboardCardRow("Uit") { MoneyText(summary.expenses.magnitude) }
+            if !summary.largestExpenses.isEmpty {
+                Divider()
+                ForEach(summary.largestExpenses) { entry in
+                    DashboardCardRow(entry.label.isEmpty ? (entry.bank?.counterpartyName ?? "Uitgave") : entry.label) {
+                        MoneyText(entry.amount.magnitude)
                     }
                 }
-                if accounts.count > 3 {
-                    Text("en nog \(accounts.count - 3)").font(.callout).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 8)
-                DashboardViewLink()
             }
-            .dashboardSummaryStyle(hovering: hovering)
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help("Saldo, afstemming en verloop per rekening")
+    }
+}
+
+/// Huidig saldo van betaal- en spaarrekeningen; niet aanklikbaar.
+struct DashboardBalanceCard: View {
+    let dashboard: Dashboard
+
+    var body: some View {
+        DashboardSummaryCard(title: "Huidig saldo") {
+            DashboardCardRow("Betaal") { MoneyText(dashboard.checkingTotal, colored: dashboard.checkingTotal.isNegative) }
+            DashboardCardRow("Spaar") { MoneyText(dashboard.savingsTotal, colored: dashboard.savingsTotal.isNegative) }
+            Divider()
+            DashboardCardRow("Totaal") {
+                MoneyText(dashboard.accountsTotal, colored: dashboard.accountsTotal.isNegative).fontWeight(.semibold)
+            }
+        }
     }
 }
 
@@ -365,11 +379,10 @@ struct DashboardQuietState: View {
 enum DashboardFormat {
     private static let weekdays = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"]
 
-    /// "Juni 2027 · vrijdag 18 juni"
+    /// "zaterdag 21 november 2026"
     static func headerSubtitle(_ today: Day) -> String {
-        let month = Day.monthNames[today.month - 1]
         let weekday = weekdays[Calendar(identifier: .gregorian).component(.weekday, from: today.date) - 1]
-        return "\(month.prefix(1).uppercased())\(month.dropFirst()) \(today.year) · \(weekday) \(today.day) \(month)"
+        return "\(weekday) \(today.day) \(Day.monthNames[today.month - 1]) \(today.year)"
     }
 
     /// Aandeel van `part` in `whole` voor de breedte van een balk, tussen 0 en 1.

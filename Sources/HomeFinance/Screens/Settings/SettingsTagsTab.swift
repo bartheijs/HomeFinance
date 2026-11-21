@@ -311,7 +311,7 @@ struct SettingsTagRow: View {
         HStack(spacing: 8) {
             Toggle("Reken mee als inkomen dat nog komt", isOn: Binding(get: { tag.countsInSpendable }, set: { onCounts($0) }))
                 .toggleStyle(.switch).controlSize(.mini)
-                .help("Rekent het openstaande bedrag alvast mee als geld dat terugkomt, in ‘vrij te besteden’ en ‘nog over deze maand’.")
+                .help("Rekent het openstaande bedrag alvast mee als geld dat terugkomt, in ‘vrij te besteden’ en ‘nog te besteden deze maand’.")
             Spacer(minLength: 0)
         }
         .font(.callout)

@@ -535,15 +535,21 @@ private let today = Fixture.today
     @Test func attentionItems() throws {
         let dash = try f.db.read { try Insight.dashboard($0, today: today) }
         #expect(dash.attention == [
+            // RESERVERINGEN wordt rond de 5e verwacht en is op 15 maart nog niet geboekt.
+            .fixedItemsLate(labels: ["RESERVERINGEN"]),
             .newBankTransactions(count: 2),
             .unreviewedEntries(count: 1),
             .openReimbursements(amount: eur(195), count: 2, direction: .fromSavings),
+            // Betaalrekening: het laatste bankbestand is 59 dagen geleden ingelezen (> 14).
+            .importOld(accountId: f.betaal, accountName: "Betaalrekening", daysAgo: 59),
             // Spaarrekening: afstemming van 31-1 heeft € 5 verschil en is 43 dagen oud (> 35).
             .reconciliationDiffers(accountId: f.spaar, accountName: "Spaarrekening", difference: eur(5), day: d("2027-01-31")),
             .reconciliationOld(accountId: f.spaar, accountName: "Spaarrekening", lastDay: d("2027-01-31"), daysAgo: 43),
         ])
-        #expect(dash.attention[0].message == "2 banktransacties moeten nog geboekt worden.")
-        #expect(dash.attention[2].message == "€ 195,00 over te maken van spaar naar betaal (2 boekingen).")
+        #expect(dash.attention[0].message == "Later dan normaal: RESERVERINGEN.")
+        #expect(dash.attention[1].message == "2 banktransacties moeten nog geboekt worden.")
+        #expect(dash.attention[3].message == "€ 195,00 over te maken van spaar naar betaal (2 boekingen).")
+        #expect(dash.attention[4].message == "Betaalrekening: laatste bankbestand 59 dagen geleden ingelezen.")
     }
 
     @Test func missingYearForToday() throws {
