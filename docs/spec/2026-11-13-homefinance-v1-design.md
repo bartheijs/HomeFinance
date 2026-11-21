@@ -97,7 +97,8 @@ Zie `Sources/HFCore/Records.swift` (records met uitleg) en `Schema.swift` (tabel
 - Een banktransactie is `verwerkt` als de som van zijn boekingen gelijk is aan zijn bedrag.
 
 ### Besteedbaar
-- **Besteedbaar** = saldo betaalrekening − `antiRood` − tijdelijk geleend van spaar.
+- **Besteedbaar** = saldo betaalrekening − `antiRood` − tijdelijk geleend van spaar + wat er nog terugkomt van
+  verrekentags met "telt mee in nog te besteden" (zie Verrekenen per tag; alleen in het lopende jaar).
 - **Anti-rood** is een vast bedrag per jaar (Instellingen).
 - **Tijdelijk geleend van spaar** (voorheen "tijdelijk anti-rood") is geen instelling maar volgt uit de
   transacties: een boeking op de betaalrekening kan de markering `temporaryLoan` krijgen. Lenen is een
@@ -163,6 +164,12 @@ Zie `Sources/HFCore/Records.swift` (records met uitleg) en `Schema.swift` (tabel
 - Een tag kan "verrekenen" hebben (bv. Tanken): uitgaven met die tag stort de gebruiker later terug op de
   betaalrekening. Openstaand = − de som van de boekingen met die tag zonder verrekening, vanaf de startdatum.
 - Een verrekening legt vast welke boekingen zijn afgerekend en koppelt optioneel de terugstorting.
+- **Startbedrag** (6g): wat er bij de start van de app al openstond (voorgeschoten in de Excel-periode), met een
+  dag. Het telt mee in het openstaande bedrag en gaat bij het verrekenen mee als een openstaande post. Na het
+  verrekenen is het niet meer te wijzigen, tot die verrekening ongedaan is gemaakt.
+- **Telt mee in nog te besteden** (6g), per tag, standaard uit: het openstaande bedrag van de tag telt mee als
+  verwachte inkomst in "besteedbaar nu" en "nog te besteden deze maand". Het Dashboard toont het als aparte
+  regel. Beide instellingen staan bij Instellingen › Tags, onder "Verrekenen" (migratie v10).
 
 ### Begrotingsmaand en afvinken
 - Een boeking telt voor de begroting in de maand van zijn `period`, of anders in de maand van zijn datum. De

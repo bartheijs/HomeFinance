@@ -22,7 +22,7 @@ public struct KeyFigures: Equatable, Sendable {
 
 extension Insight {
     /// Versie van de opbouw van de kerncijfers. Ophogen als er sleutels bijkomen of veranderen.
-    public static let keyFiguresVersion = 1
+    public static let keyFiguresVersion = 2
 
     /// De kerncijfers op de peildag `today`.
     ///
@@ -30,7 +30,9 @@ extension Insight {
     /// - `rekening.<id>.naam`, `.soort`, `.gearchiveerd`, `.saldo` (op de peildag),
     ///   `.laatsteImport.dag`, `.laatsteImport.eindsaldo` en `.laatsteImport.saldoVolgensApp` (saldo op die dag);
     /// - `pot.<id>.naam`, `.rekening`, `.gearchiveerd`, `.saldo`;
-    /// - `besteedbaarNu`, `nogTeBestedenDezeMaand` (of "geen begrotingsjaar");
+    /// - `besteedbaarNu`, `nogTeBestedenDezeMaand` (of "geen begrotingsjaar"), en `besteedbaarNu.terugTeKrijgen`:
+    ///   wat daarin meetelt van tags met "telt mee in nog te besteden" (versie 2);
+    /// - `tag.<id>.openstaand`, `.startbedrag`, `.teltMee` voor elke tag met verrekenen (versie 2);
     /// - `boekingen.aantal`, `banktransacties.<status>`, `verrekeningen.openNetto`, `verrekeningen.openAantal`;
     /// - `afgevinkt.<jjjj-mm>`: aantal afgevinkte posten per begrotingsmaand.
     public static func keyFigures(_ db: Database, today: Day) throws -> KeyFigures {
@@ -67,9 +69,18 @@ extension Insight {
             let s = try spendable(db, year: today.year, today: today)
             v["besteedbaarNu"] = amount(s.spendable)
             v["nogTeBestedenDezeMaand"] = amount(s.spendableEndOfMonth)
+            v["besteedbaarNu.terugTeKrijgen"] = amount(s.returningTotal)
         } catch InsightError.yearNotFound {
             v["besteedbaarNu"] = "geen begrotingsjaar"
             v["nogTeBestedenDezeMaand"] = "geen begrotingsjaar"
+            v["besteedbaarNu.terugTeKrijgen"] = "geen begrotingsjaar"
+        }
+
+        for t in try settlementOverview(db, today: today) {
+            let k = "tag.\(pad(t.id))"
+            v["\(k).openstaand"] = amount(t.outstanding)
+            v["\(k).startbedrag"] = amount(t.openStart)
+            v["\(k).teltMee"] = t.countsInSpendable ? "ja" : "nee"
         }
 
         v["boekingen.aantal"] = String(try Entry.fetchCount(db))

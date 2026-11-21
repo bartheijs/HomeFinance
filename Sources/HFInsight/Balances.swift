@@ -78,7 +78,13 @@ public struct Spendable: Equatable, Sendable {
     /// Wat nu nog uitstaat van bedragen die tijdelijk van spaar geleend zijn (boekingen met `temporaryLoan`
     /// op betaalrekeningen, alle jaren t/m de peildag; nooit negatief).
     public let tijdelijkAntiRood: Money
-    /// Besteedbaar = saldo − antiRood − tijdelijkAntiRood.
+    /// Tags met verrekenen waarvan het openstaande bedrag meetelt (`Tag.countsInSpendable`): geld dat nog terugkomt
+    /// op de betaalrekening, zoals voorgeschoten tanken. Alleen in het lopende jaar en alleen een positief
+    /// openstaand bedrag; anders leeg.
+    public let returningTags: [ReturningTag]
+    /// Som van `returningTags`.
+    public let returningTotal: Money
+    /// Besteedbaar = saldo − antiRood − tijdelijkAntiRood + returningTotal.
     /// Geld met een bestemming staat in potten op de spaarrekening, niet op de betaalrekening.
     public let spendable: Money
     /// Posten die deze maand verwacht worden en nog geen boeking hebben (leeg buiten het lopende jaar).
@@ -90,6 +96,15 @@ public struct Spendable: Equatable, Sendable {
     public let pendingSettlement: Money
     /// Besteedbaar eind van de maand = `spendable` + `expectedTotal` + `pendingSettlement`.
     public let spendableEndOfMonth: Money
+}
+
+/// Een tag met verrekenen waarvan het openstaande bedrag meetelt als verwachte inkomst in besteedbaar.
+public struct ReturningTag: Identifiable, Equatable, Sendable {
+    /// Id van de tag.
+    public let id: Int64
+    public let name: String
+    /// Openstaand bedrag (positief): wat er nog terugkomt, inclusief een nog open startbedrag.
+    public let amount: Money
 }
 
 /// Jaaroverzicht van de betaalrekening(en), zoals het jaarblad van de Excel.
@@ -258,7 +273,13 @@ extension Insight {
         let asOf = Q.asOf(year, today)
         let balance = try checkingBalance(db, on: asOf)
         let borrowed = try temporaryLoanOutstanding(db, on: asOf)
-        let spendable = balance - budgetYear.antiRood - borrowed
+        let returning = today.year == year
+            ? try settlementOverview(db, today: today)
+                .filter { $0.countsInSpendable && $0.outstanding > .zero }
+                .map { ReturningTag(id: $0.id, name: $0.name, amount: $0.outstanding) }
+            : []
+        let returningTotal = returning.map(\.amount).sum()
+        let spendable = balance - budgetYear.antiRood - borrowed + returningTotal
 
         var expected: [ExpectedItem] = []
         if today.year == year {
@@ -279,8 +300,8 @@ extension Insight {
         let expectedTotal = expected.map(\.plan).sum()
         let pending = today.year == year ? try pendingSettlementNet(db) : .zero
         return Spendable(year: year, asOf: asOf, balance: balance, antiRood: budgetYear.antiRood,
-                         tijdelijkAntiRood: borrowed, spendable: spendable,
-                         expectedItems: expected, expectedTotal: expectedTotal, pendingSettlement: pending,
+                         tijdelijkAntiRood: borrowed, returningTags: returning, returningTotal: returningTotal,
+                         spendable: spendable, expectedItems: expected, expectedTotal: expectedTotal, pendingSettlement: pending,
                          spendableEndOfMonth: spendable + expectedTotal + pending)
     }
 

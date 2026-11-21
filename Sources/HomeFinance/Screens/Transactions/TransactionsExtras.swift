@@ -184,6 +184,9 @@ struct TransactionsSettleSheet: View {
 
     @State private var open: [EntryRow] = []
     @State private var checked: Set<Int64> = []
+    /// Het startbedrag van de tag als dat nog openstaat (uit `Insight.settlementStart`).
+    @State private var start: SettlementStart?
+    @State private var startChecked = false
     @State private var candidates: [Entry] = []
     @State private var depositId: Int64?
     @State private var history: [SettlementDetail] = []
@@ -191,8 +194,13 @@ struct TransactionsSettleSheet: View {
     @State private var loaded = false
 
     private var chosen: [EntryRow] { open.filter { checked.contains($0.id) } }
-    /// Het te verrekenen bedrag (positief): wat er terug moet komen.
-    private var total: Money { -chosen.map(\.amount).sum() }
+    private var includeStart: Bool { start != nil && startChecked }
+    /// Aantal gekozen posten: boekingen, plus het startbedrag.
+    private var chosenCount: Int { chosen.count + (includeStart ? 1 : 0) }
+    /// Het te verrekenen bedrag (positief): wat er terug moet komen. Optellen voor de weergave; de echte
+    /// verrekening rekent `SettlementService.settle`.
+    private var total: Money { (includeStart ? start?.amount ?? .zero : .zero) - chosen.map(\.amount).sum() }
+    private var nothingOpen: Bool { open.isEmpty && start == nil }
     private var deposit: (amount: Money, day: Day, label: String)? {
         if let d = target.deposit { return (d.amount, d.day, d.label) }
         return candidates.first { $0.id == depositId }.map { ($0.amount, $0.day, $0.label) }
@@ -208,13 +216,28 @@ struct TransactionsSettleSheet: View {
             }
             .padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 12)
 
-            if open.isEmpty {
+            if nothingOpen {
                 Text(loaded ? "Er staat niets open voor \(target.tagName)." : "")
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 20).padding(.vertical, 12)
             } else {
                 ScrollView {
                     VStack(spacing: 2) {
+                        if let start {
+                            Toggle(isOn: $startChecked) {
+                                HStack {
+                                    Text(start.day.map { $0.short(withYear: $0.year != model.today.year) } ?? "")
+                                        .monospacedDigit().foregroundStyle(.secondary)
+                                        .frame(width: 84, alignment: .leading)
+                                    Text("Startbedrag").lineLimit(1)
+                                    Spacer(minLength: 8)
+                                    TransactionsAmountText(amount: -start.amount)
+                                }
+                            }
+                            .toggleStyle(.checkbox)
+                            .padding(.vertical, 2)
+                            .help("Wat er bij de start van de app al openstond (Instellingen › Tags)")
+                        }
                         ForEach(open) { row in
                             Toggle(isOn: Binding(
                                 get: { checked.contains(row.id) },
@@ -236,7 +259,8 @@ struct TransactionsSettleSheet: View {
                 }
                 .frame(maxHeight: 220)
                 HStack {
-                    Text("\(TransactionsFormat.entries(chosen.count)) gekozen").foregroundStyle(.secondary)
+                    Text(includeStart ? "\(chosenCount) gekozen (met startbedrag)" : "\(TransactionsFormat.entries(chosen.count)) gekozen")
+                        .foregroundStyle(.secondary)
                     Spacer()
                     Text("Terug te storten").foregroundStyle(.secondary)
                     Text(total.formatted()).font(.title3.weight(.semibold)).monospacedDigit()
@@ -260,17 +284,17 @@ struct TransactionsSettleSheet: View {
             Divider()
             HStack {
                 Spacer()
-                Button(open.isEmpty ? "Sluit" : "Annuleer") { dismiss() }.keyboardShortcut(.cancelAction)
-                if !open.isEmpty {
+                Button(nothingOpen ? "Sluit" : "Annuleer") { dismiss() }.keyboardShortcut(.cancelAction)
+                if !nothingOpen {
                     Button("Verreken") {
                         let ids = chosen.map(\.id)
                         let depositEntryId = target.deposit?.id ?? depositId
-                        if store.settle(model, tagId: target.tagId, entryIds: ids, day: deposit?.day ?? model.today,
-                                        depositEntryId: depositEntryId) { dismiss() }
+                        if store.settle(model, tagId: target.tagId, entryIds: ids, includeStart: includeStart,
+                                        day: deposit?.day ?? model.today, depositEntryId: depositEntryId) { dismiss() }
                     }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
-                    .disabled(chosen.isEmpty || total.isNegative)
+                    .disabled(chosenCount == 0 || total.isNegative)
                 }
             }
             .padding(.horizontal, 20).padding(.vertical, 12)
@@ -299,7 +323,7 @@ struct TransactionsSettleSheet: View {
                 .pickerStyle(.radioGroup)
                 .labelsHidden()
             }
-            if let deposit, !chosen.isEmpty, deposit.amount != total {
+            if let deposit, chosenCount > 0, deposit.amount != total {
                 let difference = deposit.amount - total
                 Label("De storting is \(difference.magnitude.formatted()) \(difference > .zero ? "hoger" : "lager") dan het te verrekenen bedrag. Verrekenen kan gewoon; het verschil wordt vastgelegd.",
                       systemImage: "exclamationmark.triangle")
@@ -316,7 +340,8 @@ struct TransactionsSettleSheet: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(s.day.short(withYear: true)) · \(s.amount.formatted())").monospacedDigit()
                 Text(s.isOpening ? "Beginstand" :
-                        "\(TransactionsFormat.entries(detail.entries.count)) · " + (detail.deposit.map { "storting \($0.amount.formatted()) op \($0.day.short())" } ?? "nog geen storting gekoppeld"))
+                        (detail.startAmount.isZero ? "" : "startbedrag \(detail.startAmount.formatted()) + ")
+                        + "\(TransactionsFormat.entries(detail.entries.count)) · " + (detail.deposit.map { "storting \($0.amount.formatted()) op \($0.day.short())" } ?? "nog geen storting gekoppeld"))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
@@ -336,11 +361,13 @@ struct TransactionsSettleSheet: View {
     private func load() {
         let tagId = target.tagId
         open = model.read([]) { try Insight.openSettlementEntries($0, tagId: tagId) }
+        start = model.read(nil as SettlementStart?) { try Insight.settlementStart($0, tagId: tagId) }.flatMap { $0.isOpen ? $0 : nil }
         history = model.read([]) { try Insight.settlementHistory($0, tagId: tagId) }
         candidates = target.deposit == nil
             ? model.read([]) { try SettlementService.suggestDeposit($0, tagId: tagId, asOf: model.today) } : []
         if !loaded {
             checked = Set(open.map(\.id))
+            startChecked = start != nil
             depositId = candidates.first?.id
             loaded = true
         } else {

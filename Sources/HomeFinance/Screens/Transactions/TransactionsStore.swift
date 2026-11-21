@@ -1065,7 +1065,8 @@ final class TransactionsStore {
     // MARK: Verrekenen
 
     @discardableResult
-    func settle(_ model: AppModel, tagId: Int64, entryIds: [Int64], day: Day, depositEntryId: Int64?) -> Bool {
+    func settle(_ model: AppModel, tagId: Int64, entryIds: [Int64], includeStart: Bool = false, day: Day,
+                depositEntryId: Int64?) -> Bool {
         var result: SettlementResult?
         return run(model, {
             guard let result else { return "Verrekend" }
@@ -1077,7 +1078,8 @@ final class TransactionsStore {
             }
             return text
         }) { db in
-            result = try SettlementService.settle(db, tagId: tagId, entryIds: entryIds, day: day, depositEntryId: depositEntryId)
+            result = try SettlementService.settle(db, tagId: tagId, entryIds: entryIds, includeStart: includeStart,
+                                                  day: day, depositEntryId: depositEntryId)
         }
     }
 

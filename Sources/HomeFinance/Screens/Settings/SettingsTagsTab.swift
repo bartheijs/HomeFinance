@@ -10,10 +10,13 @@ struct SettingsTagsData: Equatable {
     var usage: [Int64: TagUsage] = [:]
     /// Openstaand bedrag per tag met verrekenen (uit `Insight.settlementOverview`).
     var outstanding: [Int64: Money] = [:]
+    /// Dag van de beginstand per tag (vanaf wanneer verrekenen aan staat): de voorgestelde dag voor een startbedrag.
+    var openingDay: [Int64: Day] = [:]
 
     static func load(_ db: Database, today: Day) throws -> SettingsTagsData {
         var d = SettingsTagsData()
         d.tags = try Tag.order(Column("sortOrder"), Column("id")).fetchAll(db)
+        for s in try Settlement.filter(Column("isOpening") == true).fetchAll(db) { d.openingDay[s.tagId] = s.day }
         d.usage = try Insight.tagUsage(db)
         for summary in try Insight.settlementOverview(db, today: today) { d.outstanding[summary.id] = summary.outstanding }
         return d
@@ -35,6 +38,8 @@ struct SettingsTagsTab: View {
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Text("**Verrekenen** is voor uitgaven die je later terugstort op de betaalrekening, zoals tanken. De app houdt bij wat er nog openstaat.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("Stond er bij de start van de app al iets open, zet dat dan als **startbedrag** bij de tag. Met **telt mee in nog te besteden** reken je het openstaande bedrag alvast mee als geld dat terugkomt.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Card(padding: 0) {
                     VStack(spacing: 0) {
                         if loaded && data.tags.isEmpty {
@@ -46,8 +51,11 @@ struct SettingsTagsTab: View {
                         ForEach(Array(data.tags.enumerated()), id: \.element.id) { index, tag in
                             SettingsTagRow(tag: tag, usage: data.usage[tag.id ?? -1] ?? TagUsage(tagId: tag.id ?? -1),
                                            outstanding: data.outstanding[tag.id ?? -1] ?? .zero, today: model.today,
+                                           openingDay: data.openingDay[tag.id ?? -1],
                                            isFirst: index == 0, isLast: index == data.tags.count - 1,
                                            onSave: { save($0) }, onSettle: { setSettles(tag, from: $0) },
+                                           onStart: { setStart(tag, amount: $0, day: $1) },
+                                           onCounts: { setCounts(tag, $0) },
                                            onMove: { move(tag, by: $0) }, onShow: { show(tag) },
                                            onDelete: { deleteTarget = tag })
                                 .id("\(tag.id ?? 0)-\(resetToken)")
@@ -124,6 +132,22 @@ struct SettingsTagsTab: View {
         }
     }
 
+    /// Startbedrag vastleggen (€ 0,00 haalt het weg).
+    private func setStart(_ tag: Tag, amount: Money, day: Day) {
+        guard let id = tag.id else { return }
+        let text = amount.isZero ? "Startbedrag van ‘\(tag.name)’ weggehaald"
+            : "Startbedrag van ‘\(tag.name)’: \(amount.formatted()) op \(day.short(withYear: true))"
+        _ = write(text) { db in _ = try SettlementService.setStart(db, tagId: id, amount: amount, day: day) }
+    }
+
+    /// "Telt mee in nog te besteden" aan of uit.
+    private func setCounts(_ tag: Tag, _ on: Bool) {
+        guard let id = tag.id else { return }
+        let text = on ? "Openstaand bij ‘\(tag.name)’ telt mee in nog te besteden"
+            : "Openstaand bij ‘\(tag.name)’ telt niet meer mee in nog te besteden"
+        _ = write(text) { db in _ = try TagService.setCountsInSpendable(db, tagId: id, on) }
+    }
+
     /// Opent Transacties op de betaalrekening met het filter op deze tag.
     private func show(_ tag: Tag) {
         guard let id = tag.id else { return }
@@ -153,11 +177,17 @@ struct SettingsTagRow: View {
     let usage: TagUsage
     let outstanding: Money
     let today: Day
+    /// Dag van de beginstand, als voorstel voor de dag van het startbedrag.
+    let openingDay: Day?
     let isFirst: Bool
     let isLast: Bool
     var onSave: (Tag) -> Void
     /// Verrekenen aan vanaf een dag, of uit (nil).
     var onSettle: (Day?) -> Void
+    /// Startbedrag vastleggen (€ 0,00 = weghalen).
+    var onStart: (Money, Day) -> Void
+    /// "Telt mee in nog te besteden" aan of uit.
+    var onCounts: (Bool) -> Void
     var onMove: (Int) -> Void
     /// Opent Transacties met het filter op deze tag.
     var onShow: () -> Void
@@ -168,13 +198,19 @@ struct SettingsTagRow: View {
     @FocusState private var focused: Bool
     @State private var askFrom = false
     @State private var fromDate = Date()
+    @State private var editStart = false
+    @State private var startValue: Money?
+    @State private var startDate = Date()
 
-    init(tag: Tag, usage: TagUsage, outstanding: Money, today: Day, isFirst: Bool, isLast: Bool,
+    init(tag: Tag, usage: TagUsage, outstanding: Money, today: Day, openingDay: Day?, isFirst: Bool, isLast: Bool,
          onSave: @escaping (Tag) -> Void, onSettle: @escaping (Day?) -> Void,
+         onStart: @escaping (Money, Day) -> Void, onCounts: @escaping (Bool) -> Void,
          onMove: @escaping (Int) -> Void, onShow: @escaping () -> Void, onDelete: @escaping () -> Void) {
         self.tag = tag; self.usage = usage; self.outstanding = outstanding; self.today = today
+        self.openingDay = openingDay
         self.isFirst = isFirst; self.isLast = isLast
-        self.onSave = onSave; self.onSettle = onSettle; self.onMove = onMove; self.onShow = onShow
+        self.onSave = onSave; self.onSettle = onSettle; self.onStart = onStart; self.onCounts = onCounts
+        self.onMove = onMove; self.onShow = onShow
         self.onDelete = onDelete
         _name = State(initialValue: tag.name)
         _color = State(initialValue: Color(hex: tag.color))
@@ -184,6 +220,10 @@ struct SettingsTagRow: View {
         VStack(alignment: .leading, spacing: 4) {
             mainLine
             settleLine
+            if tag.settles {
+                startLine
+                countsLine
+            }
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
@@ -209,6 +249,69 @@ struct SettingsTagRow: View {
                     .foregroundStyle(outstanding.isZero ? Color.secondary : Color.primary)
                     .help("Wat je nog moet terugstorten: de uitgaven met deze tag die nog niet verrekend zijn.")
             }
+            Spacer(minLength: 0)
+        }
+        .font(.callout)
+        .padding(.leading, 54)
+    }
+
+    /// Startbedrag: wat er bij de start van de app al openstond.
+    private var startLine: some View {
+        HStack(spacing: 8) {
+            Text("Startbedrag").foregroundStyle(.secondary)
+            if tag.startAmount.isZero {
+                Text("geen").foregroundStyle(.tertiary)
+            } else {
+                Text(tag.startAmount.formatted()).monospacedDigit()
+                if let day = tag.startDay { Text("op \(day.short(withYear: true))").foregroundStyle(.secondary) }
+                if tag.startSettlementId != nil { Text("· verrekend").foregroundStyle(.secondary) }
+            }
+            if tag.startSettlementId == nil {
+                Button(tag.startAmount.isZero ? "Voeg toe…" : "Wijzig…") {
+                    startValue = tag.startAmount.isZero ? nil : tag.startAmount
+                    startDate = SettingsFormat.date(tag.startDay ?? openingDay ?? today)
+                    editStart = true
+                }
+                .buttonStyle(.link)
+                .help("Een bedrag dat bij de start van de app al openstond en nog terug moet komen")
+                .popover(isPresented: $editStart, arrowEdge: .bottom) { startPopover }
+            }
+            Spacer(minLength: 0)
+        }
+        .font(.callout)
+        .padding(.leading, 54)
+    }
+
+    private var startPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Startbedrag voor ‘\(tag.name)’").font(.headline)
+            Text("Geld dat bij de start van de app al was voorgeschoten en nog terug moet komen. Het telt mee in het openstaande bedrag en verreken je samen met de boekingen. Leeg of 0 haalt het weg.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Text("Bedrag")
+                MoneyField("0,00", value: $startValue).textFieldStyle(.roundedBorder).frame(width: 120)
+            }
+            DatePicker("Op", selection: $startDate, displayedComponents: .date)
+            HStack {
+                Spacer()
+                Button("Annuleer", role: .cancel) { editStart = false }
+                Button("Bewaar") {
+                    editStart = false
+                    onStart(startValue ?? .zero, Day(date: startDate))
+                }
+                .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16)
+        .frame(width: 340)
+    }
+
+    /// Schakelaar "Telt mee in nog te besteden".
+    private var countsLine: some View {
+        HStack(spacing: 8) {
+            Toggle("Telt mee in nog te besteden", isOn: Binding(get: { tag.countsInSpendable }, set: { onCounts($0) }))
+                .toggleStyle(.switch).controlSize(.mini)
+                .help("Rekent het openstaande bedrag alvast mee als geld dat terugkomt, in ‘besteedbaar nu’ en ‘nog te besteden deze maand’.")
             Spacer(minLength: 0)
         }
         .font(.callout)

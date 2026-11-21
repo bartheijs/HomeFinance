@@ -364,19 +364,21 @@ dan `DistributionService.recognizeAll`, dan de regels (`HFRules`).
 ## SettlementService — verrekenen per tag
 
 Voor uitgaven met een tag (bv. Tanken) die de gebruiker periodiek terugstort op de betaalrekening.
-**Openstaand** = − de som van de boekingen op betaalrekeningen met die tag en zonder `settlementId`; een retour
-met dezelfde tag telt eraf, boekingen op een spaarrekening tellen niet mee. De terugstorting is een gewone
+**Openstaand** = − de som van de boekingen op betaalrekeningen met die tag en zonder `settlementId`, plus het
+**startbedrag** van de tag zolang dat niet verrekend is; een retour met dezelfde tag telt eraf, boekingen op een
+spaarrekening tellen niet mee. De terugstorting is een gewone
 bijschrijving zonder de tag en wordt gekoppeld via `Settlement.depositEntryId`.
 
 | Functie | Doet |
 |---|---|
 | `enable(db, tagId:, from:) -> Settlement` | Zet `Tag.settles` aan en maakt één beginstand (`isOpening`) met alle open boekingen van vóór `from` (bedrag mag 0 zijn). Opnieuw aanroepen vervangt de beginstand; echte verrekeningen blijven. |
-| `disable(db, tagId:)` | Zet `settles` uit; verrekeningen blijven staan. |
-| `open(db, tagId:) -> (entries: [Entry], amount: Money)` | Openstaande boekingen (oudste eerst) en het openstaande bedrag. |
-| `settle(db, tagId:, entryIds:, day:, depositEntryId:, note:) -> SettlementResult` | Legt een verrekening vast voor de gekozen open boekingen; bedrag = − hun som. Koppelt optioneel meteen de storting. |
+| `disable(db, tagId:)` | Zet `settles` uit; verrekeningen en het startbedrag blijven staan. |
+| `setStart(db, tagId:, amount:, day:) -> Tag` | Startbedrag (6g): wat er bij de start van de app al openstond en nog terug moet komen (bv. uit de Excel-periode), met de dag. Alleen bij `settles`; niet negatief; € 0,00 haalt het weg (`startDay` wordt nil). Geweigerd zolang het startbedrag in een verrekening zit. |
+| `open(db, tagId:) -> (entries: [Entry], start: Money, amount: Money)` | Openstaande boekingen (oudste eerst), het nog open startbedrag (€ 0,00 als er geen is of het verrekend is) en het openstaande bedrag samen. |
+| `settle(db, tagId:, entryIds:, includeStart:, day:, depositEntryId:, note:) -> SettlementResult` | Legt een verrekening vast voor de gekozen open boekingen, met `includeStart` (standaard `false`) ook het open startbedrag; bedrag = startbedrag − som van de boekingen. Het startbedrag krijgt `Tag.startSettlementId`. Koppelt optioneel meteen de storting. |
 | `suggestDeposit(db, tagId:, asOf:) -> [Entry]` | Mogelijke terugstortingen: bijschrijvingen op betaalrekeningen van de laatste 45 dagen, zonder vaste post, niet gekoppeld, bedrag gelijk aan het openstaande bedrag (exact eerst, daarna binnen € 1,00), nieuwste eerst. |
 | `linkDeposit(db, settlementId:, depositEntryId:) -> SettlementResult` | Koppelt (of vervangt) de storting; `nil` ontkoppelt. |
-| `delete(db, settlementId:)` | Verwijdert de verrekening; de boekingen staan weer open. Een beginstand kan zo niet weg. |
+| `delete(db, settlementId:)` | Verwijdert de verrekening; de boekingen en een meegenomen startbedrag staan weer open. Een beginstand kan zo niet weg. |
 | `history(db, tagId:) -> [Settlement]` | Verrekeningen, nieuwste eerst (inclusief de beginstand). |
 | `entries(db, settlementId:) -> [Entry]` | De boekingen in een verrekening. |
 | `result(db, settlementId:) -> SettlementResult` | Bestaande verrekening met storting en verschil, bv. voor de historie. |
@@ -400,7 +402,13 @@ Validatie (`BudgetError`, Nederlandse melding):
 - `notSettleable`: de boeking heeft de tag niet, staat niet op een betaalrekening of is al verrekend.
 - `depositInvalid`: de storting is geen bijschrijving op een betaalrekening, heeft zelf de tag, hoort al bij
   een andere verrekening, of de verrekening is een beginstand.
-- Minstens één boeking; een selectie die samen een negatief bedrag oplevert wordt geweigerd (nul mag).
+- Minstens één boeking of het startbedrag; een selectie die samen een negatief bedrag oplevert wordt geweigerd
+  (nul mag). `includeStart` zonder open startbedrag wordt geweigerd.
+
+**Startbedrag en beginstand** zijn twee verschillende dingen. De beginstand (`enable(from:)`) sluit boekingen van
+vóór de startdatum af: die staan niet meer open. Het startbedrag is het omgekeerde: geld dat bij de start al was
+voorgeschoten, zonder boeking in de app, en dat nog terug moet komen. Instellingen › Tags stelt de dag van de
+beginstand voor als dag van het startbedrag. Bestaande tags kregen bij migratie v10 geen startbedrag.
 
 Een afgesloten jaar blokkeert het verrekenen niet: het is een koppeling, geen wijziging van de boeking.
 Een boeking heeft één `settlementId`; heeft hij twee tags die verrekend worden, dan is hij na verrekening voor
@@ -466,7 +474,8 @@ handmatige boeking tegenover staat.
 | `AccountService.setArchived(db, accountId:, Bool)` / `reorder(db, orderedIds:)` | Archiveren en volgorde. |
 | `AccountService.normalizeIBAN(String)` | De normalisatie zelf. |
 | `AccountService.setOpeningFromPots(db, accountId:, totalOpening:)` | Zet het beginsaldo op het niet toegewezen deel; zie PotService. |
-| `TagService.create(db, name:, color:)` / `update` / `delete` / `reorder` | Naam uniek (hoofdletterongevoelig), kleur `#RRGGBB`. `update` laat `settles` ongemoeid (dat loopt via `SettlementService`). `delete` wordt geweigerd met `tagHasSettlements` als de tag verrekeningen heeft (echte, of een beginstand met boekingen), zodat de historie niet stil verdwijnt; een lege beginstand houdt het niet tegen. Tags komen alleen op boekingen van een betaalrekening (zie EntryService). |
+| `TagService.setCountsInSpendable(db, tagId:, Bool) -> Tag` | "Telt mee in nog te besteden" (6g), standaard uit. Staat het aan en verrekent de tag, dan telt het openstaande bedrag mee als verwachte inkomst in `Insight.spendable` (zie HFInsight). |
+| `TagService.create(db, name:, color:)` / `update` / `delete` / `reorder` | Naam uniek (hoofdletterongevoelig), kleur `#RRGGBB`. `update` laat `settles`, het startbedrag en `countsInSpendable` ongemoeid (die lopen via `SettlementService` en `setCountsInSpendable`). `delete` wordt geweigerd met `tagHasSettlements` als de tag verrekeningen heeft (echte, of een beginstand met boekingen), zodat de historie niet stil verdwijnt; een lege beginstand houdt het niet tegen. Tags komen alleen op boekingen van een betaalrekening (zie EntryService). |
 
 ## Aannames
 

@@ -179,3 +179,28 @@ import GRDB
         #expect(withoutReimburse.reimburseApplies(to: Money(cents: -100)))
     }
 }
+
+// MARK: - 6g: startbedrag en "telt mee in nog te besteden" per tag
+
+@Suite struct TagStartMigrationTests {
+    /// Een bestaande tag (ook met verrekenen aan) krijgt bij migratie v10 geen startbedrag en telt niet mee.
+    @Test func existingTagGetsDefaults() throws {
+        let queue = try DatabaseQueue()
+        try AppDatabase.migrator.migrate(queue, upTo: "v9-rule-reimburse-direction")
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO tag (id, name, color, sortOrder, settles) VALUES (1, 'Tanken', '#112233', 1, 1);
+                INSERT INTO tag (id, name, color, sortOrder, settles) VALUES (2, 'Uit eten', '#445566', 2, 0);
+                INSERT INTO settlement (tagId, day, amount, isOpening, note, createdAt)
+                    VALUES (1, '2027-01-01', 0, 1, 'Beginstand', '2027-01-01 10:00:00');
+                """)
+        }
+        try AppDatabase.migrator.migrate(queue)
+        let tags = try queue.read { try Tag.order(Column("id")).fetchAll($0) }
+        #expect(tags.map(\.name) == ["Tanken", "Uit eten"])
+        #expect(tags.map(\.settles) == [true, false])
+        #expect(tags.allSatisfy { $0.startAmount == .zero && $0.startDay == nil && $0.startSettlementId == nil })
+        #expect(tags.allSatisfy { !$0.countsInSpendable && !$0.startIsOpen })
+        #expect(try queue.read { try Settlement.fetchCount($0) } == 1)
+    }
+}

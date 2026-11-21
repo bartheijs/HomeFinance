@@ -566,6 +566,23 @@ public enum TagService {
             try validate(db, &tag)
             tag.sortOrder = existing.sortOrder
             tag.settles = existing.settles   // alleen via SettlementService.enable/disable
+            tag.startAmount = existing.startAmount   // alleen via SettlementService.setStart
+            tag.startDay = existing.startDay
+            tag.startSettlementId = existing.startSettlementId
+            tag.countsInSpendable = existing.countsInSpendable   // alleen via setCountsInSpendable
+            try tag.update(db)
+            return tag
+        }
+    }
+
+    /// Zet "telt mee in nog te besteden" aan of uit. Staat het aan (en verrekent de tag), dan telt het openstaande
+    /// bedrag van de tag mee als verwachte inkomst in `Insight.spendable`. Kan ook als verrekenen uit staat; het
+    /// telt dan pas mee zodra verrekenen weer aan gaat.
+    @discardableResult
+    public static func setCountsInSpendable(_ db: Database, tagId: Int64, _ on: Bool) throws -> Tag {
+        try atomic(db) {
+            var tag = try Check.tag(db, tagId)
+            tag.countsInSpendable = on
             try tag.update(db)
             return tag
         }

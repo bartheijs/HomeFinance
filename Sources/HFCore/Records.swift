@@ -306,11 +306,27 @@ public struct Tag: Codable, Identifiable, Equatable, Sendable, FetchableRecord, 
     /// Uitgaven met deze tag worden periodiek verrekend: de gebruiker stort het openstaande bedrag terug
     /// op de betaalrekening (bv. Tanken na het binnenkomen van het loon).
     public var settles: Bool
+    /// Startbedrag bij verrekenen: wat er bij de start van de app al openstond en nog terug moet komen
+    /// (positief; € 0,00 = geen startbedrag). Telt mee in het openstaande bedrag tot het verrekend is.
+    public var startAmount: Money
+    /// De dag waarop het startbedrag openstond, of nil zonder startbedrag.
+    public var startDay: Day?
+    /// De verrekening waarin het startbedrag is meegenomen, of nil als het nog openstaat.
+    public var startSettlementId: Int64?
+    /// Het openstaande bedrag van deze tag telt mee als verwachte inkomst in "besteedbaar nu" en
+    /// "nog te besteden deze maand". Standaard uit.
+    public var countsInSpendable: Bool
 
     public static let databaseTableName = "tag"
-    public init(id: Int64? = nil, name: String, color: String = "#888888", sortOrder: Int = 0, settles: Bool = false) {
+    public init(id: Int64? = nil, name: String, color: String = "#888888", sortOrder: Int = 0, settles: Bool = false,
+                startAmount: Money = .zero, startDay: Day? = nil, startSettlementId: Int64? = nil,
+                countsInSpendable: Bool = false) {
         self.id = id; self.name = name; self.color = color; self.sortOrder = sortOrder; self.settles = settles
+        self.startAmount = startAmount; self.startDay = startDay; self.startSettlementId = startSettlementId
+        self.countsInSpendable = countsInSpendable
     }
+    /// Het startbedrag staat nog open (er is er een en het is nog niet verrekend).
+    public var startIsOpen: Bool { !startAmount.isZero && startSettlementId == nil }
     public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
 }
 

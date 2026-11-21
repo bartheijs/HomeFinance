@@ -16,7 +16,8 @@ public struct SettlementResult: Equatable, Sendable {
 /// Verrekenen per tag: uitgaven met een tag (bv. Tanken) die de gebruiker periodiek terugstort.
 ///
 /// Openstaand voor een tag = − de som van de boekingen op betaalrekeningen met die tag en zonder
-/// `settlementId`. Een retour met dezelfde tag telt eraf. De terugstorting zelf krijgt de tag niet; zij wordt
+/// `settlementId`, plus het startbedrag van de tag zolang dat niet verrekend is (`Tag.startAmount`).
+/// Een retour met dezelfde tag telt eraf. De terugstorting zelf krijgt de tag niet; zij wordt
 /// gekoppeld via `Settlement.depositEntryId`. Een afgesloten jaar blokkeert het verrekenen niet.
 public enum SettlementService {
     /// Aantal dagen terug waarin `suggestDeposit` naar een terugstorting zoekt.
@@ -46,7 +47,30 @@ public enum SettlementService {
         }
     }
 
-    /// Zet verrekenen uit voor een tag. Bestaande verrekeningen (ook de beginstand) blijven staan.
+    /// Legt het startbedrag van een tag vast: wat er bij de start van de app al openstond en nog terug moet komen
+    /// (bv. uit de periode in Excel), met de dag. Het telt mee in het openstaande bedrag en gaat bij het
+    /// verrekenen mee als een openstaande post (`settle(includeStart:)`). € 0,00 haalt het startbedrag weg.
+    /// Alleen bij een tag met verrekenen aan, en niet meer als het startbedrag al verrekend is.
+    @discardableResult
+    public static func setStart(_ db: Database, tagId: Int64, amount: Money, day: Day) throws -> Tag {
+        try atomic(db) {
+            var tag = try Check.tag(db, tagId)
+            guard tag.settles else { throw BudgetError.tagNotSettling(tag: tag.name) }
+            guard tag.startSettlementId == nil else {
+                throw BudgetError.validation("Het startbedrag van ‘\(tag.name)’ is al verrekend. Maak die verrekening "
+                    + "eerst ongedaan om het te wijzigen.")
+            }
+            guard !amount.isNegative else {
+                throw BudgetError.validation("Het startbedrag is wat er nog terug moet komen en kan niet negatief zijn.")
+            }
+            tag.startAmount = amount
+            tag.startDay = amount.isZero ? nil : day
+            try tag.update(db)
+            return tag
+        }
+    }
+
+    /// Zet verrekenen uit voor een tag. Bestaande verrekeningen (ook de beginstand) en het startbedrag blijven staan.
     public static func disable(_ db: Database, tagId: Int64) throws {
         try atomic(db) {
             _ = try Check.tag(db, tagId)
@@ -54,24 +78,30 @@ public enum SettlementService {
         }
     }
 
-    /// De openstaande boekingen van een tag (oudste eerst) en het openstaande bedrag (positief = nog terug te storten).
-    public static func open(_ db: Database, tagId: Int64) throws -> (entries: [Entry], amount: Money) {
+    /// De openstaande boekingen van een tag (oudste eerst), het nog openstaande startbedrag (€ 0,00 als er geen is
+    /// of als het verrekend is) en het openstaande bedrag samen (positief = nog terug te storten).
+    public static func open(_ db: Database, tagId: Int64) throws -> (entries: [Entry], start: Money, amount: Money) {
         let entries = try openEntries(db, tagId: tagId)
-        return (entries, -entries.map(\.amount).sum())
+        let tag = try Check.tag(db, tagId)
+        let start = tag.startIsOpen ? tag.startAmount : .zero
+        return (entries, start, start - entries.map(\.amount).sum())
     }
 
-    /// Legt een verrekening vast voor de gekozen openstaande boekingen; het bedrag is − hun som.
-    /// Met `depositEntryId` wordt meteen de terugstorting gekoppeld; die hoeft niet exact gelijk te zijn aan het
+    /// Legt een verrekening vast voor de gekozen openstaande boekingen; het bedrag is − hun som, plus het
+    /// startbedrag als `includeStart` (dat moet dan nog openstaan). Met `depositEntryId` wordt meteen de terugstorting gekoppeld; die hoeft niet exact gelijk te zijn aan het
     /// verrekende bedrag (zie `SettlementResult.difference`).
     @discardableResult
-    public static func settle(_ db: Database, tagId: Int64, entryIds: [Int64], day: Day,
+    public static func settle(_ db: Database, tagId: Int64, entryIds: [Int64], includeStart: Bool = false, day: Day,
                               depositEntryId: Int64? = nil, note: String = "") throws -> SettlementResult {
         try atomic(db) {
-            let tag = try Check.tag(db, tagId)
+            var tag = try Check.tag(db, tagId)
             guard tag.settles else { throw BudgetError.tagNotSettling(tag: tag.name) }
             let ids = Array(Set(entryIds))
-            guard !ids.isEmpty else {
+            guard !ids.isEmpty || includeStart else {
                 throw BudgetError.validation("Kies minstens één boeking om te verrekenen.")
+            }
+            guard !includeStart || tag.startIsOpen else {
+                throw BudgetError.validation("Het startbedrag van ‘\(tag.name)’ staat niet (meer) open.")
             }
             let openIds = Set(try openEntries(db, tagId: tagId).compactMap(\.id))
             var entries: [Entry] = []
@@ -80,7 +110,7 @@ public enum SettlementService {
                 guard openIds.contains(id) else { throw BudgetError.notSettleable(entry: entry.label, tag: tag.name) }
                 entries.append(entry)
             }
-            let amount = -entries.map(\.amount).sum()
+            let amount = (includeStart ? tag.startAmount : .zero) - entries.map(\.amount).sum()
             guard !amount.isNegative else {
                 throw BudgetError.validation("De gekozen boekingen leveren samen geen terug te storten bedrag op "
                     + "(\(amount.formatted())).")
@@ -88,6 +118,10 @@ public enum SettlementService {
             var settlement = Settlement(tagId: tagId, day: day, amount: amount, note: note)
             try settlement.insert(db)
             try assign(db, entries, to: settlement.id!)
+            if includeStart {
+                tag.startSettlementId = settlement.id
+                try tag.update(db)
+            }
             if let depositEntryId {
                 return try linkDeposit(db, settlementId: settlement.id!, depositEntryId: depositEntryId)
             }
@@ -150,7 +184,7 @@ public enum SettlementService {
         }
     }
 
-    /// Verwijdert een verrekening; de boekingen staan daarna weer open. Een beginstand verwijder je niet zo:
+    /// Verwijdert een verrekening; de boekingen (en een meegenomen startbedrag) staan daarna weer open. Een beginstand verwijder je niet zo:
     /// gebruik `enable` met een andere datum, of `disable`.
     public static func delete(_ db: Database, settlementId: Int64) throws {
         try atomic(db) {
@@ -160,6 +194,8 @@ public enum SettlementService {
                     + "met een andere datum, of zet het uit.")
             }
             try db.execute(sql: "UPDATE entry SET settlementId = NULL WHERE settlementId = ?", arguments: [settlementId])
+            try db.execute(sql: "UPDATE tag SET startSettlementId = NULL WHERE startSettlementId = ?",
+                           arguments: [settlementId])
             try db.execute(sql: "DELETE FROM settlement WHERE id = ?", arguments: [settlementId])
         }
     }

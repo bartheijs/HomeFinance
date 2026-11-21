@@ -327,6 +327,17 @@ public final class AppDatabase: Sendable {
                 """)
         }
 
+        // Verrekenen per tag (6g): een startbedrag dat bij de start van de app al openstond, en per tag de keuze of
+        // het openstaande bedrag meetelt in "nog te besteden". Bestaande tags: geen startbedrag, telt niet mee.
+        m.registerMigration("v10-tag-start-spendable") { db in
+            try db.alter(table: "tag") { t in
+                t.add(column: "startAmount", .integer).notNull().defaults(to: 0)
+                t.add(column: "startDay", .text)
+                t.add(column: "startSettlementId", .integer).references("settlement", onDelete: .setNull)
+                t.add(column: "countsInSpendable", .boolean).notNull().defaults(to: false)
+            }
+        }
+
         return m
     }
 }

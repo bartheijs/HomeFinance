@@ -79,7 +79,7 @@ de maand van `day`. Intern is dat één SQL-expressie (`Q.period`).
 
 | Functie | Geeft |
 |---|---|
-| `spendable(db, year:today:)` | `Spendable`: `balance`, `antiRood`, `tijdelijkAntiRood`, `spendable`, en de simulatie: `expectedItems`, `expectedTotal`, `spendableEndOfMonth` |
+| `spendable(db, year:today:)` | `Spendable`: `balance`, `antiRood`, `tijdelijkAntiRood`, `returningTags` / `returningTotal`, `spendable`, en de simulatie: `expectedItems`, `expectedTotal`, `pendingSettlement`, `spendableEndOfMonth` |
 | `temporaryLoanOutstanding(db, on:)` | wat er op een dag nog uitstaat van tijdelijk van spaar geleend geld (boekingen met `temporaryLoan`) |
 | `temporaryLoanEntries(db)` | de gemarkeerde boekingen, nieuwste eerst |
 | `yearSummary(db, year:today:)` | `YearSummary`: op de rekening op 1-1, IN, UIT, op de rekening, buffers, besteedbaar, IN/UIT divers en gemiddelden per verstreken maand |
@@ -129,6 +129,18 @@ anders € 0,00.
 
 `spendableEndOfMonth` = `spendable` + `expectedTotal` + `pendingSettlement`: het hoofdgetal gaat uit van een
 situatie waarin alles verrekend is. `spendable` (besteedbaar nu) verandert niet.
+
+### Verrekentags in besteedbaar (6g)
+
+Per tag kan "telt mee in nog te besteden" aan staan (`Tag.countsInSpendable`, standaard uit). Voor elke tag met
+`settles` én `countsInSpendable` en een positief openstaand bedrag (uit `settlementOverview`, dus inclusief een
+nog open startbedrag) staat er een `ReturningTag` (`id`, `name`, `amount`) in `Spendable.returningTags`;
+`returningTotal` is de som. Alleen in het lopende jaar, anders leeg.
+
+`spendable` = `balance` − `antiRood` − `tijdelijkAntiRood` + `returningTotal`, en dus telt het ook mee in
+`spendableEndOfMonth`, het jaaroverzicht van het lopende jaar en de telefoonpagina. `spendableSeries` (de trend)
+rekent het niet mee: dat is de stand per maandeinde volgens de boekingen. Het Dashboard toont per tag een regel
+"+ Komt nog terug: <tag>" boven "Besteedbaar nu", met één zin uitleg.
 
 ### Samengevatte melding bij onbevestigde verrekeningen
 
@@ -273,13 +285,15 @@ niet. `Insight.compareNames(_:_:)` is de vergelijking die erachter zit. Tests in
 ## Verrekenen per tag
 
 Voor tags met `Tag.settles`. Openstaand = − som van de boekingen op betaalrekeningen met die tag en zonder
-`settlementId` (positief; een retour met dezelfde tag telt eraf). Schrijven doet `HFBudget`.
+`settlementId`, plus het startbedrag (`Tag.startAmount`) zolang `Tag.startSettlementId` nil is (positief; een
+retour met dezelfde tag telt eraf). Schrijven doet `HFBudget`.
 
 | Functie | Geeft |
 |---|---|
-| `settlementOverview(db, today:)` | `[TagSettlementSummary]`: `outstanding`, `openCount`, `oldestOpenDay`, `lastSettlementDay` / `lastSettlementAmount` (beginstanden tellen niet), `settledThisYear` |
-| `openSettlementEntries(db, tagId:)` | `[EntryRow]` openstaand, oudste eerst |
-| `settlementHistory(db, tagId:)` | `[SettlementDetail]` nieuwste eerst: `settlement`, `deposit` (`EntryRow?`), `entries`, `entriesTotal` |
+| `settlementOverview(db, today:)` | `[TagSettlementSummary]`: `outstanding` (met open startbedrag), `openStart`, `openCount` (boekingen, +1 voor een open startbedrag), `oldestOpenDay` (ook de dag van het startbedrag), `countsInSpendable`, `lastSettlementDay` / `lastSettlementAmount` (beginstanden tellen niet), `settledThisYear` |
+| `openSettlementEntries(db, tagId:)` | `[EntryRow]` openstaand, oudste eerst (zonder startbedrag) |
+| `settlementStart(db, tagId:)` | `SettlementStart?` (`amount`, `day`, `settlementId`, `isOpen`); nil zonder startbedrag |
+| `settlementHistory(db, tagId:)` | `[SettlementDetail]` nieuwste eerst: `settlement`, `deposit` (`EntryRow?`), `entries`, `entriesTotal`, `startAmount` (het meegenomen startbedrag, anders € 0,00; `startAmount − entriesTotal = settlement.amount`) |
 
 ## Totalen per omschrijving
 
@@ -483,7 +497,8 @@ twee versies van de app op dezelfde gegevens te vergelijken. Rekent niet zelf; b
 - Bedragen als `"-1234.56"`, aantallen als `"12"`; id's met vier cijfers (`rekening.0001.saldo`).
 - Sleutels: `rekening.<id>.naam|soort|gearchiveerd|saldo|laatsteImport.dag|laatsteImport.eindsaldo|laatsteImport.saldoVolgensApp`,
   `pot.<id>.naam|rekening|gearchiveerd|saldo`, `besteedbaarNu`, `nogTeBestedenDezeMaand` ("geen begrotingsjaar"
-  als het jaar ontbreekt), `boekingen.aantal`, `banktransacties.<status>`, `verrekeningen.openNetto|openAantal`,
+  als het jaar ontbreekt), `besteedbaarNu.terugTeKrijgen` (`Spendable.returningTotal`),
+  `tag.<id>.openstaand|startbedrag|teltMee` voor elke tag met verrekenen (vanaf versie 2), `boekingen.aantal`, `banktransacties.<status>`, `verrekeningen.openNetto|openAantal`,
   `afgevinkt.<jjjj-mm>`, `peildag`, `kerncijfers.versie` (`Insight.keyFiguresVersion`).
 - `json()` is stabiel: sleutels op alfabet, één per regel.
 

@@ -69,6 +69,15 @@ struct DashboardHero: View {
                 line("Tijdelijk geleend van spaar", spendable.tijdelijkAntiRood, sign: "−",
                      help: "Geld dat je tijdelijk van spaar naar de betaalrekening hebt gehaald en nog moet terugboeken. Het staat op de rekening, maar is niet van jou om uit te geven.")
             }
+            ForEach(spendable.returningTags) { tag in
+                line("Komt nog terug: \(tag.name)", tag.amount, sign: "+",
+                     help: "Openstaand bij de tag ‘\(tag.name)’: geld dat je hebt voorgeschoten en nog terugkrijgt. Het telt mee omdat ‘telt mee in nog te besteden’ aan staat (Instellingen › Tags).")
+            }
+            if !spendable.returningTags.isEmpty {
+                Text("Voorgeschoten geld dat nog terugkomt, telt hier alvast mee.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Divider()
             total("Besteedbaar nu", spendable.spendable).help(Self.nowHelp)
 

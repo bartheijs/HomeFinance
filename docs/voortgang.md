@@ -6,7 +6,7 @@
 
 - **Testvangnet (ronde 1)**: `scripts/testronde.sh`. De orchestrator draait het na elke wens op een kopie van de
   echte administratie. De basis met kerncijfers staat buiten de repo, bij de gebruiker lokaal in
-  `~/Library/Application Support/HomeFinance/testronde/` (eerste basis: `basis-ronde1-5a8410b.json`).
+  `~/Library/Application Support/HomeFinance/testronde/` (eerste basis: `basis-ronde1-5a8410b.json`; vanaf 6g: `basis-ronde11-6g.json`, met de tagvelden erbij).
 
 - Na installatie van `16b21a1` werkte de app niet goed bij de gebruiker (lege zijbalk, startpagina zonder kop).
   Oorzaak niet gevonden. Op verzoek van de gebruiker is de **code teruggezet naar `9cba8b0`** (16 november),
@@ -215,12 +215,28 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
    de gebruiker) veranderen niet. Bij Regels staat in de lijst "verrekenen met spaar bij geld erin", en in de
    editor onder "Verrekenen met spaar" een keuze "Verrekenen bij: geld erin / geld eruit / beide". Details in
    `docs/api/HFRules.md` en de spec (Verrekenen met spaar).
-6g. **Startbedrag op een verrekentag, en meetellen in "nog te besteden"** (wens van 21 november). Voor tags
-   met verrekenen (nu alleen Tanken): een beginbedrag op de startdatum voor wat er uit de periode vóór de app
-   nog openstond; telt mee in het openstaande bedrag van de tag. Nieuw: per tag een instelling "telt mee in
-   nog te besteden". Staat die aan, dan telt het openstaande bedrag (geld dat nog terugkomt) mee in "nog te
-   besteden deze maand" en "besteedbaar". Standaard uit. Rekenen in `HFInsight`, instelling via `TagService`;
-   waarschijnlijk een nieuwe migratie (bestaande niet aanpassen). Ook op het Dashboard en de telefoon tonen.
+6g. **Startbedrag op een verrekentag, en meetellen in "nog te besteden"** — klaar (21 november), nog niet
+   geïnstalleerd of gecommit.
+   - Migratie `v10-tag-start-spendable`: op `tag` de kolommen `startAmount` (standaard 0), `startDay`,
+     `startSettlementId` en `countsInSpendable` (standaard uit). Bestaande tags: geen startbedrag, telt niet mee.
+   - `HFBudget`: `SettlementService.setStart(db, tagId:, amount:, day:)`; `open` geeft ook `start`;
+     `settle(..., includeStart:)` neemt het startbedrag mee als openstaande post; `delete` zet het weer open.
+     `TagService.setCountsInSpendable`; `update` laat de nieuwe velden staan.
+   - `HFInsight`: `TagSettlementSummary` met `openStart` en `countsInSpendable` (startbedrag zit in `outstanding`,
+     telt als 1 in `openCount`); `settlementStart`; `SettlementDetail.startAmount`. `Spendable.returningTags` /
+     `returningTotal` tellen mee in "besteedbaar nu" en dus ook in "nog te besteden deze maand" (alleen lopend
+     jaar). Kerncijfers versie 2: `besteedbaarNu.terugTeKrijgen` en `tag.<id>.openstaand|startbedrag|teltMee`.
+   - Schermen: Instellingen › Tags onder "Verrekenen": regel "Startbedrag" (Voeg toe… / Wijzig…, dag voorgesteld
+     op de beginstand) en schakelaar "Telt mee in nog te besteden". Verrekenen-sheet toont het startbedrag als
+     aan te vinken post; de historie noemt het. Dashboard: regel "+ Komt nog terug: <tag>" met één zin uitleg.
+   - De telefoonpagina rekent het mee via `spendable`, maar toont (nog) geen aparte regel; dat kan bij 6l.
+     De trendgrafiek (`spendableSeries`) rekent het niet mee.
+   - Tests: `SettlementStartTests` (HFBudget, 3), `SettlementStartInsightTests` (HFInsight, 4),
+     `TagStartMigrationTests` (HFCore, 1). testronde.sh met voorbeelddata: GESLAAGD (534 tests, zelftest 33 OK).
+     De voorbeelddata heeft geen verrekentag; de nieuwe schermdelen zijn niet door de zelftest gedekt en niet met
+     de hand in de app geprobeerd.
+   - Testronde met een kopie: verwacht als verschillen alleen de nieuwe sleutels (`(ontbreekt) → …`); zolang
+     niemand een startbedrag of "telt mee" instelt, blijven `besteedbaarNu` en `nogTeBestedenDezeMaand` gelijk.
 6h. **Tags alleen op de betaalrekening, en filteren op tag** — klaar (21 november), nog niet geïnstalleerd of
    gecommit. (Aanleiding: een tag met één boeking op spaar was in Transacties onvindbaar omdat daar de
    betaalrekening geselecteerd stond.)
