@@ -400,7 +400,7 @@ public enum SavingsTransferService {
     }
 
     private static func fetch(_ db: Database, _ id: Int64) throws -> SavingsTransfer {
-        try Check.fetch(db, SavingsTransfer.self, id, "Verrekening met spaar")
+        try Check.fetch(db, SavingsTransfer.self, id, "Spaaroverboeking")
     }
 
     private static func newTransactions(_ db: Database, accountId: Int64) throws -> [BankTransaction] {

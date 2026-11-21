@@ -586,7 +586,7 @@ struct ReviewSettlePicker: View {
             .labelsHidden().fixedSize()
         }
         .font(.callout).controlSize(.small)
-        .help("Voor iets dat je van de betaalrekening hebt betaald maar uit een pot hoort te komen, of geld dat binnenkomt en door moet naar een pot. Je maakt het later in één keer over bij Verrekenen met spaar.")
+        .help("Voor iets dat je van de betaalrekening hebt betaald maar uit een pot hoort te komen, of geld dat binnenkomt en door moet naar een pot. Je maakt het later in één keer over bij Spaaroverboekingen.")
     }
 }
 

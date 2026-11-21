@@ -19,8 +19,16 @@ Vink af wat klopt. Klopt iets niet, maak dan een screenshot en noteer wat je zag
 
 ## 3. Nakijken
 
-- [ ] **Overboeking naar de rentepot.** De overboeking naar spaar voor de rente-reservering komt nu binnen.
-      Boek die op de pot *Rente lening* en kijk of het saldo van die pot omhooggaat.
+- [ ] **Correctie € 6,00 (21 november), zakgeld Aya.** Betaalkant: divers, verrekenen op Nee. Spaarkant: laat
+      staan en meld het aan de orchestrator (hoort op *Spaar Aya*; de app biedt alleen de vaste storting aan).
+- [ ] **Twee correctie-overboekingen (21 november).** Je maakte twee bedragen over van betaal naar spaar om
+      een verrekening recht te zetten. Spaarkant: de ene op *Rente lening*, de andere op *Lotte spaar*.
+      Betaalkant: beide **zonder pot**, als divers.
+- [ ] **Overboeking naar de rentepot.** Een overboeking naar spaar staat twee keer in de app. Kies de pot
+      *Rente lening* alleen bij de **spaarkant** (bijschrijving op de spaarrekening). Aan de **betaalkant** kies je
+      geen pot: een pot daar betekent "deze uitgave moet uit de pot terugkomen" en komt in de verrekening.
+      Stelt de app bij de spaarkant de vaste storting "Reserveringen" voor terwijl het bedrag niet klopt, neem dat
+      voorstel dan niet over.
 - [ ] **Nieuw: tags bij het nakijken.** Geef een tankbeurt de tag *Tanken*, direct in het nakijkscherm. Probeer
       ook een nieuwe tag aan te maken vanuit dat scherm.
 - [ ] **Nieuw: boekingen die elkaar opheffen** (heen en terug, zelfde bedrag) boek je als divers, zonder pot.

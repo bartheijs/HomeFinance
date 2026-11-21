@@ -20,7 +20,7 @@ struct RulesData: Equatable {
         var d = RulesData()
         d.rules = try RuleEngine.rules(db)
         d.accounts = try Account.order(Column("sortOrder"), Column("id")).fetchAll(db)
-        d.pots = Insight.pickerOrder(try Pot.fetchAll(db))
+        d.pots = try Pot.order(Column("accountId"), Column("sortOrder"), Column("id")).fetchAll(db)
         d.tags = try Tag.order(Column("sortOrder"), Column("id")).fetchAll(db)
         if let y = try BudgetYear.filter(Column("year") == year).fetchOne(db), let yearId = y.id {
             d.itemLabels = try BudgetItem

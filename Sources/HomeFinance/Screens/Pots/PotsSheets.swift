@@ -329,7 +329,7 @@ struct PotsMoveSheet: View {
                     Picker("Naar", selection: $toId) {
                         Text("Kies een pot").tag(Int64?.none)
                         ForEach(PotKind.allCases, id: \.self) { kind in
-                            let group = Insight.pickerOrder(candidates.filter { $0.kind == kind })
+                            let group = candidates.filter { $0.kind == kind }
                             if !group.isEmpty {
                                 Section(kind == .reservering ? "Reserveringen" : "Sparen") {
                                     ForEach(group) { pot in

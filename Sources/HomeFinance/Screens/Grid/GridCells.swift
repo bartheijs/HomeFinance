@@ -303,10 +303,10 @@ struct GridLabelLayer: View, Equatable {
                 Spacer(minLength: 2)
                 if row.frequency != .maand {
                     Text(row.frequency == .kwartaal ? "kwartaal" : "jaar")
-                        .font(.system(size: 9)).foregroundStyle(.secondary)
+                        .font(.system(size: 9)).foregroundStyle(.tertiary)
                 }
                 if distributionHelp[row.id] != nil {
-                    Image(systemName: "arrow.triangle.branch").font(.system(size: 8.5)).foregroundStyle(.secondary)
+                    Image(systemName: "arrow.triangle.branch").font(.system(size: 8.5)).foregroundStyle(.tertiary)
                 }
             }
             .font(.system(size: layout.fontSize + 0.5))
@@ -445,7 +445,7 @@ struct GridFooterLabelLayer: View, Equatable {
                 HStack(spacing: 4) {
                     Text(line.title).fontWeight(line.isStrong ? .semibold : .medium).lineLimit(1).minimumScaleFactor(0.85)
                     if line == .ruimte {
-                        Image(systemName: "info.circle").font(.system(size: 9)).foregroundStyle(.secondary)
+                        Image(systemName: "info.circle").font(.system(size: 9)).foregroundStyle(.tertiary)
                     }
                     Spacer(minLength: 0)
                 }

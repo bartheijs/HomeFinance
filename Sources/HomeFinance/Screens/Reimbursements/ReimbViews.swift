@@ -71,7 +71,7 @@ struct ReimbOpenRow: View {
     private var potMenu: some View {
         Menu {
             ForEach(PotKind.allCases, id: \.self) { kind in
-                let group = Insight.pickerOrder(pots.filter { $0.kind == kind })
+                let group = pots.filter { $0.kind == kind }
                 if !group.isEmpty {
                     Section(kind == .reservering ? "Reserveringen" : "Sparen") {
                         ForEach(group) { pot in

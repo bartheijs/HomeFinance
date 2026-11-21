@@ -216,7 +216,7 @@ import Testing
                 try BookingService.book(db, bankTransactionId: af.id!, allocations: [Allocation(amount: c(-13_050), label: "x")])
             }
             #expect(throws: BudgetError.savingsTransferBooking) { try EntryService.delete(db, entryId: spaarEntries[0].id!) }
-            #expect(BudgetError.savingsTransferBooking.localizedDescription.contains("Verrekenen met spaar"))
+            #expect(BudgetError.savingsTransferBooking.localizedDescription.contains("Spaaroverboekingen"))
             #expect(throws: BudgetError.self) { try SavingsTransferService.reopen(db, savingsTransferId: transfer.id!) }
             #expect(throws: BudgetError.self) { try SavingsTransferService.delete(db, savingsTransferId: transfer.id!) }
             // Label en notitie wijzigen mag wel.

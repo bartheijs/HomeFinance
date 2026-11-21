@@ -39,11 +39,10 @@ struct Fixture {
     /// Voegt een verzonnen banktransactie toe.
     @discardableResult
     func tx(_ d: Database, name: String = "", iban: String = "", description: String = "", cents: Int64 = -1000,
-            day: String = "2027-03-05", account: Int64? = nil, status: BankTransactionStatus = .nieuw,
-            code: String = "") throws -> BankTransaction {
+            day: String = "2027-03-05", account: Int64? = nil, status: BankTransactionStatus = .nieuw) throws -> BankTransaction {
         var t = BankTransaction(accountId: account ?? accountId, day: Day(iso: day)!, amount: Money(cents: cents),
                                 counterpartyName: name, counterpartyIban: iban, descriptionText: description,
-                                transactionCode: code, fingerprint: UUID().uuidString, status: status)
+                                fingerprint: UUID().uuidString, status: status)
         try t.insert(d)
         return t
     }

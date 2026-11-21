@@ -81,9 +81,6 @@ struct DemoPot {
     var target: Int64? = nil
     /// Bedrag dat op 1 januari in deze pot zit (handboeking "Beginsaldo <pot>").
     var initial: Int64
-    /// De maandelijkse storting gaat mee in de vaste storting RESERVERINGEN (met een RES-regel), niet met een
-    /// eigen overboeking. Geldt voor alle reserveringspotten en een deel van de spaarpotten.
-    var viaReserve = false
 }
 
 struct DemoPlan {
@@ -95,7 +92,6 @@ struct DemoPlan {
     static let savingsInterestDay = 2
     static let tags: [(name: String, color: String)] = [
         ("Tanken", "#E67E22"), ("Uit eten", "#C0392B"), ("Cadeau", "#8E44AD"), ("Vakantie", "#2980B9"),
-        ("Rijbewijs Kind 1", "#16A085"), ("Rijbewijs Kind 2", "#B7950B"),
     ]
 
     // MARK: Potten
@@ -123,40 +119,13 @@ struct DemoPlan {
         DemoPot(name: "Fietsen", kind: .reservering, monthly: 25_00, initial: 350_00),
     ]
 
-    /// Spaarpotten. Per kind drie potten: spaargeld (eigen maandelijkse overboeking), kleedgeld en zakgeld (mee in
-    /// RESERVERINGEN). Kleding en het wekelijkse zakgeld van een kind worden uit zijn eigen pot vergoed.
     static let savingsPots: [DemoPot] = [
-        DemoPot(name: "Spaargeld Kind 1", kind: .spaar, owner: "Kind 1", monthly: 25_00, target: 2_500_00, initial: 1_240_00),
-        DemoPot(name: "Kleedgeld Kind 1", kind: .spaar, owner: "Kind 1", monthly: 45_00, initial: 120_00, viaReserve: true),
-        DemoPot(name: "Zakgeld Kind 1", kind: .spaar, owner: "Kind 1", monthly: 32_50, initial: 30_00, viaReserve: true),
-        DemoPot(name: "Spaargeld Kind 2", kind: .spaar, owner: "Kind 2", monthly: 20_00, target: 2_500_00, initial: 980_00),
-        DemoPot(name: "Kleedgeld Kind 2", kind: .spaar, owner: "Kind 2", monthly: 35_00, initial: 90_00, viaReserve: true),
-        DemoPot(name: "Zakgeld Kind 2", kind: .spaar, owner: "Kind 2", monthly: 22_00, initial: 20_00, viaReserve: true),
+        DemoPot(name: "Spaarpot Kind 1", kind: .spaar, owner: "Kind 1", monthly: 25_00, target: 2_500_00, initial: 1_240_00),
+        DemoPot(name: "Spaarpot Kind 2", kind: .spaar, owner: "Kind 2", monthly: 20_00, target: 2_500_00, initial: 980_00),
         DemoPot(name: "Studie Ouder 1", kind: .spaar, owner: "Ouder 1", monthly: 0, target: 3_000_00, initial: 1_500_00),
         DemoPot(name: "Nieuwe fiets Ouder 2", kind: .spaar, owner: "Ouder 2", monthly: 0, target: 1_800_00, initial: 650_00),
         DemoPot(name: "Buffer gezin", kind: .spaar, monthly: 150_00, target: 10_000_00, initial: 4_000_00),
-        goalPot,
     ]
-
-    /// Spaardoel dat uit onderdelen bestaat: studie en rijbewijs voor de kinderen. De rijlessen worden uit deze pot
-    /// vergoed en krijgen een tag per kind ("Rijbewijs Kind 1", "Rijbewijs Kind 2").
-    static let goalPot = DemoPot(name: "Studie en rijbewijs", kind: .spaar, monthly: 150_00,
-                                 target: goalParts.map { Int64($0.quantity) * $0.unit }.reduce(0, +),
-                                 initial: 2_400_00, viaReserve: true)
-    /// Onderdelen van het spaardoel: (omschrijving, aantal, bedrag per stuk in centen).
-    static let goalParts: [(label: String, quantity: Int, unit: Int64)] = [
-        ("Studie Kind 1: collegegeld en boeken per jaar", 2, 1_600_00),
-        ("Rijlessen Kind 1", 30, 62_50),
-        ("Rijlessen Kind 2", 30, 62_50),
-        ("Examens rijbewijs", 2, 340_00),
-    ]
-    /// Doeldatum van het spaardoel: eind augustus van het volgende jaar (start studie).
-    static func goalDate(year: Int) -> Day { Day(year: year + 1, month: 8, day: 31)! }
-    static let drivingSchool = (name: "Rijschool Voorbeeld", iban: "NL00TEST0000000264")
-    static let lessonPrice: Int64 = 62_50
-    /// Rijlessen om de twee weken: (kind, eerste les).
-    static let lessonStarts: [(child: String, month: Int, day: Int)] = [("Kind 1", 2, 4), ("Kind 2", 5, 11)]
-    static let childShops = [("Jeugdmode Voorbeeld", "NL00TEST0000000262"), ("Schoenenwinkel Fictief", "NL00TEST0000000263")]
 
     /// Pot voor de rente op de privélening: één keer per jaar gevuld met een schenking, dus geen maandbedrag
     /// en geen RES-regel. De maandelijkse rentebetaling wordt uit deze pot vergoed.
@@ -167,12 +136,7 @@ struct DemoPlan {
     static let transferDayOfMonth = 27
 
     static var pots: [DemoPot] { reservePots + [loanPot] + savingsPots }
-    /// De potten die hun maandbedrag via RESERVERINGEN krijgen (elk met een RES-regel en een regel in de vaste
-    /// storting): alle reserveringspotten en de spaarpotten met `viaReserve`.
-    static var reserveLines: [DemoPot] { reservePots + savingsPots.filter(\.viaReserve) }
-    static var reserveTotal: Money { Money(cents: reserveLines.map(\.monthly).reduce(0, +)) }
-    /// Naam van de vaste storting achter RESERVERINGEN.
-    static let reserveDistributionName = "Maandelijkse reserveringen"
+    static var reserveTotal: Money { Money(cents: reservePots.map(\.monthly).reduce(0, +)) }
     /// Beginsaldo van de spaarrekening in de app: nul. Wat er op 1 januari staat is per pot geboekt.
     static let savingsOpening = Money.zero
     /// Saldo van de spaarrekening bij de bank op 1 januari = som van de beginsaldi van de potten.
@@ -218,9 +182,9 @@ struct DemoPlan {
         DemoItem(label: reserveLabel, direction: .UIT, cents: -reserveTotal.cents, day: 26,
                  party: "Spaarrekening gezin", iban: savingsIban, code: "OVB", kind: .reserveTotal),
         DemoItem(label: "Sparen Kind 1", direction: .UIT, cents: -25_00, day: 26,
-                 party: "Spaarrekening gezin", iban: savingsIban, code: "OVB", kind: .saving(pot: "Spaargeld Kind 1")),
+                 party: "Spaarrekening gezin", iban: savingsIban, code: "OVB", kind: .saving(pot: "Spaarpot Kind 1")),
         DemoItem(label: "Sparen Kind 2", direction: .UIT, cents: -20_00, day: 26,
-                 party: "Spaarrekening gezin", iban: savingsIban, code: "OVB", kind: .saving(pot: "Spaargeld Kind 2")),
+                 party: "Spaarrekening gezin", iban: savingsIban, code: "OVB", kind: .saving(pot: "Spaarpot Kind 2")),
         DemoItem(label: "Sparen buffer", direction: .UIT, cents: -150_00, day: 26,
                  party: "Spaarrekening gezin", iban: savingsIban, code: "OVB", kind: .saving(pot: "Buffer gezin")),
     ]
@@ -329,7 +293,7 @@ struct DemoPlan {
                 case .reserveTotal:
                     tx.link = nextLink
                     all.append(tx)
-                    let lines = Self.reserveLines.map {
+                    let lines = Self.reservePots.map {
                         DemoLine(amount: Money(cents: $0.monthly), label: "Reservering \($0.name)", potName: $0.name)
                     }
                     all.append(DemoTx(onSavings: true, day: date, amount: -amount, name: "Ouder 1 en Ouder 2",
@@ -349,50 +313,17 @@ struct DemoPlan {
             }
         }
 
-        // 2. Wekelijks zakgeld, vergoed uit de zakgeldpot van het kind.
+        // 2. Wekelijks zakgeld.
         var pocketDay = yearStart.adding(days: 2)
         while pocketDay <= yearEnd {
             for (child, iban, cents) in Self.children {
-                let line = DemoLine(amount: Money(cents: cents), label: "Zakgeld \(child)", potName: "Zakgeld \(child)",
-                                    reimburse: true, ruleName: "Zakgeld \(child)", confidence: .hoog)
-                reimbursements.append(DemoTx(day: pocketDay, amount: Money(cents: cents), name: "\(child) Voorbeeld",
-                                             iban: iban, description: "Zakgeld \(child)", code: "OVB", lines: [line]))
+                let line = DemoLine(amount: Money(cents: cents), label: "Zakgeld \(child)",
+                                    ruleName: "Zakgeld \(child)", confidence: .hoog)
+                all.append(DemoTx(day: pocketDay, amount: Money(cents: cents), name: "\(child) Voorbeeld", iban: iban,
+                                  description: "Zakgeld \(child)", code: "OVB", lines: [line]))
             }
             pocketDay = pocketDay.adding(days: 7)
         }
-
-        // 2b. Kleding per kind, vergoed uit het kleedgeld van dat kind. Geen regel: de winkel zegt niet voor wie.
-        for (index, child) in Self.children.map({ $0.0 }).enumerated() {
-            var rng = generator(10 + UInt64(index))
-            var date = yearStart.adding(days: rng.int(10...30))
-            while date <= yearEnd {
-                let (name, iban) = rng.pick(Self.childShops)
-                let amount = Money(cents: -Int64(index == 0 ? rng.int(25_00...70_00) : rng.int(20_00...55_00)))
-                let line = DemoLine(amount: amount, label: "Kleding \(child)", potName: "Kleedgeld \(child)", reimburse: true)
-                reimbursements.append(DemoTx(day: date, amount: amount, name: name, iban: iban,
-                                             description: "Betaalautomaat \(name)", lines: [line]))
-                date = date.adding(days: rng.int(40...60))
-            }
-        }
-
-        // 2c. Rijlessen om de twee weken en een theorie-examen, uit de pot voor studie en rijbewijs, met een tag per kind.
-        func drivingCost(_ date: Day, _ cents: Int64, _ child: String, label: String, name: String, iban: String) {
-            let amount = Money(cents: -cents)
-            let line = DemoLine(amount: amount, label: label, potName: Self.goalPot.name, tags: ["Rijbewijs \(child)"],
-                                reimburse: true, ruleName: name == Self.drivingSchool.name ? "Rijles \(child)" : nil,
-                                confidence: name == Self.drivingSchool.name ? .midden : nil)
-            reimbursements.append(DemoTx(day: date, amount: amount, name: name, iban: iban, description: label, lines: [line]))
-        }
-        for start in Self.lessonStarts {
-            var date = day(start.month, start.day)
-            while date <= yearEnd {
-                drivingCost(date, Self.lessonPrice, start.child, label: "Rijles \(start.child)",
-                            name: Self.drivingSchool.name, iban: Self.drivingSchool.iban)
-                date = date.adding(days: 14)
-            }
-        }
-        drivingCost(day(3, 16), 45_00, "Kind 1", label: "Theorie-examen Kind 1", name: "Examenbureau Demo",
-                    iban: "NL00TEST0000000265")
 
         // 3. Tanken, uit eten en losse winkels, met tussenpozen uit de generator.
         func stream(_ id: UInt64, first: ClosedRange<Int>, step: ClosedRange<Int>, _ make: (inout SeededGenerator, Day) -> DemoTx) {

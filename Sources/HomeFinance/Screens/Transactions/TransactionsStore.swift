@@ -189,8 +189,7 @@ struct TransactionsLookups: Equatable {
         for item in items {
             if let year = yearById[item.yearId] { l.itemsByYear[year, default: []].append(item) }
         }
-        // Op alfabet per soort, voor alle pot-kiezers op dit scherm.
-        l.pots = Insight.pickerOrder(try Pot.fetchAll(db))
+        l.pots = try Pot.order(Column("accountId"), Column("sortOrder"), Column("name")).fetchAll(db)
         l.tags = try HFCore.Tag.order(Column("sortOrder"), Column("name")).fetchAll(db)
         l.doneTransferIds = Set(try SavingsTransfer.filter(Column("done") == true).fetchAll(db).compactMap(\.id))
         return l
@@ -365,8 +364,6 @@ final class TransactionsStore {
     var newTagTarget: TransactionsNewTagTarget?
     /// Gemarkeerde boekingen die nog met spaar verrekend moeten worden, gesaldeerd.
     private(set) var openReimbursements: HFInsight.OpenReimbursements?
-    /// Welke bankbestanden de gebruiker moet downloaden om bij te werken.
-    private(set) var downloadAdvice: DownloadAdvice?
 
     var selection = Set<TransactionsItemID>()
     var showDetail = false
@@ -439,7 +436,6 @@ final class TransactionsStore {
         }
         loanOutstanding = model.read(Money.zero) { try Insight.temporaryLoanOutstanding($0, on: model.today) }
         openReimbursements = model.read(nil as HFInsight.OpenReimbursements?) { try Insight.openReimbursements($0) }
-        downloadAdvice = model.read(nil as DownloadAdvice?) { try Insight.downloadAdvice($0, today: model.today) }
         let kind = kind
         labels = model.read(labels) { try Insight.allLabels($0, accountKind: kind) }
         settlements = model.read([]) {
@@ -1143,7 +1139,7 @@ enum TransactionsFormat {
 
     static let loanHelp = "Geld dat je even van spaar haalt en later terugboekt. Het telt niet mee als besteedbaar zolang het uitstaat. Markeer ook de terugboeking."
 
-    static let settleHelp = "Bij een uitgave komt het bedrag uit de pot op de spaarrekening, bij een bijschrijving gaat het naar de pot. Het saldo maak je later in één keer over bij Verrekenen met spaar."
+    static let settleHelp = "Bij een uitgave komt het bedrag uit de pot op de spaarrekening, bij een bijschrijving gaat het naar de pot. Het saldo maak je later in één keer over bij Spaaroverboekingen."
     static let periodHelp = "Voor iets dat eind van de maand is betaald maar bij de volgende maand hoort. Het saldo van je rekening verandert er niet door."
 
     /// "yyyy-MM" voor de maand vóór (−1), van (0) of na (+1) de datum; nil voor de maand van de datum zelf.
@@ -1161,32 +1157,6 @@ enum TransactionsFormat {
     }
 
     static func number(_ n: Int) -> String { n.formatted(.number.locale(dutch)) }
-
-    /// "Bijwerken: download bij de bank de CSV-export (zip, één bestand per rekening) van A en B, van … tot en met …"
-    static func downloadText(_ advice: DownloadAdvice) -> String {
-        let names = advice.accounts.map(\.name)
-        let list = names.count <= 1 ? (names.first ?? "")
-            : names.dropLast().joined(separator: ", ") + " en " + (names.last ?? "")
-        let period = advice.from == advice.through
-            ? "van vandaag (\(advice.from.dutch))"
-            : "van \(advice.from.dutch) tot en met \(advice.through.dutch)"
-        return "Bijwerken: download bij de bank de CSV-export (zip, één bestand per rekening) van \(list), \(period)."
-    }
-
-    /// Uitleg onder het downloadadvies.
-    static func downloadNote(_ advice: DownloadAdvice) -> String {
-        advice.hasEarlierImport
-            ? "De begindag is de vroegste laatste banktransactie in de app. Die dag zit er bewust nog een keer in; overlap kan geen kwaad, want regels die er al zijn worden overgeslagen."
-            : "Er is nog niets geïmporteerd, dus de periode begint bij de startdatum van het beginsaldo. Overlap kan geen kwaad, want regels die er al zijn worden overgeslagen."
-    }
-
-    /// Per rekening de laatste banktransactie, voor de uitleg bij het aanwijzen.
-    static func downloadHelp(_ advice: DownloadAdvice) -> String {
-        advice.accounts.map { a in
-            "\(a.name)\(a.iban.map { " (\($0))" } ?? ""): "
-                + (a.lastBankDay.map { "laatste banktransactie \($0.dutch)" } ?? "nog niets geïmporteerd, start \(a.fromDay.dutch)")
-        }.joined(separator: "\n")
-    }
 
     /// "1 boeking", "1.204 boekingen"
     static func entries(_ n: Int) -> String { "\(number(n)) \(n == 1 ? "boeking" : "boekingen")" }

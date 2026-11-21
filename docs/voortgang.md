@@ -2,6 +2,21 @@
 
 *Bijgewerkt op 21 november 2026. Dit bestand is het overdrachtspunt voor de volgende werksessie.*
 
+## Terug naar de code van 16 november (21 november 2026)
+
+- Na installatie van `16b21a1` werkte de app niet goed bij de gebruiker (lege zijbalk, startpagina zonder kop).
+  Oorzaak niet gevonden. Op verzoek van de gebruiker is de **code teruggezet naar `9cba8b0`** (16 november),
+  de versie waarin hij al zijn werk deed. De documentatie (deze voortgang, checklist, tijdlijn) blijft.
+- Wat daarmee uit de code is gegaan en **opnieuw, één voor één** gebouwd wordt, elk met een testronde bij de
+  gebruiker (echte app starten, niet alleen tests en snapshots):
+  - uit `70cab3b` (20 november): schermfixes (smal venster, "Verrekenen met spaar" overal, leesbaarheid),
+    voorbeelddata versie 2, telefoondashboard met "Nog te besteden deze maand", snapshot `--size`;
+  - uit `16b21a1`: 6a, 6b, 6c (zie hieronder).
+- Bewaard: de oude commits in de geschiedenis, en het onderbroken diagnosewerk op branch
+  `wip/diagnose-zijbalk` (startoptie `--database`, logging).
+- Let op: de gebruiker meldde dat ook de versie van 16 november soms dezelfde lege zijbalk toont. Na elke
+  bouwronde dit expliciet laten controleren.
+
 ## Stand op 20 november 2026
 
 - De gebruiker draait sinds 8 november parallel met Excel. Bij de volgende import werkt hij
@@ -89,7 +104,26 @@
    de popover en het dubbelklikken in het maandgrid, het detailpaneel van een pot met de vooruitblik, de vensters
    Vaste stortingen, Nieuwe pot en Splitsen.
 6. **Grotere schermpunten** hieronder oppakken, als de gebruiker dat wil.
-6a, 6b en 6c (wensen van 21 november) zijn gebouwd op 21 november; zie "21 november" hierboven.
+6a, 6b en 6c (wensen van 21 november) zijn gebouwd op 21 november; zie "21 november" hierboven. **Maar zie
+   "Let op" bovenaan: die versie werkte niet bij de gebruiker en is teruggedraaid.**
+6e. **Vaste storting niet herkennen bij een heel ander bedrag** (21 november). Een losse overboeking van
+   betaal naar spaar werd aan de spaarkant herkend als de maandelijkse vaste storting (zelfde tegenrekening),
+   ook al scheelde het bedrag sterk; het verschil kwam in één pot en alle reserveringspotten kregen hun
+   maandbedrag dubbel. `DistributionService.recognize` (doelkant): bij een groot verschil geen verdeling
+   voorstellen maar twijfel. En: een pot aan de betaalkant van een overboeking naar spaar niet stilzwijgend
+   als "verrekenen met spaar" behandelen (waarschuwen). Data van de gebruiker is met de hand hersteld.
+   Ook: de gebruiker vindt het onderscheid niet vanzelfsprekend tussen "verrekenen" (bij de aanleiding: geld
+   voor een pot staat op betaal) en de overboeking zelf (geen verrekenen). Waarschuw als bij een overboeking
+   naar of van de eigen spaarrekening "Verrekenen met spaar" wordt gekozen, met één zin uitleg.
+6f. **Regels met "verrekenen met spaar" kijken niet naar de richting** (21 november). Een regel op de
+   tegenpartij (bv. de rekening van een kind) met verrekenen gold ook voor zakgeld dat de gebruiker naar dat kind
+   stuurde; dat kwam zo onterecht in een verrekening. Leer verrekenen alleen voor dezelfde richting (in of uit)
+   als waarin de gebruiker het koos, of vraag het bij de andere richting. Bij de gebruiker zijn drie regels met
+   de hand aangepast (verrekenen uit).
+6d. **Versie zichtbaar in Instellingen › Over** (wens van 21 november). Nu staat er altijd "Versie 1.0 (1)", zodat
+   de gebruiker niet ziet welke build draait. Laat `scripts/run.sh` bij het bouwen de korte commit-hash en de
+   bouwdatum in de app zetten (bijvoorbeeld in `Info.plist`) en toon die bij Over, bv. "gebouwd 21-11-2026,
+   versie 9cba8b0".
 7. **Excel-historie** (in de wacht): `HFHistory` aanpassen volgens de oplossing hieronder, proefdraaien, pas
    importeren als de jaren kloppen. Daarna de knop "Leer regels uit bankhistorie" in het scherm Regels.
 8. **Code-review** door een developer voordat de app de enige administratie wordt (zie de spec).

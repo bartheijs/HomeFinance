@@ -79,9 +79,16 @@ struct ReportsScreen: View {
                     .keyboardShortcut("c", modifiers: [.command, .shift])
                     .help("Zet de cijfers van dit rapport op het klembord, om in Excel te plakken (⇧⌘C)")
             }
-            tabBar
-                .padding(.horizontal, 24).padding(.bottom, 12)
-                .background { tabShortcuts }
+            HStack(spacing: 12) {
+                Picker("Rapport", selection: $tab) {
+                    ForEach(ReportsTab.allCases) { Text($0.title).tag($0).help($0.help) }
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
+                Spacer(minLength: 8)
+                tabControls
+            }
+            .padding(.horizontal, 24).padding(.bottom, 12)
+            .background { tabShortcuts }
             Divider()
             content
         }
@@ -99,35 +106,6 @@ struct ReportsScreen: View {
         if tab == .years { return "Alle jaren naast elkaar" }
         guard let summary = data.summary else { return "Trends en waar het geld naartoe ging in \(String(model.year))" }
         return "Cijfers van \(String(model.year)) t/m \(summary.asOf.short())"
-    }
-
-    /// De tabbladen met rechts de knoppen van het gekozen rapport. Past dat niet naast elkaar, dan komen de knoppen
-    /// eronder; in een smal venster worden de tabbladen een keuzemenu. Zo schuift het scherm nooit buiten het venster.
-    private var tabBar: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 12) {
-                tabPicker.pickerStyle(.segmented)
-                Spacer(minLength: 8)
-                tabControls
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                tabPicker.pickerStyle(.segmented)
-                tabControls
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 12) {
-                tabPicker.pickerStyle(.menu)
-                Spacer(minLength: 8)
-                tabControls
-            }
-        }
-    }
-
-    private var tabPicker: some View {
-        Picker("Rapport", selection: $tab) {
-            ForEach(ReportsTab.allCases) { Text($0.title).tag($0).help($0.help) }
-        }
-        .labelsHidden().fixedSize()
     }
 
     @ViewBuilder private var tabControls: some View {

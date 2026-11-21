@@ -53,10 +53,9 @@ Eén volledig HTML-document voor een telefoon:
 - Licht en donker via `prefers-color-scheme`; systeemlettertype.
 - Bovenaan "HomeFinance" en "Bijgewerkt op 15 mrt 2027 om 14:03". Zonder scripts kan de pagina niet zelf melden
   dat hij oud is; daarom staat de datum duidelijk bovenaan.
-- Volgorde: "Nog te besteden deze maand" (groot: besteedbaar eind van de maand, hetzelfde hoofdgetal als het
-  Dashboard op de Mac), "Besteedbaar nu", eventueel "tijdelijk geleend van spaar" en "nog over te boeken van
-  spaar", uitgaven van de maand tegen plan, vaste posten, verloop, rekeningen, potten.
-- Eén accentkleur. Rood alleen voor posten die te laat zijn en voor een negatief bedrag bovenaan.
+- Volgorde: besteedbaar (groot), eind van de maand, eventueel "tijdelijk geleend van spaar" en "nog over te
+  boeken van spaar", uitgaven van de maand tegen plan, vaste posten, verloop, rekeningen, potten.
+- Eén accentkleur. Rood alleen voor posten die te laat zijn en voor een negatief besteedbaar.
 - Bedragen via `Money.formatted()`, maanden via `Day.monthNames` en `Day.monthNamesShort`.
 - Alle tekst van de gebruiker (namen van rekeningen, posten en potten) gaat door `PhoneDashboard.escape`.
 - Bestaat het begrotingsjaar niet, dan staat er "Er is nog geen begroting voor <jaar>." met wat je moet doen;
@@ -66,8 +65,7 @@ Eén volledig HTML-document voor een telefoon:
 ## Opties en instellingen
 
 `PublishOptions` (Codable, standaard alles aan): `showFixedItems`, `showTrend`, `showAccounts`, `showPots`.
-Nog te besteden, besteedbaar en de uitgaven van de maand staan er altijd op. Ontbrekende sleutels bij het lezen
-betekenen "aan".
+Besteedbaar en de uitgaven van de maand staan er altijd op. Ontbrekende sleutels bij het lezen betekenen "aan".
 
 `PublishSettings` staat in de tabel `setting` onder `publish.*`:
 

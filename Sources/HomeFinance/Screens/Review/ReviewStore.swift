@@ -268,7 +268,7 @@ final class ReviewStore {
             accounts = try Account.fetchAll(db, sql: "SELECT * FROM account WHERE archived = 0 ORDER BY sortOrder, id")
             if accountId == nil || !accounts.contains(where: { $0.id == accountId }) { accountId = accounts.first?.id }
             tags = try Tag.fetchAll(db, sql: "SELECT * FROM tag ORDER BY sortOrder, id")
-            pots = Insight.pickerOrder(try Pot.fetchAll(db, sql: "SELECT * FROM pot WHERE archived = 0"))
+            pots = try Pot.fetchAll(db, sql: "SELECT * FROM pot WHERE archived = 0 ORDER BY sortOrder, id")
             potsById = Dictionary(uniqueKeysWithValues: pots.compactMap { p in p.id.map { ($0, p) } })
 
             let years = try BudgetYear.fetchAll(db)
@@ -310,8 +310,7 @@ final class ReviewStore {
                 let pair = pairs.first { $0.from.id == tx.id || $0.to.id == tx.id }
                 return ReviewRow(
                     item: item, suggestion: suggestion,
-                    cleanLabel: LabelCleaner.suggestedLabel(counterparty: tx.counterpartyName, description: tx.descriptionText,
-                                                            transactionCode: tx.transactionCode),
+                    cleanLabel: LabelCleaner.cleanLabel(counterparty: tx.counterpartyName, description: tx.descriptionText),
                     group: settlement != nil ? .doubt
                         : match.map { $0.distribution != nil && $0.exactAmount ? .certain : .doubt }
                         ?? Self.group(suggestion, hasProposal: pair != nil),

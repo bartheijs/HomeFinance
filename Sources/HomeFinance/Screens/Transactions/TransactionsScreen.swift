@@ -33,7 +33,6 @@ struct TransactionsScreen: View {
                 }
                 VStack(alignment: .leading, spacing: 14) {
                     accountCards
-                    if let advice = store.downloadAdvice { downloadLine(advice) }
                     TransactionsFilterBar(store: store, searchFocused: $searchFocused)
                     if store.criteria.hasFilters, store.criteria.status != .newOnly, store.totalEntryCount > 0 {
                         TransactionsSummaryLine(store: store)
@@ -136,21 +135,6 @@ struct TransactionsScreen: View {
         }
     }
 
-    /// Rustig blok onder de rekeningen: welke bankbestanden je downloadt om bij te werken.
-    private func downloadLine(_ advice: DownloadAdvice) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: "arrow.down.circle").foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(TransactionsFormat.downloadText(advice))
-                Text(TransactionsFormat.downloadNote(advice)).foregroundStyle(.secondary)
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .font(.caption)
-        .help(TransactionsFormat.downloadHelp(advice))
-    }
-
     /// Eén regel boven de feed, alleen als er nieuwe transacties zijn.
     private var newBanner: some View {
         let count = store.pendingAll.count
@@ -203,7 +187,7 @@ struct TransactionsScreen: View {
         return HStack(spacing: 10) {
             Image(systemName: "arrow.triangle.swap").foregroundStyle(.secondary)
             Text("Te verrekenen met spaar: \(direction) · \(TransactionsFormat.entries(open.entries.count))")
-            Button("Naar Verrekenen met spaar") { model.selection = .reimbursements }
+            Button("Naar Spaaroverboekingen") { model.selection = .reimbursements }
                 .buttonStyle(.link)
                 .help("Daar maak je het saldo in één keer over en vink je de verrekening af; dan wordt alles geboekt")
             Spacer(minLength: 0)

@@ -228,26 +228,6 @@ spaarrekening van de pot tellen in het potsaldo; een te vergoeden uitgave op de 
 | `searchEntries(db, filter:)` | `EntrySearchResult`: `rows` (één pagina), `totalCount` en `totalSum` (alle gevonden boekingen) |
 | `reviewQueue(db, accountId:)` | `[ReviewItem]`: banktransacties met status `nieuw`, oudste eerst, met `bookedAmount` en `remaining` |
 | `recentEntries(db, limit:)` | de laatste boekingen |
-| `downloadAdvice(db, today:)` | `DownloadAdvice?`: welke bankbestanden je downloadt om bij te werken (nil zonder rekeningen) |
-
-### Downloadadvies (`downloadAdvice`)
-
-Voor het blok onder de rekeningen op het scherm Transacties. `DownloadAdvice` heeft `accounts`
-(`[DownloadAccount]`: niet-gearchiveerde rekeningen in de volgorde van de app, elk met `lastBankDay` = datum van de
-laatste banktransactie en `fromDay`), `from`, `through` (= `today`) en `hasEarlierImport`.
-
-- `fromDay` van een rekening is haar laatste banktransactiedatum, of zonder banktransacties de startdatum van het
-  beginsaldo (`Account.openingDate`), nooit later dan vandaag.
-- `from` is de vroegste `fromDay` over alle rekeningen. Die dag zit er bewust in als overlap: de import slaat
-  regels over die er al zijn.
-
-### Volgorde in pot-kiezers (`pickerOrder`)
-
-`Insight.pickerOrder(_:)` (voor `[Pot]` en `[PotSummary]`, of generiek met `kind:` en `name:`) zet potten in de
-volgorde van een keuzelijst: eerst reserveringspotten, dan spaarpotten, binnen elke groep op alfabet
-(hoofdletter- en accentongevoelig, Nederlandse sortering, "Pot 2" vóór "Pot 10"). Alle pot-kiezers in de app
-gebruiken deze ene functie; "Nee", "Geen pot" en dergelijke zet de kiezer zelf bovenaan.
-`Insight.compareNames(_:_:)` is de vergelijking die erachter zit.
 
 ```swift
 var filter = EntryFilter(accountId: accountId, year: 2027, month: 3, text: "tank", sort: .dayDescending, limit: 50)

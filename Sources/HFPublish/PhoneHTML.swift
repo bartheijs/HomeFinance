@@ -104,14 +104,12 @@ extension PhoneDashboard {
         if !snapshot.openReimbursement.isZero {
             notes.append(row("Nog over te boeken van spaar", amount(snapshot.openReimbursement)))
         }
-        // Zoals het Dashboard op de Mac: hoofdgetal is wat er deze maand nog te besteden is (besteedbaar eind van de
-        // maand, met open verrekeningen); besteedbaar nu staat eronder.
-        let end = budget.spendableEndOfMonth, now = budget.spendable
+        let end = budget.spendableEndOfMonth
         return """
         <section class="hero">
-        <div class="label">Nog te besteden deze maand</div>
-        <div class="big\(end.isNegative ? " neg" : "")">\(bigAmount(end))</div>
-        <div class="sub">Besteedbaar nu <strong\(now.isNegative ? " class=\"neg\"" : "")>\(amount(now))</strong></div>
+        <div class="label">Besteedbaar</div>
+        <div class="big\(budget.spendable.isNegative ? " neg" : "")">\(bigAmount(budget.spendable))</div>
+        <div class="sub">Eind van de maand <strong\(end.isNegative ? " class=\"neg\"" : "")>\(amount(end))</strong></div>
         \(notes.isEmpty ? "" : "<div class=\"notes\">\n\(notes.joined(separator: "\n"))\n</div>")
         </section>
         """
@@ -240,7 +238,7 @@ extension PhoneDashboard {
     static func yearMissingCard(_ snapshot: PhoneSnapshot) -> String {
         """
         <section class="hero">
-        <div class="label">Nog te besteden deze maand</div>
+        <div class="label">Besteedbaar</div>
         <div class="missing">Er is nog geen begroting voor \(snapshot.today.year).</div>
         <div class="sub">Maak het jaar aan in HomeFinance op je Mac, bij Instellingen › Jaar en posten. Daarna staan hier weer je cijfers.</div>
         </section>
