@@ -134,6 +134,43 @@ kader "Namen in de interface") en de importchecklist.
 - De groepen "Reserveringspotten" en "Spaarpotten" in de kiezers heten nu "Reserveringspotjes" en "Spaarpotjes"
   (niet "Reserveren" en "Sparen" uit de tabel hierboven).
 
+## Doorgevoerd na de test (herstelronde 1, 21–22 november 2026)
+
+Na de test door de gebruiker (`docs/ux/feedback-test.md`). Zes commits op `ux-ronde`, elk apart terug te draaien.
+Geen rekenregel, geen migratie; identifiers (`Screen.settleUp`, `Tag.settles`, `countsInSpendable`) en de sleutels
+van de kerncijfers zijn niet veranderd.
+
+### Zijbalk
+
+| Groep | Schermen |
+|---|---|
+| Vandaag | Dashboard · Te doen |
+| Bijwerken | Importeren en nakijken · Transacties · Tags |
+| Begroting | Posten |
+| Sparen | Potjes · Automatisch sparen |
+| Inzicht | Rapporten · Maandgrid |
+| *(onderaan)* | Instellingen (Rekeningen, Regels, Back-up, Telefoon, Over; Tags is een eigen scherm) |
+
+### Woorden
+
+| Was (stap C/D) | Nu |
+|---|---|
+| Nog over deze maand | **Nog te besteden deze maand** (Dashboard, telefoon) |
+| Nog rechtzetten | **Te doen** (zijbalk, titel, teller, links) |
+| Voorgeschoten (scherm en schakelaar bij een tag) | **Tags** (scherm); schakelaar **Krijg ik terug** |
+| Reken mee als inkomen dat nog komt | **Tel mee bij ‘nog te besteden’** |
+| nog terug te krijgen: € X | **Nog terug te ontvangen: € X** |
+| Rapporten › Categorieën | Rapporten › **Tags** |
+| Het is binnen… / Het geld is terug… (knop) | weg: de terugbetaling krijgt dezelfde tag; voorstel "Tag Tanken" in Nakijken en Transacties |
+| Kaartjes Vaste posten · Deze maand · Rekeningen | **Periodieke transacties** · **Incidentele transacties** · **Huidig saldo** |
+| Blokken Nog overboeken + Wacht op de bank | één kaartje **Nog overboeken** met per regel "Nog overmaken: € …" of "Afgevinkt, wacht op de bank" |
+
+Het woord "voorgeschoten" staat nergens meer in de interface; alleen de verzonnen banktekst in de voorbeelddata
+("Terugbetaling voorgeschoten bedrag") houdt het, omdat dat gegevens zijn en geen interfacetekst.
+
+De grijze uitlegzinnen uit stap C zijn op het Dashboard, Tags en Te doen weg (wens: minder tekst). "Vrij te
+besteden" staat niet meer op het Dashboard; het begrip bestaat nog op de telefoonpagina en in de kerncijfers.
+
 ## Bronnen
 
 - YNAB Glossary: https://support.ynab.com/en_us/ynab-glossary-a-guide-BJd80SORq.md

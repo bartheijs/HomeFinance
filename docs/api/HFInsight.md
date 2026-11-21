@@ -2,8 +2,8 @@
 
 > **Namen in de interface (UX-stap C, november 2026).** De app gebruikt sinds stap C andere woorden dan deze
 > documentatie en de code: potje (pot), Automatisch sparen / vaste overboeking (vaste storting), overig (divers),
-> vrij te besteden (besteedbaar nu), nog over deze maand (nog te besteden deze maand), minimaal op je betaalrekening
-> (anti-rood), Nog overboeken (verrekenen met spaar), voorgeschoten (verrekenen per tag), banktransactie (bankregel).
+> vrij te besteden (besteedbaar nu), nog te besteden deze maand, minimaal op je betaalrekening
+> (anti-rood), Nog overboeken (verrekenen met spaar), krijg ik terug (verrekenen per tag), banktransactie (bankregel).
 > De volledige lijst staat in `docs/ux/begrippen-voorstel.md`, sectie "Doorgevoerd". Identifiers zijn niet hernoemd.
 
 Alle alleen-lezen queries en berekeningen voor de schermen. Hangt alleen af van `HFCore` en GRDB; geen SwiftUI.
@@ -530,7 +530,33 @@ print(balance.plan.surplus, balance.hasScenario ? balance.scenario.surplus : nil
   `unreviewedEntries`, `openReimbursements`, `reconciliationDiffers`, `reconciliationOld` (ouder dan
   `Insight.reconciliationMaxAgeDays` = 35 dagen, of nooit afgestemd sinds de begindatum),
   `openSettlement(tagId:tagName:amount:count:)` per tag waarvoor nog iets terug te storten is;
-- `recentEntries`, `monthIncome` / `monthExpenses` tegen `planIncome` / `planExpenses`, `topTags`.
+  en sinds de UX-feedback (herstelronde 1): `fixedItemsLate(labels:)` (vaste posten later dan normaal),
+  `potGoalsBehind(names:)` (spaardoel `tekort` of `verlopen`), `bufferNotReached(shortfall:)` (nog te besteden
+  negatief), `importBalanceDiffers(accountId:accountName:bank:app:day:)` (eindsaldo laatste bankbestand ≠ saldo
+  volgens de app op die dag; alleen als er op die rekening niets meer wacht), `importOld(accountId:accountName:daysAgo:)`
+  (laatste bankbestand ouder dan `Insight.importMaxAgeDays` = 14 dagen) en
+  `largeExpenseComing(itemId:label:amount:expectedDay:)` (open uitgave van een post die niet elke maand komt, vanaf
+  `Insight.largeExpenseThreshold` = € 250). **Nieuwe `case`s: een uitputtende `switch` moet ze afhandelen.**
+- `recentEntries`, `monthIncome` / `monthExpenses` tegen `planIncome` / `planExpenses`, `topTags`;
+- `incidental: IncidentalSummary`: in, uit en de drie grootste uitgaven zonder vaste post van de lopende maand;
+- `checkingTotal`, `savingsTotal`, `accountsTotal` (saldo betaal, spaar en samen).
+
+`FixedItemsOverview` heeft `incomeBooked`, `expensesBooked`, `incomeExpected`, `expensesExpected` en `expectedNet`
+(nog binnen + nog af; gelijk aan `outstandingTotal`).
+
+### De rekensom onder "Nog te besteden deze maand" (`SpendableBreakdown`)
+
+`SpendableBreakdown(spendable)` deelt `Spendable` op in regels met teken: huidig saldo betaalrekening − minimaal
+aan het eind van de maand (− tijdelijk geleend van spaar, alleen als er iets uitstaat) (+ komt nog terug, alleen als
+er iets meetelt) + nog verwacht deze maand. "Nog verwacht" is netto: `expectedIncome` en `expectedExpenses` per
+post, plus een open verrekening met spaar. `addsUp` is waar als de regels samen `spendableEndOfMonth` zijn; getest
+met een fixture en met de voorbeelddata. Vervangt `SpendableExplanation` (de zin).
+
+### Incidentele transacties (`incidentalMonth`)
+
+`incidentalMonth(db, year:month:)` geeft alles zonder vaste post op de betaalrekening(en) in één begrotingsmaand:
+`summary` (in, uit, saldo, de 5 grootste uitgaven), `expensesByTag` (`DiversBreakdown`, alle tags plus "Zonder
+tag") en `entries`. `list(sign:sort:)` filtert op in/uit en sorteert op datum of bedrag.
 
 ## Kerncijfers (testronde)
 

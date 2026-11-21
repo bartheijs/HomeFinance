@@ -2,8 +2,8 @@
 
 > **Namen in de interface (UX-stap C, november 2026).** De app gebruikt sinds stap C andere woorden dan deze
 > documentatie en de code: potje (pot), Automatisch sparen / vaste overboeking (vaste storting), overig (divers),
-> vrij te besteden (besteedbaar nu), nog over deze maand (nog te besteden deze maand), minimaal op je betaalrekening
-> (anti-rood), Nog overboeken (verrekenen met spaar), voorgeschoten (verrekenen per tag), banktransactie (bankregel).
+> vrij te besteden (besteedbaar nu), nog te besteden deze maand, minimaal op je betaalrekening
+> (anti-rood), Nog overboeken (verrekenen met spaar), krijg ik terug (verrekenen per tag), banktransactie (bankregel).
 > De volledige lijst staat in `docs/ux/begrippen-voorstel.md`, sectie "Doorgevoerd". Identifiers zijn niet hernoemd.
 
 Alle schrijfacties van HomeFinance: boeken, splitsen, potten, overboekingen, afstemming, jaar en posten,
@@ -267,7 +267,9 @@ Geweigerd in een afgesloten jaar (ook het weghalen) en voor RES-regels; de regel
 ## SavingsTransferService — verrekenen met spaar (in de app: "Nog overboeken")
 
 *Sinds UX-stap C2 heet dit in de interface **Nog overboeken**; een `SavingsTransfer` heet daar "overboeking met
-spaar". Verrekenen per tag (`SettlementService`) heet in de interface **Voorgeschoten** ("nog terug te krijgen").
+spaar". Verrekenen per tag (`SettlementService`) heet in de interface **Krijg ik terug** ("Nog terug te ontvangen: € …"); de knop om een terugbetaling vast te
+leggen is weg uit de interface (UX-feedback): de gebruiker tagt de terugbetaling met dezelfde tag, en volgens de
+rekenregel telt die bijschrijving af van het openstaande bedrag.
 De namen in de code blijven.*
 
 Twee richtingen, gesaldeerd. Een boeking op de betaalrekening met `reimburse`:
@@ -419,7 +421,7 @@ Validatie (`BudgetError`, Nederlandse melding):
 
 **Startbedrag en beginstand** zijn twee verschillende dingen. De beginstand (`enable(from:)`) sluit boekingen van
 vóór de startdatum af: die staan niet meer open. Het startbedrag is het omgekeerde: geld dat bij de start al was
-voorgeschoten, zonder boeking in de app, en dat nog terug moet komen. Instellingen › Tags stelt de dag van de
+voorgeschoten, zonder boeking in de app, en dat nog terug moet komen. Het scherm Tags stelt de dag van de
 beginstand voor als dag van het startbedrag. Bestaande tags kregen bij migratie v10 geen startbedrag.
 
 Een afgesloten jaar blokkeert het verrekenen niet: het is een koppeling, geen wijziging van de boeking.

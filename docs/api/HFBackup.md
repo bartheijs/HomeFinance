@@ -2,8 +2,8 @@
 
 > **Namen in de interface (UX-stap C, november 2026).** De app gebruikt sinds stap C andere woorden dan deze
 > documentatie en de code: potje (pot), Automatisch sparen / vaste overboeking (vaste storting), overig (divers),
-> vrij te besteden (besteedbaar nu), nog over deze maand (nog te besteden deze maand), minimaal op je betaalrekening
-> (anti-rood), Nog overboeken (verrekenen met spaar), voorgeschoten (verrekenen per tag), banktransactie (bankregel).
+> vrij te besteden (besteedbaar nu), nog te besteden deze maand, minimaal op je betaalrekening
+> (anti-rood), Nog overboeken (verrekenen met spaar), krijg ik terug (verrekenen per tag), banktransactie (bankregel).
 > De volledige lijst staat in `docs/ux/begrippen-voorstel.md`, sectie "Doorgevoerd". Identifiers zijn niet hernoemd.
 
 Back-up en herstel van de database, export van de complete dataset als CSV, en verzonnen voorbeelddata.

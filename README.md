@@ -25,11 +25,14 @@ administratie beginnen**. Je kunt later altijd wisselen via Instellingen › Ove
 
 ## Zo werk je ermee
 
-De zijbalk is ingedeeld naar wat je komt doen: **Vandaag** (Dashboard, Nog rechtzetten), **Bijwerken**
-(Importeren en nakijken, Transacties, Voorgeschoten), **Begroting** (Maandgrid, Posten), **Sparen** (Potjes,
-Automatisch sparen) en **Inzicht** (Rapporten), met Instellingen onderaan. *Nog rechtzetten* zet alles wat nog
-open staat bij elkaar, in vier blokken met de volgende stap: nog overboeken met spaar (daar ga je naar het scherm
-Nog overboeken om af te vinken), voorgeschoten geld, tijdelijk geleend van spaar en wat nog op de bank wacht.
+De zijbalk is ingedeeld naar wat je komt doen: **Vandaag** (Dashboard, Te doen), **Bijwerken**
+(Importeren en nakijken, Transacties, Tags), **Begroting** (Posten), **Sparen** (Potjes, Automatisch sparen) en
+**Inzicht** (Rapporten, Maandgrid), met Instellingen onderaan. Het Dashboard toont "Nog te besteden deze maand" met
+de rekensom eronder en drie kaartjes: Periodieke transacties, Incidentele transacties en Huidig saldo. *Te doen*
+zet alles wat nog open staat bij elkaar, alleen in kaartjes met inhoud: Nog overboeken (met per regel "Nog
+overmaken" of "Afgevinkt, wacht op de bank"), Terug te ontvangen en Tijdelijk geleend van spaar. Bij *Tags* zie je
+per tag de uitgaven deze maand en dit jaar en beheer je de tags; komt geld terug, dan geef je de bijschrijving
+dezelfde tag.
 Nieuwe banktransacties boek je in Nakijken of in Transacties: beide tonen dezelfde voorstellen, dezelfde aantallen
 "zeker / na te kijken" en hetzelfde vinkje "Voortaan zo indelen". Automatisch geboekte boekingen die je achteraf
 nog niet hebt bekeken, heten "nog niet gecontroleerd". Jaar aanmaken en afsluiten doe je bij Posten; regels beheer je
@@ -63,8 +66,8 @@ geopend of veranderd.
    - "Voortaan zo indelen" bij een betaling zonder regel.
 4. **Potjes:** per kind spaargeld, kleedgeld en zakgeld; de groep Kids met het spaardoel "Studie en rijbewijs"
    uit onderdelen; "Buffer gezin" met een vooruitblik. Bij **Automatisch sparen** de maandelijkse reserveringen.
-5. **Dashboard:** "Nog over deze maand" met "+ Komt nog terug: Tanken". Bij **Instellingen › Tags** staat
-   Tanken met een startbedrag en "Reken mee als inkomen dat nog komt".
+5. **Dashboard:** "Nog te besteden deze maand" met "+ Komt nog terug" in de rekensom. Bij **Tags** staat
+   Tanken met een startbedrag, "Krijg ik terug" en "Tel mee bij ‘nog te besteden’".
 6. **Instellingen › Telefoon:** bij "Voor het gezin" zijn de kinderen en Buffer gezin al gekozen. Kies een map
    om de pagina te maken.
 7. Klaar? **Instellingen › Over › Bekijk eigen administratie.**
@@ -85,11 +88,11 @@ Sinds de UX-ronde (stap C) heten een aantal begrippen anders; de oude naam staat
 | Telt in je begroting als (hoort bij post) | Op je betaalrekening is de overboeking van Automatisch sparen een uitgave op deze post. |
 | Minimaal op je betaalrekening aan het eind van de maand (anti-rood) | Dit bedrag laat je altijd staan, zodat je niet rood komt. |
 | Vrij te besteden (besteedbaar nu) | Wat er nu op je betaalrekening staat, min wat je wilt laten staan en wat je van spaar hebt geleend. |
-| Nog over deze maand (nog te besteden deze maand) | Wat je deze maand nog kunt uitgeven, na de vaste posten die nog komen. |
+| Nog te besteden deze maand | Wat je deze maand nog kunt uitgeven, na de vaste posten die nog komen (met de rekensom eronder). |
 | Tijdelijk geleend van spaar | Geld dat je even van je spaarrekening haalt en later terugzet. Je markeert beide overboekingen; de app houdt bij wat er uitstaat. |
 | Nog overboeken (verrekenen met spaar) | Je betaalde iets vanaf je betaalrekening, maar het hoort bij een potje (of andersom). Je zet het later in één overboeking recht en vinkt het af. |
-| Voorgeschoten (verrekenen bij een tag) | Uitgaven die je voorschiet en terugkrijgt, zoals tankkosten van je werk; de app toont wat je nog terug te krijgen hebt. |
-| Reken mee als inkomen dat nog komt (telt mee in nog te besteden) | Het bedrag dat je nog terugkrijgt, telt mee in wat je deze maand kunt uitgeven. |
+| Krijg ik terug (verrekenen bij een tag) | Uitgaven met deze tag krijg je terug, zoals tankkosten van je werk; de app toont "Nog terug te ontvangen: € …". Tag de terugbetaling met dezelfde tag. |
+| Tel mee bij ‘nog te besteden’ (telt mee in nog te besteden) | Het bedrag dat je nog terugkrijgt, telt mee in wat je deze maand kunt uitgeven. |
 | Banktransactie (bankregel) | Een regel uit het bankbestand. |
 | Voortaan zo indelen (onthoud als regel) | Boekingen van deze tegenpartij krijgen voortaan deze post of dit potje voorgesteld. |
 | Indelen bij (toewijzen aan) | Een boeking bij een post of potje zetten. |
@@ -152,10 +155,11 @@ Dat doet vier dingen en schrijft alles naar de map achter `--uit` (nooit in deze
    nog eens langs op de gewone en de kleinste venstermaat: is de kop zichtbaar, schuift het scherm niet
    horizontaal buiten beeld, staat de titel op één regel en blijft de zijbalk zichtbaar. Op Transacties en Nakijken kijkt hij of de pot-kiezers geladen zijn met de
    potten per soort op alfabet (in het log alleen het aantal en "volgorde OK"), en of beide schermen dezelfde
-   aantallen wachtend en zeker tonen, en dezelfde terugbetalingen en andere helften. Op Nog rechtzetten kijkt hij
-   of de vier blokken in beeld staan (beide venstermaten) en of de teller in de zijbalk klopt.
+   aantallen wachtend en zeker tonen, en dezelfde terugbetalingen en andere helften. Op Te doen kijkt hij
+   of precies de kaartjes met inhoud in beeld staan (of "Er is niets te doen."), in beide venstermaten, en of de
+   teller in de zijbalk klopt.
    Na hooguit 90 seconden stopt de app altijd.
-4. **Kerncijfers**: saldi per rekening, het saldo van elk potje, "vrij te besteden" (sleutel `besteedbaarNu`), "nog over deze maand"
+4. **Kerncijfers**: saldi per rekening, het saldo van elk potje, "vrij te besteden" (sleutel `besteedbaarNu`), "nog te besteden deze maand"
    en een paar aantallen, in `kerncijfers-voorbeeld.json`.
 
 Met een **kopie** van je administratie (nooit het origineel; dat weigert het script) doet hij stap 3 en 4 ook op

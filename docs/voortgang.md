@@ -139,6 +139,47 @@ Aandachtspunten voor de test door de gebruiker:
   geboekt als overig. In Nakijken kan het direct met "Maak ongedaan" in de melding. Op Voorgeschoten staat
   "Het is binnen…" alleen als er iets openstaat; een knop naar de geschiedenis daar is een mogelijke aanvulling.
 
+### Herstelronde 1: feedback uit de test (gebouwd, nog niet getest door de gebruiker)
+
+De gebruiker testte de UX-versie in de echte app; zijn feedback staat in `docs/ux/feedback-test.md` (rode draad:
+te veel tekst). Zes commits, elk apart terug te draaien met `git revert <commit>` (terugdraaien in omgekeerde
+volgorde is het veiligst: 3 en 4 bouwen voort op de kaartjes van 1, 5 en 6 op de namen van 2).
+
+| Commit | Wat de gebruiker ziet |
+|---|---|
+| `b0ab622` 1 | Dashboard: datumregel "zaterdag 21 november 2026", titel "Nog te besteden deze maand", geen grijze tekst en geen "Vrij te besteden". Daaronder de rekensom: huidig saldo betaalrekening − minimaal aan het eind van de maand (− tijdelijk geleend) (+ komt nog terug) + nog verwacht deze maand (uitklapbaar per post, inkomsten en uitgaven) = nog te besteden. Drie kaartjes: Periodieke transacties (x van y voldaan, te laat ook bij 0, nog verwacht, in en uit), Incidentele transacties (in, uit, drie grootste uitgaven), Huidig saldo (betaal, spaar, totaal; niet aanklikbaar). Aandacht ook voor: later dan normaal, spaardoel niet op koers, minimum niet gehaald, saldo na import sluit niet aan, laatste import > 14 dagen, grote uitgave op komst (niet-maandelijks, vanaf € 250). Knop Maandgrid weg. Telefoon: "Nog te besteden deze maand". |
+| `cbfabe6` 2 | Zijbalk: Maandgrid onder Inzicht (na Rapporten); "Nog rechtzetten" heet Te doen; "Voorgeschoten" heet Tags: één scherm met per tag deze maand en dit jaar, "Nog terug te ontvangen: € …" en het beheer (tagbeheer uit Instellingen). Schakelaars "Krijg ik terug" en "Tel mee bij ‘nog te besteden’". Rapporten › Tags. "Voorgeschoten" is overal weg. |
+| `f05e52a` 3 | Pagina Vaste posten (achter Periodieke transacties): geen maandgrid-link en geen info-icoon; bovenaan nog binnen te komen, nog af te gaan en het saldo; inkomsten en uitgaven apart, elk "Nog te komen" en "Verwerkt"; nooit € 0,00 (plan, werkelijk, of plan met "afgevinkt"); filter Alles / In / Uit. |
+| `6efe9b4` 4 | Pagina Incidentele transacties: drie kaartjes (totalen, uitgaven per tag, 5 grootste uitgaven), daaronder alle transacties, te sorteren op datum en bedrag (op- en aflopend) en te filteren op Alles / In / Uit; geen links. |
+| `67b4a18` 5 | Tags: knop "Het is binnen…" weg (ook in Te doen en Transacties). Nakijken en Transacties: "Is dit je € … van Tanken terug?" met de knop "Tag Tanken" (boekt als overig met de tag). |
+| `0c74eee` 6 | Te doen: één kaartje Nog overboeken met per regel "Nog overmaken: € …" (Afvinken…) of grijs "Afgevinkt, wacht op de bank"; daarnaast alleen Terug te ontvangen en Tijdelijk geleend van spaar als er iets in staat; anders "Er is niets te doen.". Na vijf dagen de bestaande melding bij Aandacht (opent nu Te doen). |
+
+**Bevinding punt 5 (terugbetaling taggen).** In de code (`Insight.settlementOverview`, en hetzelfde in
+`SettlementService.open`) is openstaand = het startbedrag zolang dat niet verrekend is − de som van de boekingen
+op een betaalrekening met de tag en zonder verrekening. Een bijschrijving met de tag telt dus af. Getest in
+`RepaymentByTagTests`: met een startbedrag van € 20 en een bestaande verrekening (waarvan de storting geen tag
+heeft) staat er € 110 open; een bijschrijving van € 110 met de tag brengt het op € 0,00, "komt nog terug" valt weg
+en nog te besteden blijft gelijk (het geld staat nu op de rekening); een deel terug verlaagt het openstaande
+bedrag; een al verrekend startbedrag telt niet mee. Geen rekenwijziging nodig, dus de knop is weg. Gevolgen om te
+weten: de getagde terugbetaling blijft als "open boeking" in de telling van de tag staan (bedrag € 0,00 netto), er
+komt geen regel meer in de geschiedenis van terugbetalingen, en een tag-rapport telt de bijschrijving mee in het
+netto bedrag van de tag. De oude terugbetalingen en hun "Maak ongedaan" blijven bestaan.
+
+Techniek: rekensom `SpendableBreakdown`, kaartjes en pagina's `IncidentalSummary`, `IncidentalMonth`,
+`FixedItemsOverview` (extensies), extra `AttentionItem`s; alles in HFInsight met tests (621). Elke testronde
+GESLAAGD (zelftest 211 → 205 OK, 0 FOUT, beide venstermaten: het tabblad Tags van Instellingen is weg);
+kerncijfers voorbeelddata na elk deel gelijk aan die van `8ab97d5` (peildag 21-11-2026).
+
+Aandachtspunten voor de test door de gebruiker:
+- Alleen getest met voorbeelddata, de zelftest, unittests en schermafdrukken (Dashboard, Vaste posten,
+  Incidentele transacties, Tags, Te doen). Niet met een kopie van de eigen administratie en niet geïnstalleerd.
+- Meldingen bij Aandacht met eigen grenzen: laatste import ouder dan 14 dagen, grote uitgave vanaf € 250 en niet
+  maandelijks. Te veel of te weinig? Dat zijn twee constanten in HFInsight.
+- "Saldo na import sluit niet aan" verschijnt alleen als er op die rekening geen banktransacties meer wachten.
+- Het kaartje Periodieke transacties toont bij In en Uit wat al geboekt is; de pagina erachter toont wat nog komt.
+- De lege toestand van Te doen ("Er is niets te doen.") is niet in de voorbeelddata te zien (daar staat altijd iets).
+- Op de telefoonpagina staat "Vrij te besteden" nog; dat was geen onderdeel van de feedback.
+
 ## Terug naar de code van 16 november (21 november 2026)
 
 - **Testvangnet (ronde 1)**: `scripts/testronde.sh`. De orchestrator draait het na elke wens op een kopie van de
