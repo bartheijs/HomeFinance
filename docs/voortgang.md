@@ -299,7 +299,10 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
       (21 november, ronde 15). Knoppen "Naar Verrekenen met spaar", de uitleg en foutmeldingen (ook in HFBudget)
       zeggen nu "Verrekenen met spaar" of "verrekening met spaar"; Instellingen › Tags: "Kenmerken om uitgaven te
       volgen, zoals tanken of uit eten." Codecommentaar niet aangepast. Eén test volgt de nieuwe foutmelding.
-   2. Leesbaarheid: te lichte grijze bijschriften iets donkerder.
+   2. Leesbaarheid: te lichte grijze bijschriften iets donkerder. — **klaar** (21 november, ronde 16). Van
+      `.tertiary` naar `.secondary` (past zich vanzelf aan in donker): Potten (bijschrift en "nog te verdelen" bij
+      nul), Rapporten › Per omschrijving (aantallen "12×"), Maandgrid (kleine pictogrammen en bijschrift in de
+      cel), Tags ("niet gebruikt", startbedrag "geen"). Geen layout-wijzigingen.
    3. Rapporten in een smal venster. Eerst de zelftest uitbreiden: elk scherm in gewone én kleinste
       venstermaat, zijbalk na elke stap zichtbaar.
    4. Instellingen in een smal venster.

@@ -111,7 +111,7 @@ struct ReportsLabelsTab: View {
             HStack(spacing: 8) {
                 Text(item.label.isEmpty ? "Zonder omschrijving" : item.label)
                     .fontWeight(item.id == selectedId ? .semibold : .regular).lineLimit(1)
-                Text("\(item.count)×").font(.callout).foregroundStyle(.tertiary).monospacedDigit()
+                Text("\(item.count)×").font(.callout).foregroundStyle(.secondary).monospacedDigit()
                 Spacer(minLength: 6)
                 ReportsAmount(amount: item.total).foregroundStyle(.secondary)
             }
@@ -153,7 +153,7 @@ struct ReportsLabelsTab: View {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(String(y.year)).font(.callout).foregroundStyle(.secondary).monospacedDigit()
                             ReportsAmount(amount: y.total).fontWeight(y.year == year ? .semibold : .regular)
-                            Text("\(y.count)×").font(.callout).foregroundStyle(.tertiary).monospacedDigit()
+                            Text("\(y.count)×").font(.callout).foregroundStyle(.secondary).monospacedDigit()
                         }
                     }
                 }

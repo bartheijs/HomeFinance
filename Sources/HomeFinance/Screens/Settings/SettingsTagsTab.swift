@@ -260,7 +260,7 @@ struct SettingsTagRow: View {
         HStack(spacing: 8) {
             Text("Startbedrag").foregroundStyle(.secondary)
             if tag.startAmount.isZero {
-                Text("geen").foregroundStyle(.tertiary)
+                Text("geen").foregroundStyle(.secondary)
             } else {
                 Text(tag.startAmount.formatted()).monospacedDigit()
                 if let day = tag.startDay { Text("op \(day.short(withYear: true))").foregroundStyle(.secondary) }
@@ -361,7 +361,7 @@ struct SettingsTagRow: View {
     /// van vroeger op een spaarrekening, dan staat dat eronder: die zijn daar te vinden via de spaarrekening.
     @ViewBuilder private var usageText: some View {
         if usage.total == 0 {
-            Text("niet gebruikt").font(.callout).foregroundStyle(.tertiary)
+            Text("niet gebruikt").font(.callout).foregroundStyle(.secondary)
         } else {
             VStack(alignment: .trailing, spacing: 0) {
                 Button(SettingsFormat.count(usage.total, "boeking", "boekingen"), action: onShow)

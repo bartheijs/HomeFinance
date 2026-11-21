@@ -74,7 +74,7 @@ struct PotsAccountStrip: View {
                 .font(.system(size: 28, weight: .semibold, design: .rounded)).monospacedDigit()
                 .foregroundStyle(amount.isNegative ? Theme.negative : Color.primary)
                 .lineLimit(1).minimumScaleFactor(0.7)
-            Text(caption).font(.callout).foregroundStyle(.tertiary).lineLimit(1)
+            Text(caption).font(.callout).foregroundStyle(.secondary).lineLimit(1)
         }
         .help(help)
     }
@@ -94,7 +94,7 @@ struct PotsAccountStrip: View {
             }
             Text(isZero ? "elke euro heeft een pot"
                  : (account.unallocated.isNegative ? "de potten zijn samen meer dan het saldo" : "dit geld heeft nog geen pot"))
-                .font(.callout).foregroundStyle(isZero ? AnyShapeStyle(.tertiary) : AnyShapeStyle(Theme.warning)).lineLimit(1)
+                .font(.callout).foregroundStyle(isZero ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.warning)).lineLimit(1)
         }
         .help("Niet toegewezen = saldo van de spaarrekening − de som van de potten. Dit hoort € 0,00 te zijn: dan heeft elke euro op de spaarrekening een pot. Is het positief, wijs dan de boekingen zonder pot aan een pot toe. Is het negatief, dan zit er in de potten meer dan er op de rekening staat.")
     }
