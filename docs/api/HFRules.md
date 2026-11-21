@@ -53,7 +53,7 @@ try appDatabase.write { db in try RuleEngine.undoLearning(result, db) }
 | `reorder(ruleIds: [Int64], _ db)` | Genoemde regels krijgen priority 10, 20, 30 … in die volgorde; de rest volgt in de oude volgorde. |
 | `testRule(_ rule, against: db, limit: Int? = nil) -> [RuleTestHit]` | Welke bestaande banktransacties (alle statussen, nieuwste eerst) een — eventueel niet opgeslagen — regel herkent. Negeert `enabled`. |
 | `ruleProposal(for: Correction, _ db) -> RuleProposal` | Het regelconcept bij een keuze; schrijft niets (zie "Regels alleen met toestemming"). |
-| `applyChoice(_ correction: Correction, to: Rule) -> Rule` | Zet post, pot, verrekenen (met richting), omschrijving en tags van de keuze in een regel; voorwaarden, naam en volgorde blijven. Puur rekenwerk. |
+| `applyChoice(_ correction: Correction, to: Rule) -> Rule` | Zet post, pot, verrekenen (met richting), omschrijving en tags van de keuze in een regel; voorwaarden, naam en volgorde blijven. Omschrijving: zie "Omschrijving in een regel" hieronder. Puur rekenwerk. |
 | `afterBooking(_ correction:, remember: Rule?, _ db, now:) -> LearnResult` | Na het boeken: `remember` bewaren (`created`/`updated`), of zonder `remember` alleen het gebruik tellen als de keuze gelijk was aan het voorstel. |
 | `summary(of: Rule, _ db) -> String` | Eén zin: "Voortaan bij X: post …, verrekenen met pot … bij geld eruit, omschrijving '…', tags …". Ook `summary(of:potName:tagNames:)` zonder database. |
 | `undoLearning(_ result: LearnResult, _ db)` | Bewaarde regel verwijderen of bijgewerkte regel terugzetten. |
@@ -89,7 +89,8 @@ voorwaarden (`accountId` telt mee) → laagste id.
 - `budgetItemId`: de `BudgetItem` met label `targetItemLabel` (hoofdletterongevoelig) in het `BudgetYear` van de
   **dag van de transactie**. Bestaat het jaar of de post niet, dan is hij nil en staat er een melding in `warnings`
   ("Het jaar 2028 bestaat nog niet; …", "De post 'X' bestaat niet in 2027."). `targetItemLabel == nil` = divers.
-- `label`: `entryLabel` van de regel, anders de opgeschoonde tegenpartij, anders "Onbekend".
+- `label`: `entryLabel` van de regel, anders `LabelCleaner.suggestedLabel` (eigen tekst van een overboeking of de
+  opgeschoonde tegenpartij), anders "Onbekend".
 - **Richting van verrekenen** (`Rule.reimburseDirection`, `.incoming` "erin" / `.outgoing` "eruit" / `.both`
   "beide"): heeft de regel `reimburse` en past de richting niet bij het bedrag van de transactie
   (`rule.reimburseApplies(to:) == false`), dan zijn `reimburse` false en `potId` nil, is `confidence` `.laag`
@@ -111,6 +112,23 @@ rekenwerk (handig voor lijsten). `RuleMatcher.match(rule, transaction, ignoreEna
   Tekst met gemengde hoofdletters blijft zoals hij is.
 - `LabelCleaner.cleanLabel(counterparty:description:)`: de tegenpartij, of bij een lege naam een naam uit de
   omschrijving (pinbetaling, `/NAME/…/`, `Naam: …`; anders de omschrijving zelf, hoogstens 40 tekens).
+- `LabelCleaner.suggestedLabel(counterparty:description:transactionCode:)` (6b), ook als `suggestedLabel(for: tx)`:
+  de voorgestelde omschrijving van een nieuwe boeking. Bij een overboeking met een korte, eigen tekst ("Zakgeld",
+  "Cadeau verjaardag") is dat die tekst; anders hetzelfde als `cleanLabel(counterparty:description:)`. Geen eigen
+  tekst bij:
+  - een transactiecode van pin, geldautomaat, incasso, iDEAL, acceptgiro, kosten of rente (`BEA`, `GEA`, `INC`,
+    `IDB`, `ACC`, `KST`, `RNT` … en de korte codes van andere banken). Overboekingscodes (`OVB`, `IOB`, `POV`) en
+    onbekende codes laten de keuze aan de tekst;
+  - gestructureerde tekst (`/`, `:`, `*`, links), vijf of meer cijfers achter elkaar of meer cijfers dan letters;
+  - tekst die begint met iDEAL, SEPA, incasso, betaalautomaat en dergelijke, of een zakelijk woord bevat
+    (factuur, termijn, kenmerk, contributie, polis …);
+  - meer dan 30 tekens of meer dan 4 woorden;
+  - tekst die gelijk is aan (een deel van) de tegenpartij;
+  - geen tegenpartij: dan het oude gedrag (naam uit de omschrijving).
+
+  `RuleMatcher.suggest` gebruikt dit als label wanneer de regel geen omschrijving (`entryLabel`) heeft; een
+  omschrijving uit een regel gaat altijd voor. `cleanLabel(counterparty:description:)` blijft de naam van een
+  nieuwe regel bepalen (ook in `HistoryRuleSeeder`). Het matchen zelf (IBAN, naam, trefwoord) verandert niet.
 - `TextNormalizer.normalize(_:)` en `normalizeIban(_:)`: dezelfde vergelijking als de regels gebruiken.
 
 ## Regels alleen met toestemming (6i)
@@ -130,6 +148,13 @@ en de keuze is niet gelijk aan het voorstel van een regel).
   tegenpartij + bedrag minstens twee keer gezien zijn. `priority` achteraan (hoogste + 10, afgerond op tientallen).
   Lukt geen tegenpartij of trefwoord, dan is `draft` nil en biedt Nakijken niets aan.
 - **Verrekenen en richting** gaan via `learnReimburse` (zie onder, punt 6).
+- **Omschrijving in een regel** (`applyChoice`, 6b): `correction.entryLabel == nil` betekent "de voorgestelde
+  omschrijving overgenomen"; de omschrijving van de regel blijft dan zoals hij was (een nieuwe regel krijgt er
+  geen). Een gekozen omschrijving gelijk aan `LabelCleaner.suggestedLabel` (wat de app zonder regel voorstelt:
+  de eigen tekst van een overboeking, anders de tegenpartij) wordt niet vastgelegd (`entryLabel` nil), zodat
+  elke overboeking haar eigen tekst houdt. Iets anders, ook bewust de naam van de tegenpartij, wordt vastgelegd
+  en staat in `summary`. Nakijken en Transacties geven `entryLabel` nil mee als de omschrijving gelijk is aan
+  `Suggestion.label`.
 - `afterBooking(correction, remember:)`:
   - `remember` gezet → `RuleEngine.save` (met `validate`), `created` of `updated` (`previousRule` = de oude
     versie, voor `undoLearning`); `message` "Regel bewaard: Voortaan bij …" / "Regel bijgewerkt: …".

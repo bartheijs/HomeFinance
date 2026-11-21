@@ -152,6 +152,25 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
    en dat het onder de kop staat (meetpunt `.selfTestProbe`, doet buiten de zelftest niets).
    Testronde met voorbeelddata: GESLAAGD (498 tests, zelftest 31 OK). Nog: testronde op een kopie, installeren,
    en de gebruiker laten kijken naar de kop van Transacties en de zijbalk.
+6b. **Voorgestelde omschrijving slim kiezen** — opnieuw gebouwd, klaar (21 november), nog niet geïnstalleerd.
+   Bij een overboeking met een korte, eigen tekst ("Zakgeld") stelt Nakijken (en Transacties) die tekst voor; bij
+   pin, geldautomaat, incasso, iDEAL (transactiecodes als BEA, GEA, INC, IDB), gestructureerde tekst (`/…/`,
+   "Naam:", kenmerken, factuurnummers, lange rijen cijfers), zakelijke woorden of een lange tekst de tegenpartij.
+   Een omschrijving uit een regel gaat altijd voor. Regels matchen precies als eerst.
+   Ingepast in 6i ("Onthoud als regel"):
+   - Laat de gebruiker de eigen tekst staan, dan legt het regelconcept géén vaste omschrijving vast; elke
+     volgende overboeking houdt haar eigen tekst. De samenvattingszin noemt dan geen omschrijving.
+   - Kiest de gebruiker bewust iets anders (ook de naam van de tegenpartij bij een overboeking), dan komt dat
+     in de regel en in de zin ("omschrijving 'J. Voorbeeld'").
+   - Wijzigt de gebruiker bij een bestaande regel alleen de post, dan blijft de omschrijving van die regel staan
+     (`applyChoice` met lege omschrijving = voorstel overgenomen). Vervangt hij de omschrijving van de regel
+     door de eigen tekst, dan legt de bijgewerkte regel geen omschrijving meer vast.
+   - Regeleditor: het lege veld Omschrijving toont "eigen tekst of tegenpartij", met uitleg in de hulptekst.
+   - Het kopje rechts in Nakijken blijft de tegenpartij tonen (wat is het); het veld Omschrijving de eigen tekst.
+   `LabelCleaner.suggestedLabel` (logica als in `16b21a1`), 31 testgevallen in `SuggestedLabelTests`. Het oude
+   `learn` is niet aangepast (de app gebruikt het niet meer).
+   Testronde met voorbeelddata: GESLAAGD (508 tests, zelftest 31 OK). Nog: testronde op een kopie, installeren,
+   en de gebruiker laten kijken bij een overboeking met een eigen tekst en bij "Onthoud als regel".
 6e. **Vaste storting niet herkennen bij een heel ander bedrag** — klaar (21 november), nog niet geïnstalleerd.
    Wat er gebouwd is: `DistributionService.recognize` stelt aan de spaarkant geen verdeling meer voor als het
    bedrag minder dan de helft of meer dan anderhalf keer het totaal van de storting is (`isFarFromTotal`); het

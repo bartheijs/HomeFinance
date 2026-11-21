@@ -203,9 +203,9 @@ struct RulesEditor: View {
                 }
             }
             .help("Spaarrekening: de pot waar het bedrag bij of af gaat. Betaalrekening: de pot die de uitgave vergoedt.")
-            TextField("Omschrijving", text: $draft.entryLabel.rulesText, prompt: Text("naam van de tegenpartij"))
+            TextField("Omschrijving", text: $draft.entryLabel.rulesText, prompt: Text("eigen tekst of tegenpartij"))
                 .focused($labelFocused)
-                .help("De leesbare tekst van de boeking. Leeg = de opgeschoonde naam van de tegenpartij.")
+                .help("De leesbare tekst van de boeking. Leeg = bij een overboeking met een korte eigen tekst (zoals 'Zakgeld') die tekst, anders de opgeschoonde naam van de tegenpartij.")
             labelHelp
             if !data.tags.isEmpty {
                 LabeledContent("Tags") {

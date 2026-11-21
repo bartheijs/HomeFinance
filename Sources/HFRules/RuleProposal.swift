@@ -54,14 +54,18 @@ extension RuleEngine {
     }
 
     /// Zet de keuze (post, pot, verrekenen en de richting daarvan, omschrijving, tags) in een regel.
-    /// De voorwaarden, naam en volgorde blijven. Puur rekenwerk.
+    /// De voorwaarden, naam en volgorde blijven. `correction.entryLabel == nil` betekent "de voorgestelde
+    /// omschrijving": de omschrijving van de regel blijft dan zoals hij was. Puur rekenwerk.
     public static func applyChoice(_ correction: Correction, to rule: Rule) -> Rule {
         var r = rule
-        let tx = correction.bankTransaction
-        let defaultLabel = LabelCleaner.cleanLabel(counterparty: tx.counterpartyName, description: tx.descriptionText)
         r.targetItemLabel = RuleMatcher.filled(correction.itemLabel)
-        r.entryLabel = RuleMatcher.filled(correction.entryLabel).flatMap {
-            TextNormalizer.normalize($0) == TextNormalizer.normalize(defaultLabel) ? nil : $0
+        // Omschrijving (6b): geen gekozen omschrijving = het voorstel overgenomen, dus wat de regel al had blijft.
+        // Een gekozen omschrijving gelijk aan wat de app zonder regel voorstelt (de eigen tekst van een
+        // overboeking, anders de tegenpartij) wordt niet vastgelegd, zodat elke transactie haar eigen tekst
+        // houdt. Al het andere (ook bewust de naam van de tegenpartij bij een overboeking) wel.
+        if let chosen = RuleMatcher.filled(correction.entryLabel) {
+            let own = LabelCleaner.suggestedLabel(for: correction.bankTransaction)
+            r.entryLabel = TextNormalizer.normalize(chosen) == TextNormalizer.normalize(own) ? nil : chosen
         }
         r.tagIdList = correction.tagIds
         learnReimburse(into: &r, from: correction)

@@ -1,4 +1,5 @@
 import Foundation
+import HFCore
 
 /// Tekst vergelijkbaar maken: hoofdletters, accenten en dubbele spaties tellen niet mee.
 public enum TextNormalizer {
@@ -38,6 +39,76 @@ public enum LabelCleaner {
         let name = cleanLabel(counterparty)
         if !name.isEmpty { return name }
         return derive(fromDescription: description).text
+    }
+
+    /// Voorgestelde omschrijving voor een nieuwe boeking (6b). Bij een overboeking met een korte, eigen tekst
+    /// (bijvoorbeeld "Zakgeld") is dat die tekst; in alle andere gevallen hetzelfde als
+    /// `cleanLabel(counterparty:description:)`. Een omschrijving uit een regel (`Rule.entryLabel`) gaat hier
+    /// altijd voor; dat regelt `RuleMatcher.suggest`.
+    public static func suggestedLabel(counterparty: String, description: String, transactionCode: String = "") -> String {
+        let name = cleanLabel(counterparty)
+        if !name.isEmpty, let own = personalNote(description, transactionCode: transactionCode, counterparty: name) {
+            return own
+        }
+        return cleanLabel(counterparty: counterparty, description: description)
+    }
+
+    /// `suggestedLabel(counterparty:description:transactionCode:)` voor een banktransactie.
+    public static func suggestedLabel(for tx: BankTransaction) -> String {
+        suggestedLabel(counterparty: tx.counterpartyName, description: tx.descriptionText,
+                       transactionCode: tx.transactionCode)
+    }
+
+    /// Langste eigen tekst die als omschrijving wordt voorgesteld.
+    static let maxPersonalLength = 30
+    /// Meeste woorden in een eigen tekst.
+    static let maxPersonalWords = 4
+
+    /// Transactiecodes van betalingen die nooit een eigen tekst hebben (pin, geldautomaat, incasso, iDEAL,
+    /// acceptgiro, kosten, rente). Codes van overboekingen (bv. OVB, IOB, POV) of een onbekende code laten
+    /// de keuze aan de tekst zelf.
+    static let nonPersonalCodes: Set<String> = [
+        "BEA", "GEA", "PIN", "INC", "ACC", "IDB", "IMB", "KST", "KTN", "RNT", "PRV", "PRM", "STO", "COR", "EFF",
+        "BA", "BC", "GA", "GB", "EI", "ID", "MA", "KH", "IC", "GM",
+    ]
+
+    /// Woorden die op een zakelijke betaling wijzen; dan is de tegenpartij duidelijker dan de tekst.
+    private static let businessWords: Set<String> = [
+        "factuur", "factuurnummer", "fact", "nota", "termijn", "klantnummer", "klantnr", "debiteurnummer",
+        "contract", "contractnummer", "polis", "polisnummer", "order", "ordernummer", "bestelling", "kenmerk",
+        "referentie", "ref", "betalingskenmerk", "betaling", "abonnement", "incasso", "machtiging", "contributie",
+        "premie", "dossier", "dossiernummer", "aanslag", "vordering", "transactie", "nr", "no",
+    ]
+
+    /// De omschrijving zelf, als het een korte, menselijke tekst is; anders nil.
+    static func personalNote(_ description: String, transactionCode: String, counterparty: String) -> String? {
+        let code = transactionCode.trimmingCharacters(in: .whitespaces).uppercased()
+        if nonPersonalCodes.contains(code) { return nil }
+        let text = TextNormalizer.collapse(description).trimmingCharacters(in: CharacterSet(charactersIn: " ,;.-"))
+        guard !text.isEmpty, text.count <= maxPersonalLength else { return nil }
+        let words = text.split(separator: " ")
+        guard words.count <= maxPersonalWords else { return nil }
+        // Gestructureerde tekst: velden, scheidingstekens, links.
+        if text.range(of: #"[/:*#@=|\\]|https?|www\."#, options: [.regularExpression, .caseInsensitive]) != nil {
+            return nil
+        }
+        // Kenmerken: vijf of meer cijfers achter elkaar, of meer cijfers dan letters.
+        if text.range(of: #"\d{5,}"#, options: .regularExpression) != nil { return nil }
+        let letters = text.filter(\.isLetter).count, digits = text.filter(\.isNumber).count
+        guard letters >= 3, digits <= letters / 2 else { return nil }
+        // Voorvoegsels van de bank of de betaalverwerker (pin, iDEAL, SEPA).
+        if text.range(of: #"^(IDEAL|SEPA|EUROPESE INCASSO|INCASSO|BETAALAUTOMAAT|GELDAUTOMAAT|BEA|GEA)\b"#,
+                      options: [.regularExpression, .caseInsensitive]) != nil { return nil }
+        let normalized = TextNormalizer.normalize(text)
+        if normalized.split(separator: " ").contains(where: { businessWords.contains(String($0).filter(\.isLetter)) }) {
+            return nil
+        }
+        // Zelfde als de tegenpartij (of een deel daarvan): dan liever de opgeschoonde naam.
+        let party = TextNormalizer.normalize(counterparty)
+        if party.contains(normalized) || normalized.contains(party) { return nil }
+        let result = analyze(text)
+        guard !result.terminal, !result.text.isEmpty else { return nil }
+        return result.text
     }
 
     // MARK: Intern

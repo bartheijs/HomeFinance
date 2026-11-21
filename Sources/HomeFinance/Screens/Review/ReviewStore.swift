@@ -642,7 +642,7 @@ final class ReviewStore {
         if reimburse { potId = draft.reimbursePotId }
         let label = draft.label.trimmingCharacters(in: .whitespaces)
         return Correction(bankTransaction: row.tx, itemLabel: itemLabel, potId: potId,
-                          entryLabel: label.isEmpty || label == row.cleanLabel ? nil : label,
+                          entryLabel: label.isEmpty || label == row.suggestion.label ? nil : label,
                           tagIds: draft.tagIds.sorted(), reimburse: reimburse)
     }
 
