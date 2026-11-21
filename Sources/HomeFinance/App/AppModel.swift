@@ -43,6 +43,12 @@ enum Screen: String, CaseIterable, Identifiable, Hashable {
 }
 
 /// Transacties openen op een rekening met het filter op een tag.
+/// Vraag aan Importeren en nakijken om deze banktransactie te selecteren (bv. vanuit het maandgrid).
+struct ReviewJump: Equatable {
+    var accountId: Int64
+    var transactionId: Int64
+}
+
 struct TransactionsJump: Equatable {
     var accountId: Int64
     var tagId: Int64
@@ -64,6 +70,9 @@ final class AppModel {
     /// Vraag aan Transacties om te openen op deze rekening met dit filter (bv. vanuit Instellingen › Tags).
     /// Transacties neemt het over en zet het terug op nil.
     var transactionsJump: TransactionsJump?
+    /// Vraag aan Importeren en nakijken om op deze banktransactie te openen. Nakijken neemt het over en zet het
+    /// terug op nil.
+    var reviewJump: ReviewJump?
     /// Het begrotingsjaar dat de schermen tonen.
     var year: Int
     /// Vaste "vandaag" voor snapshots en tests; normaal nil (= echte datum).

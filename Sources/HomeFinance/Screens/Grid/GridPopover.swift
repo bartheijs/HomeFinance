@@ -3,6 +3,7 @@ import GRDB
 import HFCore
 import HFInsight
 import HFBudget
+import HFRules
 
 /// Venstertje bij een cel: de boekingen erachter.
 struct GridCellPopover: View {
@@ -18,6 +19,8 @@ struct GridCellPopover: View {
 
     @State private var entries: [EntryRow] = []
     @State private var loaded = false
+    /// Wachtende banktransacties die bij een post lijken te passen die te laat is; alleen gezocht bij openen.
+    @State private var candidates: [WaitingCandidate] = []
 
     private var cell: GridCell? {
         if case .item(let row) = target.kind { return row.cells.first { $0.month == target.month } }
@@ -42,10 +45,12 @@ struct GridCellPopover: View {
                     }
                     Spacer(minLength: 0)
                     if !(options.isFuture(cell.month) && cell.entryCount == 0) {
-                        Pill(cell.status.gridTitle, color: statusColor(cell.status))
+                        Pill(statusWords(cell), color: statusColor(cell.status))
                     }
                 }
             }
+
+            if let first = candidates.first { candidateHint(first) }
 
             if let cell {
                 VStack(alignment: .leading, spacing: 2) {
@@ -117,6 +122,46 @@ struct GridCellPopover: View {
         .padding(14)
         .frame(width: 400)
         .task(id: model.revision) { load() }
+    }
+
+    /// De woorden uit het begrippenvoorstel: Klopt / Wijkt af (± € X) / Nog verwacht / Te laat / Afgevinkt.
+    private func statusWords(_ cell: GridCell) -> String {
+        switch cell.status {
+        case .gelijk: "Klopt"
+        case .afwijkend: cell.expected == nil ? "Wijkt af (niet verwacht)" : "Wijkt af (\(cell.difference.formatted(alwaysSign: true)))"
+        case .open: "Nog verwacht"
+        case .teLaat: "Te laat"
+        case .afgevinkt: "Afgevinkt"
+        case .nietVerwacht: "Niet verwacht"
+        }
+    }
+
+    /// "Er wacht een banktransactie die hierbij lijkt te passen", met een knop naar Nakijken.
+    private func candidateHint(_ c: WaitingCandidate) -> some View {
+        let why = switch c.reason {
+        case .rule: "een regel stelt deze post voor"
+        case .sameCounterparty: "dezelfde tegenrekening als eerder"
+        case .sameAmount: "precies het geplande bedrag"
+        }
+        let more = candidates.count > 1 ? " (en nog \(candidates.count - 1))" : ""
+        return VStack(alignment: .leading, spacing: 6) {
+            Label {
+                Text("Er wacht een banktransactie die hierbij lijkt te passen\(more): \(c.day.short()) · \(c.counterpartyName.isEmpty ? "zonder naam" : c.counterpartyName) · \(c.amount.formatted()) (\(why)). Boek hem in Nakijken; afvinken is dan niet nodig.")
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "tray.full").foregroundStyle(Theme.info)
+            }
+            .font(.callout)
+            Button("Naar Nakijken") {
+                model.reviewJump = ReviewJump(accountId: c.accountId, transactionId: c.id)
+                model.selection = .review
+            }
+            .controlSize(.small)
+            .help("Open Importeren en nakijken op deze banktransactie.")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.info.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var emptyText: String {
@@ -197,6 +242,14 @@ struct GridCellPopover: View {
             }
         }
         loaded = true
+        candidates = []
+        if case .item(let row) = target.kind, let cell, cell.status == .teLaat, let plan = cell.expected {
+            candidates = model.read([]) { db in
+                let suggested = try RuleEngine.suggestAll(db).compactMapValues(\.budgetItemId)
+                return try Insight.waitingCandidates(db, itemId: row.id, year: options.year, month: target.month,
+                                                     plan: plan, suggestedItems: suggested)
+            }
+        }
     }
 }
 

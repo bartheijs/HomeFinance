@@ -293,6 +293,8 @@ final class ReviewStore {
     }
 
     func load(_ model: AppModel) {
+        let jump = model.reviewJump
+        if let jump { accountId = jump.accountId }
         attachSettlements(model)
         model.read(()) { db in
             accounts = try Account.fetchAll(db, sql: "SELECT * FROM account WHERE archived = 0 ORDER BY sortOrder, id")
@@ -374,6 +376,10 @@ final class ReviewStore {
         for row in rows {
             let fresh = makeDefault(row)
             if defaults[row.id] != fresh { defaults[row.id] = fresh }
+        }
+        if let jump, jump.accountId == accountId {
+            model.reviewJump = nil
+            if ids.contains(jump.transactionId) { selection = [jump.transactionId]; cursor = jump.transactionId }
         }
         selection = selection.intersection(ids)
         if selection.isEmpty, let first = rows.first { selection = [first.id] }
