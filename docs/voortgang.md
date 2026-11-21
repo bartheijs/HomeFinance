@@ -302,16 +302,27 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
    4. Instellingen in een smal venster.
    Volgorde van de rondes: 6c (test), 6j, 6h, 6g, 6k-1 t/m 6k-4. Daarna nog te vragen: telefoondashboard
    met "Nog te besteden deze maand", voorbeelddata versie 2.
-6l. **Telefoondashboard voor het gezin** (wens van 21 november; na 6k). Op de telefoonpagina (`HFPublish`):
-   1. hoofdgetal "Nog te besteden deze maand", met "Besteedbaar nu" eronder (zoals het Dashboard op de Mac);
-   2. de eigen potjes van elk kind (spaargeld, kleedgeld, inspreekgeld e.d.), per kind gegroepeerd, met saldo.
-      Niet de groep "Kids" (studie, rijbewijs, zorg): alleen potten met een kind als eigenaar. Welke eigenaren
-      erop komen is in te stellen;
-   3. de gezamenlijke spaarpot (bij de gebruiker "Spaar B&D"; in code: een instelbare pot, geen naam
-      hard-coden) met vooruitblik: verwachte stand over 3, 6 en 12 maanden (zelfde berekening als de
-      vooruitblik bij een pot).
-   Welke onderdelen en welke pot: in te stellen bij Instellingen › Telefoon. Na de bouw zet de orchestrator
-   het telefoondashboard samen met de gebruiker aan en laat het op een echte iPhone bekijken.
+6l. **Telefoondashboard voor het gezin** — klaar (21 november), nog niet geïnstalleerd of gecommit. Op de
+   telefoonpagina (`HFPublish`), in deze volgorde:
+   1. hoofdgetal "Nog te besteden deze maand" (zoals het Dashboard op de Mac) met "Besteedbaar nu" eronder. Een
+      verrekentag met "telt mee in nog te besteden" (6g) staat eronder als "Komt nog terug: <tag>";
+   2. per gekozen eigenaar (kind) een kaart met het totaal en de potjes met saldo. Alleen de eigenaren die de
+      gebruiker aanvinkt; een groep als "Kids" komt er dus niet op, tenzij die wordt aangevinkt;
+   3. één gekozen spaarpot met het saldo nu en de verwachte stand over 3, 6 en 12 maanden, met
+      `Insight.potForecast` (dezelfde vooruitblik als bij de pot). Geen naam in de code.
+   - Instellen bij Instellingen › Telefoon, kaart "Voor het gezin": schakelaar plus vinkjes per eigenaar, en
+     schakelaar plus keuzelijst met potten. Zolang er niets gekozen is, staan de onderdelen er niet op.
+     Opgeslagen in `publish.options` (nieuwe sleutels; oudere instellingen worden gewoon gelezen). Geen migratie.
+   - `PhoneDashboard.make` krijgt de opties mee; nieuwe velden `budget.returning`, `childPots`, `sharedPot`.
+   - `--snapshot` schrijft nu ook `telefoon.html` met voorbeelddata (`--only telefoon`).
+   - Bekeken op 375 px breed, licht en donker: geen horizontaal schuiven. De voorbeelddata heeft geen vaste
+     stortingen, dus daar is de vooruitblik vlak (bij 6m een pot met stortingen meenemen).
+   - Tests: 15 in `PhoneFamilyTests` (HFPublish), 2 bestaande aangepast aan het nieuwe hoofdgetal. Testronde met
+     voorbeelddata GESLAAGD (549 tests, zelftest 33 OK). De kaart "Voor het gezin" in Instellingen is niet door de
+     zelftest gedekt en niet met de hand geprobeerd.
+   - Testronde met een kopie: geen nieuwe kerncijfers; verwacht geen verschillen.
+   Na de installatie zet de orchestrator het telefoondashboard samen met de gebruiker aan en laat het op een
+   echte iPhone bekijken.
 6m. **Voorbeelddata versie 3, om te demonstreren** (wens van 21 november; als laatste, na 6l). De gebruiker wil
    de app kunnen laten zien zonder zijn eigen situatie. Een verzonnen gezin waarmee alle onderdelen te tonen
    zijn: import met een zip om na te kijken (inclusief een losse overboeking naar spaar en een verrekening),

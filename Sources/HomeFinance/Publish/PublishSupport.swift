@@ -155,7 +155,8 @@ enum PublishSupport {
 
     nonisolated private static func prepare(_ db: AppDatabase, today: Day) throws -> Prepared {
         let (settings, snapshot) = try db.read { database in
-            (try PublishSettings.load(database), try PhoneDashboard.make(database, today: today))
+            let settings = try PublishSettings.load(database)
+            return (settings, try PhoneDashboard.make(database, today: today, options: settings.options))
         }
         return Prepared(settings: settings, snapshot: snapshot,
                         html: PhoneDashboard.html(snapshot, options: settings.options))

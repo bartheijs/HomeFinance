@@ -2,7 +2,8 @@ import Foundation
 import GRDB
 import HFCore
 
-/// Welke onderdelen op de pagina voor de telefoon staan. Standaard alles.
+/// Welke onderdelen op de pagina voor de telefoon staan. Standaard alles; de potjes van de kinderen en de
+/// gezamenlijke spaarpot verschijnen pas als de gebruiker eigenaren of een pot gekozen heeft.
 public struct PublishOptions: Codable, Equatable, Sendable {
     /// Saldo per rekening.
     public var showAccounts: Bool
@@ -12,22 +13,45 @@ public struct PublishOptions: Codable, Equatable, Sendable {
     public var showTrend: Bool
     /// Potten op de spaarrekening.
     public var showPots: Bool
+    /// De potjes van de gekozen eigenaren (de kinderen), per eigenaar gegroepeerd.
+    public var showChildPots: Bool
+    /// Eigenaren (zoals bij de pot ingevuld) van wie de potjes op de pagina staan. Leeg = niemand.
+    public var childOwners: [String]
+    /// Eén gekozen spaarpot met de verwachte stand over 3, 6 en 12 maanden.
+    public var showSharedPot: Bool
+    /// Id van die spaarpot, of nil als er nog geen gekozen is.
+    public var sharedPotId: Int64?
 
-    public init(showAccounts: Bool = true, showFixedItems: Bool = true, showTrend: Bool = true, showPots: Bool = true) {
+    public init(showAccounts: Bool = true, showFixedItems: Bool = true, showTrend: Bool = true, showPots: Bool = true,
+                showChildPots: Bool = true, childOwners: [String] = [], showSharedPot: Bool = true,
+                sharedPotId: Int64? = nil) {
         self.showAccounts = showAccounts; self.showFixedItems = showFixedItems
         self.showTrend = showTrend; self.showPots = showPots
+        self.showChildPots = showChildPots; self.childOwners = childOwners
+        self.showSharedPot = showSharedPot; self.sharedPotId = sharedPotId
     }
 
-    enum CodingKeys: String, CodingKey { case showAccounts, showFixedItems, showTrend, showPots }
+    enum CodingKeys: String, CodingKey {
+        case showAccounts, showFixedItems, showTrend, showPots, showChildPots, childOwners, showSharedPot, sharedPotId
+    }
 
-    /// Ontbrekende sleutels (oudere versie) betekenen "aan".
+    /// Ontbrekende sleutels (oudere versie) betekenen "aan", geen eigenaren en geen pot.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         showAccounts = try c.decodeIfPresent(Bool.self, forKey: .showAccounts) ?? true
         showFixedItems = try c.decodeIfPresent(Bool.self, forKey: .showFixedItems) ?? true
         showTrend = try c.decodeIfPresent(Bool.self, forKey: .showTrend) ?? true
         showPots = try c.decodeIfPresent(Bool.self, forKey: .showPots) ?? true
+        showChildPots = try c.decodeIfPresent(Bool.self, forKey: .showChildPots) ?? true
+        childOwners = try c.decodeIfPresent([String].self, forKey: .childOwners) ?? []
+        showSharedPot = try c.decodeIfPresent(Bool.self, forKey: .showSharedPot) ?? true
+        sharedPotId = try c.decodeIfPresent(Int64.self, forKey: .sharedPotId)
     }
+
+    /// Of de potjes van de kinderen op de pagina komen: aan en er is minstens één eigenaar gekozen.
+    public var includesChildPots: Bool { showChildPots && !childOwners.isEmpty }
+    /// Of de gezamenlijke spaarpot op de pagina komt: aan en er is een pot gekozen.
+    public var includesSharedPot: Bool { showSharedPot && sharedPotId != nil }
 }
 
 /// Instellingen voor het dashboard op de telefoon, opgeslagen in de tabel `setting` onder `publish.*`.

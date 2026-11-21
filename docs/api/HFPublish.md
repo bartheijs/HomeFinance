@@ -19,14 +19,18 @@ try Data(html.utf8).write(to: folder.appendingPathComponent("HomeFinance vandaag
 
 ## Momentopname
 
-`PhoneDashboard.make(_ db: Database, today: Day, now: Date = Date()) -> PhoneSnapshot`
+`PhoneDashboard.make(_ db: Database, today: Day, now: Date = Date(), options: PublishOptions = .init()) -> PhoneSnapshot`
+
+`options` bepaalt welke eigenaren (`childOwners`) en welke spaarpot (`sharedPotId`) in de momentopname komen. De
+app geeft de opties uit de instellingen mee.
 
 | Veld | Inhoud | Bron in `Insight` |
 |---|---|---|
 | `today`, `generatedAt` | peildag en moment van maken | |
 | `budget` | nil als het begrotingsjaar van `today` niet bestaat | |
-| `budget.spendable`, `.spendableEndOfMonth` | besteedbaar nu en eind van de maand | `spendable` |
+| `budget.spendable`, `.spendableEndOfMonth` | besteedbaar nu en nog te besteden deze maand | `spendable` |
 | `budget.borrowed` | tijdelijk geleend van spaar dat nog uitstaat (nul = niets) | `temporaryLoanOutstanding` |
+| `budget.returning` | tags met "telt mee in nog te besteden" en wat er nog terugkomt (naam, bedrag) | `spendable.returningTags` |
 | `budget.month` | `expenses` en `planExpenses` (beide negatief) en `percent` (nil zonder plan) | `dashboard` |
 | `budget.fixedItems` | `paidCount`, `openCount`, `lateCount` en `late` (naam en planbedrag) | `fixedItemsStatus` |
 | `budget.trend` | besteedbaar per maandeinde t/m vandaag | `spendableSeries` |
@@ -34,6 +38,15 @@ try Data(html.utf8).write(to: folder.appendingPathComponent("HomeFinance vandaag
 | `potGroups` | per soort (`Reserveringen`, `Sparen`) het totaal en de potten | `potOverview` |
 | `unallocated` | saldo op spaar zonder pot | `potOverview` |
 | `openReimbursement` | nog over te boeken van spaar (positief) | `openReimbursements` |
+| `childPots` | per gekozen eigenaar het totaal en de potten (leeg als het uit staat of niemand gekozen is) | `potOverview.byOwner` |
+| `sharedPot` | de gekozen spaarpot: naam, saldo nu en `ahead` (over 3, 6 en 12 maanden: dag en verwachte stand) | `potForecast` |
+
+- `childPots`: alleen eigenaren uit `options.childOwners`, op alfabet zoals in `potOverview`. Gearchiveerde potten
+  met saldo nul staan er niet in; een eigenaar zonder potten valt weg. Potten zonder eigenaar of van een andere
+  eigenaar (zoals een groep "Kids") komen er alleen op als de gebruiker die eigenaar kiest.
+- `sharedPot`: de dag is dezelfde dag zoveel maanden later; bestaat die niet (31 januari + 1 maand), dan de
+  laatste dag van die maand. De stand is `PotForecast.balance(on:)`, dus precies de vooruitblik bij de pot op de
+  Mac (vaste stortingen, losse verwachtingen). Bestaat de pot niet meer, dan is `sharedPot` nil.
 
 - Gearchiveerde potten met saldo nul staan niet in de lijst; het totaal van de groep is dat van `Insight`.
 - `percent` is afgerond op hele procenten en kan boven de 100 komen.
@@ -53,9 +66,13 @@ Eén volledig HTML-document voor een telefoon:
 - Licht en donker via `prefers-color-scheme`; systeemlettertype.
 - Bovenaan "HomeFinance" en "Bijgewerkt op 15 mrt 2027 om 14:03". Zonder scripts kan de pagina niet zelf melden
   dat hij oud is; daarom staat de datum duidelijk bovenaan.
-- Volgorde: besteedbaar (groot), eind van de maand, eventueel "tijdelijk geleend van spaar" en "nog over te
-  boeken van spaar", uitgaven van de maand tegen plan, vaste posten, verloop, rekeningen, potten.
-- Eén accentkleur. Rood alleen voor posten die te laat zijn en voor een negatief besteedbaar.
+- Volgorde: "Nog te besteden deze maand" (groot, zoals op het Dashboard van de Mac), daaronder "Besteedbaar nu",
+  eventueel "Komt nog terug: <tag>" (met de zin "Voorgeschoten geld dat nog terugkomt, telt al mee."),
+  "tijdelijk geleend van spaar" en "nog over te boeken van spaar"; dan per kind een kaart met de potjes; de
+  gezamenlijke spaarpot met "Over 3/6/12 maanden" en de maand eronder; uitgaven van de maand tegen plan, vaste
+  posten, verloop, rekeningen, potten.
+- Eén accentkleur. Rood alleen voor posten die te laat zijn en voor een negatief bedrag bij nog te besteden of
+  besteedbaar nu.
 - Bedragen via `Money.formatted()`, maanden via `Day.monthNames` en `Day.monthNamesShort`.
 - Alle tekst van de gebruiker (namen van rekeningen, posten en potten) gaat door `PhoneDashboard.escape`.
 - Bestaat het begrotingsjaar niet, dan staat er "Er is nog geen begroting voor <jaar>." met wat je moet doen;
@@ -64,8 +81,11 @@ Eén volledig HTML-document voor een telefoon:
 
 ## Opties en instellingen
 
-`PublishOptions` (Codable, standaard alles aan): `showFixedItems`, `showTrend`, `showAccounts`, `showPots`.
-Besteedbaar en de uitgaven van de maand staan er altijd op. Ontbrekende sleutels bij het lezen betekenen "aan".
+`PublishOptions` (Codable, standaard alles aan): `showFixedItems`, `showTrend`, `showAccounts`, `showPots`,
+`showChildPots` met `childOwners` (eigenaren zoals bij de pot ingevuld; standaard leeg) en `showSharedPot` met
+`sharedPotId` (standaard nil). De potjes en de spaarpot staan er pas op als er eigenaren of een pot gekozen zijn
+(`includesChildPots`, `includesSharedPot`). Nog te besteden, besteedbaar nu en de uitgaven van de maand staan er
+altijd op. Ontbrekende sleutels bij het lezen betekenen "aan", geen eigenaren en geen pot.
 
 `PublishSettings` staat in de tabel `setting` onder `publish.*`:
 
@@ -81,6 +101,19 @@ Besteedbaar en de uitgaven van de maand staan er altijd op. Ontbrekende sleutels
 - `PublishSettings.recordSuccess(db, at:)` bewaart het moment en wist de fout.
 - `PublishSettings.recordFailure(db, message:)` bewaart de melding en schrijft niets als dezelfde melding er al
   staat. Dat voorkomt een kring: elke schrijfactie in de database plant in de app een nieuwe versie in.
+
+## Instellingen › Telefoon
+
+Kaart "Voor het gezin": schakelaar "Potjes van de kinderen" met een vinkje per eigenaar (alle eigenaren die bij
+een pot zijn ingevuld, plus eerder gekozen eigenaren die niet meer bestaan, zodat je ze kunt uitzetten), en
+schakelaar "Gezamenlijke spaarpot met vooruitblik" met een keuzelijst van de potten (niet gearchiveerd, op
+alfabet; met de eigenaar tussen haakjes omdat potten van verschillende kinderen vaak hetzelfde heten).
+
+## Voorbeeld met voorbeelddata
+
+`HomeFinance --snapshot <map>` schrijft naast de schermen ook `telefoon.html` (`--only telefoon` voor alleen die
+pagina), met alle onderdelen aan: de eigenaren uit de voorbeelddata die met "Kind" beginnen en als spaarpot de
+eerste spaarpot zonder eigenaar. De voorbeelddata heeft geen vaste stortingen, dus de vooruitblik is daar vlak.
 
 ## Wat de app ermee doet
 
@@ -102,5 +135,6 @@ Besteedbaar en de uitgaven van de maand staan er altijd op. Ontbrekende sleutels
 
 ## Niet getest op een echte telefoon
 
-De pagina is bekeken in WebKit op de Mac op 390 punten breed, licht en donker, en de PDF is nagekeken. Hoe de
+De pagina is bekeken in WebKit op de Mac op 390 punten breed (en met de gezinsonderdelen op 375), licht en
+donker, en de PDF is nagekeken. Hoe de
 app Bestanden en de app Google Drive op een iPhone de bestanden tonen, is niet gecontroleerd.

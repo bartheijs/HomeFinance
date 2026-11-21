@@ -10,13 +10,14 @@ extension PhoneDashboard {
         var body: [String] = []
         body.append(header(snapshot, timeZone: timeZone))
 
+        body.append(snapshot.budget.map { hero($0, snapshot: snapshot) } ?? yearMissingCard(snapshot))
+        // De potjes en de spaarpot staan in de momentopname alleen als ze aan staan en gekozen zijn.
+        body.append(contentsOf: snapshot.childPots.map(childPotsCard))
+        if let shared = snapshot.sharedPot { body.append(sharedPotCard(shared)) }
         if let budget = snapshot.budget {
-            body.append(hero(budget, snapshot: snapshot))
             body.append(monthCard(budget.month))
             if options.showFixedItems { body.append(fixedItemsCard(budget.fixedItems, month: budget.month.month)) }
             if options.showTrend, let chart = trendCard(budget.trend) { body.append(chart) }
-        } else {
-            body.append(yearMissingCard(snapshot))
         }
         if options.showAccounts, !snapshot.accounts.isEmpty { body.append(accountsCard(snapshot.accounts)) }
         if options.showPots { body.append(contentsOf: potCards(snapshot)) }
@@ -96,23 +97,66 @@ extension PhoneDashboard {
         """
     }
 
+    /// Het hoofdgetal: wat er deze maand nog te besteden is, zoals op het Dashboard van de Mac. Besteedbaar nu
+    /// staat eronder; geleend geld, nog over te boeken bedragen en tags die meetellen staan in de notities.
     static func hero(_ budget: PhoneSnapshot.Budget, snapshot: PhoneSnapshot) -> String {
         var notes: [String] = []
+        for tag in budget.returning {
+            notes.append(row("Komt nog terug: \(tag.name)", amount(tag.amount)))
+        }
         if !budget.borrowed.isZero {
             notes.append(row("Tijdelijk geleend van spaar", amount(budget.borrowed)))
         }
         if !snapshot.openReimbursement.isZero {
             notes.append(row("Nog over te boeken van spaar", amount(snapshot.openReimbursement)))
         }
-        let end = budget.spendableEndOfMonth
-        return """
-        <section class="hero">
-        <div class="label">Besteedbaar</div>
-        <div class="big\(budget.spendable.isNegative ? " neg" : "")">\(bigAmount(budget.spendable))</div>
-        <div class="sub">Eind van de maand <strong\(end.isNegative ? " class=\"neg\"" : "")>\(amount(end))</strong></div>
-        \(notes.isEmpty ? "" : "<div class=\"notes\">\n\(notes.joined(separator: "\n"))\n</div>")
-        </section>
-        """
+        let main = budget.spendableEndOfMonth, now = budget.spendable
+        let monthName = Day.monthNames[snapshot.today.month - 1]
+        var lines = ["<section class=\"hero\">",
+                     "<div class=\"label\">Nog te besteden deze maand</div>",
+                     "<div class=\"big\(main.isNegative ? " neg" : "")\">\(bigAmount(main))</div>",
+                     "<div class=\"sub\">Als alle vaste lasten en inkomsten van \(monthName) binnen zijn.</div>",
+                     "<div class=\"now\">Besteedbaar nu <strong\(now.isNegative ? " class=\"neg\"" : "")>\(amount(now))</strong></div>"]
+        if !notes.isEmpty {
+            lines.append("<div class=\"notes\">\n\(notes.joined(separator: "\n"))\n</div>")
+        }
+        if !budget.returning.isEmpty {
+            lines.append("<div class=\"sub fine\">Voorgeschoten geld dat nog terugkomt, telt al mee.</div>")
+        }
+        lines.append("</section>")
+        return lines.joined(separator: "\n")
+    }
+
+    /// De potjes van één kind: totaal en per pot het saldo.
+    static func childPotsCard(_ group: PhoneSnapshot.OwnerPots) -> String {
+        var lines = ["<section class=\"card\">",
+                     "<h2>\(escape(group.owner))</h2>",
+                     "<div class=\"mid\">\(amount(group.total))</div>",
+                     "<div class=\"rows\">"]
+        for pot in group.pots {
+            lines.append(row(pot.name, amount(pot.balance), classes: "small"))
+        }
+        lines.append("</div>")
+        lines.append("</section>")
+        return lines.joined(separator: "\n")
+    }
+
+    /// De gezamenlijke spaarpot: saldo nu en de verwachte stand over 3, 6 en 12 maanden.
+    static func sharedPotCard(_ pot: PhoneSnapshot.SharedPot) -> String {
+        var lines = ["<section class=\"card\">",
+                     "<h2>\(escape(pot.name))</h2>",
+                     "<div class=\"mid\">\(amount(pot.balance))</div>",
+                     "<div class=\"sub\">Nu op de spaarrekening</div>",
+                     "<div class=\"rows\">"]
+        for point in pot.ahead {
+            let when = "\(Day.monthNamesShort[point.day.month - 1]) \(point.day.year)"
+            lines.append("<div class=\"row small\"><span class=\"name\">Over \(point.months) maanden"
+                         + " <span class=\"when\">\(when)</span></span><span class=\"amt\">\(amount(point.balance))</span></div>")
+        }
+        lines.append("</div>")
+        lines.append("<div class=\"sub fine\">Verwacht met de vaste stortingen en de verwachte bedragen van deze pot.</div>")
+        lines.append("</section>")
+        return lines.joined(separator: "\n")
     }
 
     static func monthCard(_ month: PhoneSnapshot.MonthSpending) -> String {
@@ -238,7 +282,7 @@ extension PhoneDashboard {
     static func yearMissingCard(_ snapshot: PhoneSnapshot) -> String {
         """
         <section class="hero">
-        <div class="label">Besteedbaar</div>
+        <div class="label">Nog te besteden deze maand</div>
         <div class="missing">Er is nog geen begroting voor \(snapshot.today.year).</div>
         <div class="sub">Maak het jaar aan in HomeFinance op je Mac, bij Instellingen › Jaar en posten. Daarna staan hier weer je cijfers.</div>
         </section>
@@ -276,6 +320,11 @@ extension PhoneDashboard {
     .missing{margin:6px 0 8px;font-size:26px;line-height:1.25;font-weight:700}
     .sub{font-size:15px;color:var(--muted)}
     .sub strong{color:var(--text);font-weight:600}
+    .now{margin-top:14px;font-size:17px;color:var(--muted)}
+    .now strong{color:var(--text);font-weight:600}
+    .now strong.neg{color:var(--red)}
+    .fine{margin-top:10px;font-size:13px}
+    .when{display:block;font-size:13px;color:var(--muted)}
     .notes{margin-top:18px;border-top:1px solid var(--line)}
     .card{background:var(--card);border-radius:18px;padding:20px;margin-bottom:16px}
     .mid{margin:4px 0 2px;font-size:28px;line-height:1.2;font-weight:700;letter-spacing:-.01em}

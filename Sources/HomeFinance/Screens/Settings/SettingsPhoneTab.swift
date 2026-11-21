@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import HFCore
 import HFBackup
+import HFInsight
 import HFPublish
 
 /// Dashboard voor de telefoon: een pagina met de belangrijkste cijfers in een map die synchroniseert.
@@ -11,6 +12,10 @@ struct SettingsPhoneTab: View {
     @State private var settings = PublishSettings()
     @State private var backupFolder: URL?
     @State private var busy = false
+    /// Eigenaren die bij een pot zijn ingevuld, op alfabet.
+    @State private var owners: [String] = []
+    /// Potten om uit te kiezen voor de gezamenlijke spaarpot (niet gearchiveerd, behalve de gekozen), op alfabet.
+    @State private var pots: [PotSummary] = []
 
     var body: some View {
         ScrollView {
@@ -24,6 +29,7 @@ struct SettingsPhoneTab: View {
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 mainCard
                 folderCard
+                familyCard
                 sectionsCard
             }
             .frame(maxWidth: 780, alignment: .leading)
@@ -107,7 +113,7 @@ struct SettingsPhoneTab: View {
     private var sectionsCard: some View {
         Card("Wat staat erop", icon: "list.bullet.rectangle") {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Besteedbaar en de uitgaven van deze maand staan er altijd op.")
+                Text("Nog te besteden deze maand, besteedbaar nu en de uitgaven van deze maand staan er altijd op.")
                     .font(.callout).foregroundStyle(.secondary)
                 optionToggle("Vaste posten van deze maand", \.showFixedItems)
                 optionToggle("Verloop van besteedbaar per maand", \.showTrend)
@@ -115,6 +121,61 @@ struct SettingsPhoneTab: View {
                 optionToggle("Potten", \.showPots)
             }
         }
+    }
+
+    private var familyCard: some View {
+        Card("Voor het gezin", icon: "person.2") {
+            VStack(alignment: .leading, spacing: 10) {
+                optionToggle("Potjes van de kinderen", \.showChildPots)
+                if settings.options.showChildPots {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Kies wiens potjes erop komen. Dit is de eigenaar die je bij een pot invult (Potten en sparen › pot bewerken).")
+                            .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        if ownerChoices.isEmpty {
+                            Text("Er zijn nog geen potten met een eigenaar.").font(.callout).foregroundStyle(.secondary)
+                        }
+                        ForEach(ownerChoices, id: \.self) { owner in
+                            Toggle(owner, isOn: ownerBinding(owner)).toggleStyle(.checkbox)
+                        }
+                    }
+                    .padding(.leading, 20)
+                }
+                Divider()
+                optionToggle("Gezamenlijke spaarpot met vooruitblik", \.showSharedPot)
+                if settings.options.showSharedPot {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Picker("Pot", selection: Binding(
+                            get: { settings.options.sharedPotId },
+                            set: { settings.options.sharedPotId = $0; save() })) {
+                            Text("Kies een pot").tag(Int64?.none)
+                            ForEach(pots) { pot in
+                                // Potten van verschillende kinderen heten vaak hetzelfde; de eigenaar maakt ze uniek.
+                                Text(pot.owner.map { "\(pot.name) (\($0))" } ?? pot.name).tag(Int64?.some(pot.id))
+                            }
+                        }
+                        .frame(maxWidth: 360)
+                        Text("Met het saldo nu en de verwachte stand over 3, 6 en 12 maanden, berekend zoals de vooruitblik bij de pot.")
+                            .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.leading, 20)
+                }
+            }
+        }
+    }
+
+    /// De eigenaren om uit te kiezen, plus eerder gekozen eigenaren die niet meer bestaan (om ze uit te zetten).
+    private var ownerChoices: [String] {
+        let gone = settings.options.childOwners.filter { !owners.contains($0) }
+        return owners + gone.sorted { Insight.compareNames($0, $1) == .orderedAscending }
+    }
+
+    private func ownerBinding(_ owner: String) -> Binding<Bool> {
+        Binding(get: { settings.options.childOwners.contains(owner) },
+                set: { on in
+                    settings.options.childOwners.removeAll { $0 == owner }
+                    if on { settings.options.childOwners.append(owner) }
+                    save()
+                })
     }
 
     private func optionToggle(_ title: String, _ keyPath: WritableKeyPath<PublishOptions, Bool>) -> some View {
@@ -128,6 +189,11 @@ struct SettingsPhoneTab: View {
     private func load() {
         settings = model.read(PublishSettings()) { try PublishSettings.load($0) }
         backupFolder = model.read(nil) { try BackupSettings.load($0).folderURL }
+        let today = model.today, chosen = settings.options.sharedPotId
+        let overview = model.read(PotOverview?.none) { try Insight.potOverview($0, today: today) }
+        let all = overview?.byKind.flatMap(\.pots) ?? []
+        owners = (overview?.byOwner ?? []).compactMap(\.owner)
+        pots = Insight.pickerOrder(all.filter { !$0.archived || $0.id == chosen })
     }
 
     // MARK: Schrijven

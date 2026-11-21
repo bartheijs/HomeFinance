@@ -1,8 +1,12 @@
 import SwiftUI
 import AppKit
 import HFCore
+import HFInsight
+import HFPublish
 
 /// Schrijft elk scherm met voorbeelddata weg als PNG, zonder dat iemand de app bedient.
+/// Schrijft ook `telefoon.html`: de pagina voor de telefoon met dezelfde voorbeelddata (`--only telefoon` voor
+/// alleen die pagina).
 /// Gebruik: HomeFinance --snapshot <map> [--only <scherm>] [--dark]
 @MainActor
 enum Snapshot {
@@ -48,5 +52,25 @@ enum Snapshot {
             print("geschreven: \(url.path)")
             window.orderOut(nil)
         }
+        if only == nil || only == "telefoon" { try writePhonePage(db: db, today: today, to: outputDirectory) }
+    }
+
+    /// De telefoonpagina met voorbeelddata, met alle onderdelen aan: de potjes van de kinderen uit het voorbeeld
+    /// en als gezamenlijke spaarpot de eerste spaarpot zonder eigenaar.
+    private static func writePhonePage(db: AppDatabase, today: Day, to outputDirectory: URL) throws {
+        let html = try db.read { database in
+            let overview = try Insight.potOverview(database, today: today)
+            var options = PublishOptions()
+            options.childOwners = overview.byOwner.compactMap(\.owner).filter { $0.hasPrefix("Kind") }
+            options.sharedPotId = overview.byKind.flatMap(\.pots)
+                .first { $0.kind == .spaar && $0.owner == nil && !$0.archived }?.id
+            // "Bijgewerkt op" past bij de peildag van de voorbeelddata (12:00 op die dag).
+            let snapshot = try PhoneDashboard.make(database, today: today, now: today.date.addingTimeInterval(12 * 3600),
+                                                   options: options)
+            return PhoneDashboard.html(snapshot, options: options)
+        }
+        let url = outputDirectory.appendingPathComponent("telefoon.html")
+        try Data(html.utf8).write(to: url)
+        print("geschreven: \(url.path)")
     }
 }
