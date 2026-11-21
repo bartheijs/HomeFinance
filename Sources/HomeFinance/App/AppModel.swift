@@ -49,6 +49,15 @@ struct ReviewJump: Equatable {
     var transactionId: Int64
 }
 
+/// Sprong in de keten post ↔ vaste storting ↔ potje (UX-stap B2). Het doelscherm neemt hem over en zet hem
+/// terug op nil.
+enum ChainJump: Equatable {
+    /// Potten en sparen › Vaste stortingen, met deze storting geselecteerd.
+    case distribution(Int64)
+    /// Instellingen › Jaar en posten, met deze post van dit jaar opengeklapt.
+    case item(Int64, year: Int)
+}
+
 struct TransactionsJump: Equatable {
     var accountId: Int64
     var tagId: Int64
@@ -73,6 +82,8 @@ final class AppModel {
     /// Vraag aan Importeren en nakijken om op deze banktransactie te openen. Nakijken neemt het over en zet het
     /// terug op nil.
     var reviewJump: ReviewJump?
+    /// Vraag om naar de andere kant van de keten te gaan (zie `ChainJump`).
+    var chainJump: ChainJump?
     /// Het begrotingsjaar dat de schermen tonen.
     var year: Int
     /// Vaste "vandaag" voor snapshots en tests; normaal nil (= echte datum).
@@ -88,6 +99,18 @@ final class AppModel {
     @ObservationIgnored private var observer: AnyDatabaseCancellable?
 
     var today: Day { fixedToday ?? Day.today() }
+
+    /// Gaat naar de andere kant van de keten: de vaste storting (bij Potten) of de post (bij Instellingen).
+    func jump(_ target: ChainJump) {
+        chainJump = target
+        switch target {
+        case .distribution: selection = .pots
+        case .item(_, let year):
+            self.year = year
+            settingsTab = "jaar"
+            selection = .settings
+        }
+    }
 
     init(db: AppDatabase, isDemo: Bool, today: Day? = nil) {
         self.db = db

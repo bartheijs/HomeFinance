@@ -17,6 +17,8 @@ struct PotsDetailPanel: View {
     var onDelete: () -> Void
     var onClose: () -> Void
     var onDistributions: () -> Void
+    /// Via welke vaste stortingen dit potje geld krijgt, en bij welke post die horen.
+    var chain: PotChain? = nil
     @State private var showAllMovements = false
 
     private var points: [PotsChartPoint] { PotsChartPoint.points(from: history, asOf: asOf) }
@@ -110,6 +112,8 @@ struct PotsDetailPanel: View {
                 Divider().frame(height: 26).padding(.horizontal, 10)
                 fact("Opgenomen", pot.withdrawalsThisYear.isZero ? "–" : pot.withdrawalsThisYear.formatted())
             }
+
+            if let chain, !pot.archived { PotChainView(chain: chain) }
 
             HStack(spacing: 8) {
                 Button(action: onMove) {

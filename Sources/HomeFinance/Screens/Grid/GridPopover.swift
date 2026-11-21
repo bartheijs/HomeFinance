@@ -21,6 +21,8 @@ struct GridCellPopover: View {
     @State private var loaded = false
     /// Wachtende banktransacties die bij een post lijken te passen die te laat is; alleen gezocht bij openen.
     @State private var candidates: [WaitingCandidate] = []
+    /// Bij een post met een vaste storting: via welke storting hij naar welke potjes gaat (UX-stap B2).
+    @State private var chain: ItemChain?
 
     private var cell: GridCell? {
         if case .item(let row) = target.kind { return row.cells.first { $0.month == target.month } }
@@ -49,6 +51,8 @@ struct GridCellPopover: View {
                     }
                 }
             }
+
+            if let chain { ItemChainView(chain: chain) }
 
             if let first = candidates.first { candidateHint(first) }
 
@@ -242,6 +246,11 @@ struct GridCellPopover: View {
             }
         }
         loaded = true
+        chain = nil
+        if case .item(let row) = target.kind, row.kind != .reserveLine {
+            let found = model.read(nil as ItemChain?) { db in try Insight.chain(db, year: options.year).item(row.id) }
+            if found?.distribution != nil { chain = found }
+        }
         candidates = []
         if case .item(let row) = target.kind, let cell, cell.status == .teLaat, let plan = cell.expected {
             candidates = model.read([]) { db in

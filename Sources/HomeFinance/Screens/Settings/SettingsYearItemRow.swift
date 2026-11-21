@@ -18,6 +18,8 @@ struct SettingsYearItemRow: View {
     var balanceRow: PlanBalanceRow?
     /// Alleen bij RESERVERINGEN: de opbouw uit de gekoppelde vaste storting.
     var buildup: ReserveBuildup?
+    /// Bij een post met een vaste storting: via welke storting hij naar welke potjes gaat.
+    var chain: ItemChain?
     /// Wat-als-bedrag zetten (met teken) of wissen (nil).
     var onScenario: (Money?) -> Void = { _ in }
     let isFirst: Bool
@@ -162,6 +164,7 @@ struct SettingsYearItemRow: View {
                 }
                 extraRow
             }
+            if let chain { ItemChainView(chain: chain) }
             if let buildup { buildupBlock(buildup) }
             HStack(spacing: 8) {
                 Button { onMove(-1) } label: { Label("Omhoog", systemImage: "chevron.up") }.disabled(isFirst)
@@ -228,9 +231,11 @@ struct SettingsYearItemRow: View {
                     Text(item.planAmount.magnitude.formatted()).monospacedDigit()
                     Image(systemName: "lock.fill").font(.caption).foregroundStyle(.tertiary)
                 }
-                Text("Volgt de vaste storting ‘\(name)’ (instellen bij Potten en sparen › Vaste stortingen)")
+                Text("Volgt het totaal van de vaste storting ‘\(name)’.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button("Naar Vaste stortingen", action: onGoToPots).controlSize(.small)
+                if chain == nil {
+                    Button("Naar Vaste stortingen", action: onGoToPots).controlSize(.small)
+                }
             }
         } else if item.isReserveTotal {
             HStack(spacing: 6) {

@@ -16,6 +16,8 @@ private struct PotsDistData: Equatable {
     var items: [BudgetItem] = []
     /// De opbouw van RESERVERINGEN in het lopende jaar (om te zien of de RES-regels en de storting uit elkaar lopen).
     var buildup: ReserveBuildup?
+    /// De keten van het lopende jaar: als welke post elke storting in de begroting telt.
+    var chain: ChainOverview?
 
     var checking: [Account] { accounts.filter { $0.kind == .betaal && !$0.archived } }
     var savings: [Account] { accounts.filter { $0.kind == .spaar && !$0.archived } }
@@ -44,6 +46,7 @@ private struct PotsDistData: Equatable {
                 WHERE y.year = ? AND i.direction = 'UIT' ORDER BY i.sortOrder, i.id
                 """, arguments: [today.year]))
             data.buildup = try Insight.reserveBuildup(db, year: today.year)
+            data.chain = try Insight.chain(db, year: today.year)
             return data
         }
     }
@@ -82,6 +85,8 @@ private enum PotsDistSelection: Hashable {
 struct PotsDistributionsSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    /// De storting die bij het openen geselecteerd wordt (sprong uit de keten), of nil.
+    var focus: Int64? = nil
 
     @State private var data: PotsDistData?
     @State private var selection: PotsDistSelection?
@@ -120,6 +125,10 @@ struct PotsDistributionsSheet: View {
     private func reload() {
         let loaded = PotsDistData.load(model: model)
         if case .existing(let id) = selection, !loaded.summaries.contains(where: { $0.id == id }) { selection = nil }
+        if selection == nil, let focus, loaded.summaries.contains(where: { $0.id == focus }) {
+            selection = .existing(focus)
+            if loaded.summaries.first(where: { $0.id == focus })?.archived == true { showArchived = true }
+        }
         if selection == nil, let first = loaded.summaries.first(where: { !$0.archived }) { selection = .existing(first.id) }
         data = loaded
     }
@@ -232,6 +241,7 @@ struct PotsDistributionsSheet: View {
 
 private struct PotsDistributionEditor: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
 
     let data: PotsDistData
     /// nil = nieuwe storting.
@@ -380,6 +390,17 @@ private struct PotsDistributionEditor: View {
     private var link: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Post op de betaalrekening").font(.headline)
+            if let summary, let chain = data.chain?.distribution(summary.id), !dirty {
+                ChainBox {
+                    Text(chain.sentence).font(.callout).fixedSize(horizontal: false, vertical: true)
+                    ForEach(chain.distribution.items) { item in
+                        ChainLinkButton(title: "Open post \(item.label)", help: "Open de post \(item.label) in je begroting (Instellingen › Jaar en posten).") {
+                            dismiss()
+                            model.jump(.item(item.id, year: chain.year))
+                        }
+                    }
+                }
+            }
             Picker("Hoort bij post", selection: $draft.itemId) {
                 Text("Geen").tag(Int64?.none)
                 ForEach(data.items, id: \.id) { item in

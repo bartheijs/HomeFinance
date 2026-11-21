@@ -18,6 +18,8 @@ struct SettingsYearData: Equatable {
     var yearPlan: [Direction: Money] = [:]
     /// De opbouw van RESERVERINGEN: de regels van de gekoppelde vaste storting naast de oude RES-regels.
     var buildup: ReserveBuildup?
+    /// De keten post ↔ vaste storting ↔ potje van dit jaar (UX-stap B2).
+    var chain: ChainOverview?
 
     var plannedIncome: Money { yearPlan[.IN] ?? .zero }
     var plannedExpenses: Money { yearPlan[.UIT] ?? .zero }
@@ -44,6 +46,7 @@ struct SettingsYearData: Equatable {
         }
         d.balance = try Insight.planBalance(db, year: year)
         d.buildup = try Insight.reserveBuildup(db, year: year)
+        d.chain = try Insight.chain(db, year: year)
         let grid = try Insight.monthGrid(db, year: year, today: today)
         for row in grid.rows {
             let key: Direction = row.kind == .reserveLine ? .RES : row.direction
@@ -67,6 +70,8 @@ struct SettingsYearTab: View {
     @State private var showScenario = false
     @State private var confirmApply = false
     @State private var applyNote: String?
+    /// Na een sprong uit de keten: naar deze rij schuiven.
+    @State private var scrollTarget: String?
 
     var body: some View {
         Group {
@@ -81,6 +86,7 @@ struct SettingsYearTab: View {
             }
         }
         .task(id: SettingsReloadKey(revision: model.revision, year: model.year)) { load() }
+        .onChange(of: model.chainJump) { _, _ in takeChainJump() }
         .sheet(isPresented: $showNewYear) {
             SettingsNewYearSheet(existingYears: data.allYears, suggested: suggestedNewYear)
         }
@@ -125,6 +131,7 @@ struct SettingsYearTab: View {
     // MARK: Inhoud
 
     private func content(_ year: BudgetYear) -> some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 if year.closed {
@@ -159,6 +166,12 @@ struct SettingsYearTab: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { totalsBar }
+        .onChange(of: scrollTarget) { _, target in
+            guard let target else { return }
+            withAnimation { proxy.scrollTo(target, anchor: .center) }
+            scrollTarget = nil
+        }
+        }
     }
 
     private func yearLine(_ year: BudgetYear) -> some View {
@@ -202,7 +215,10 @@ struct SettingsYearTab: View {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
                     }
                     Spacer()
-                    Text("\((data.yearPlan[direction] ?? .zero).magnitude.formatted()) per jaar")
+                    // RES-regels tellen niet mee in het jaarplan; toon hun som per maand (het plan van RESERVERINGEN).
+                    Text(direction == .RES
+                         ? "\(rows.map(\.planAmount).sum().magnitude.formatted()) per maand"
+                         : "\((data.yearPlan[direction] ?? .zero).magnitude.formatted()) per jaar")
                         .font(.title3).monospacedDigit().foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 18).padding(.vertical, 13)
@@ -284,6 +300,7 @@ struct SettingsYearTab: View {
         row.showScenario = showScenario
         row.balanceRow = data.balance?.rows.first { $0.id == item.id }
         if item.isReserveTotal { row.buildup = data.buildup }
+        if let id = item.id, item.distributionId != nil { row.chain = data.chain?.item(id) }
         row.onScenario = { setScenario(item, $0) }
         return row
     }
@@ -391,6 +408,17 @@ struct SettingsYearTab: View {
             if forced || data.balance?.hasScenario == true { showScenario = true }
         }
         loaded = true
+        takeChainJump()
+    }
+
+    /// Sprong uit de keten (vaste storting, potje of maandgrid): klap de post open en schuif ernaartoe.
+    private func takeChainJump() {
+        guard case .item(let id, let year) = model.chainJump, year == model.year,
+              let item = data.items.first(where: { $0.id == id }) else { return }
+        model.chainJump = nil
+        openGroups.insert(item.direction)
+        expandedId = id
+        DispatchQueue.main.async { scrollTarget = "\(id)-\(resetToken)" }
     }
 
     /// Schrijft, en zet bij een fout de velden terug naar wat er bewaard is.

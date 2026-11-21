@@ -21,6 +21,8 @@ struct PotsData: Equatable {
     var openings: [OpeningOverview] = []
     /// De dag waarop de saldi gelden.
     var asOf: Day
+    /// De keten post ↔ vaste storting ↔ potje van het jaar van `asOf` (UX-stap B2).
+    var chain: ChainOverview?
 
     static func empty(asOf: Day) -> PotsData { PotsData(asOf: asOf) }
 
@@ -64,6 +66,7 @@ struct PotsData: Equatable {
                                                 arguments: [account.id]) ?? 0
                 if imported == 0 { data.openings.append(try Insight.openingOverview(db, accountId: account.id)) }
             }
+            data.chain = try Insight.chain(db, year: asOf.year)
             if let start = Day(year: asOf.year, month: 1, day: 1) {
                 for account in overview.accounts {
                     data.series[account.id] = try Insight.balanceSeries(db, accountId: account.id, from: start,

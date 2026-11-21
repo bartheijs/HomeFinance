@@ -371,6 +371,17 @@ Alleen weergave. Het plan van RESERVERINGEN in het maandgrid, de rapporten, de m
 blijft de som van de RES-regels (`PlanSet`), ook als er een storting met een ander totaal aan gekoppeld is.
 `warning` meldt dat verschil.
 
+### De keten post ↔ vaste storting ↔ potje (UX-stap B2)
+
+| Functie | Geeft |
+|---|---|
+| `chain(db, year:)` | `ChainOverview` van één begrotingsjaar: alle stortingen (`ChainDistribution`: naam, totaal, potnamen, gekoppelde posten van dat jaar), met `pot(_:)` → `PotChain`, `item(_:)` → `ItemChain` en `distribution(_:)` → `DistributionChain?` |
+
+De zinnen staan in de typen zelf: `PotChain.sentence` ("Krijgt € 42,00 per maand via vaste storting X (post Y)."; bij
+meer stortingen "… via 2 vaste stortingen:" met het lijstje in `lines[].line`), `ItemChain.sentence` ("Gaat via vaste
+storting X naar 28 potjes."), `DistributionChain.sentence` ("Telt in je begroting als: post Y."). Gearchiveerde
+stortingen tellen niet mee bij een potje.
+
 ## Vooruitblik per pot
 
 Staat los van de werkelijkheid: raakt geen enkel ander cijfer. Schrijven (`ForecastItem`) doet `HFBudget`.

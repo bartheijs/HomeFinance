@@ -18,6 +18,8 @@ struct PotsScreen: View {
     @State private var showArchived = false
     @State private var sheet: PotsSheet?
     @State private var potToDelete: PotSummary?
+    /// De vaste storting die bij het openen van Vaste stortingen geselecteerd moet zijn (sprong uit de keten).
+    @State private var distributionFocus: Int64?
     @FocusState private var listFocused: Bool
 
     private struct ReloadKey: Hashable {
@@ -41,7 +43,7 @@ struct PotsScreen: View {
                 PotsEditSheet(pot: pot, accounts: data?.savingsAccounts ?? [], defaultAccountId: pot.accountId, owners: owners,
                               today: model.today, onSaved: { _ in }, onDistributions: { self.sheet = .distributions })
             case .distributions:
-                PotsDistributionsSheet()
+                PotsDistributionsSheet(focus: distributionFocus)
             case .openings(let id):
                 PotsOpeningSheet(accountId: id, accountName: data?.accountName(id) ?? "de spaarrekening")
             case .move(let pot):
@@ -49,6 +51,14 @@ struct PotsScreen: View {
                               candidates: (data?.pickerPots ?? []).filter { $0.accountId == pot.accountId && $0.id != pot.id && !$0.archived },
                               today: model.today)
             }
+        }
+        .onChange(of: sheet == nil) { _, closed in if closed { distributionFocus = nil } }
+        .task(id: model.chainJump) {
+            // Sprong uit de keten (potje, post of maandgrid): open Vaste stortingen op deze storting.
+            guard case .distribution(let id) = model.chainJump else { return }
+            model.chainJump = nil
+            distributionFocus = id
+            sheet = .distributions
         }
         .confirmationDialog("Pot \(potToDelete?.name ?? "") verwijderen?",
                             isPresented: Binding(get: { potToDelete != nil }, set: { if !$0 { potToDelete = nil } }),
@@ -250,7 +260,8 @@ struct PotsScreen: View {
                             onUnarchive: { unarchive(pot) },
                             onDelete: { potToDelete = pot },
                             onClose: { withAnimation(.easeInOut(duration: 0.2)) { selectedPotId = nil } },
-                            onDistributions: { sheet = .distributions })
+                            onDistributions: { sheet = .distributions },
+                            chain: data.chain?.pot(pot.id))
                 .id(pot.id)
         }
     }
