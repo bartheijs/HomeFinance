@@ -7,6 +7,8 @@ import HFInsight
 struct DashboardHero: View {
     @Environment(AppModel.self) private var model
     let spendable: Spendable
+    /// Banktransacties op de betaalrekening die nog niet geboekt zijn (tellen nog niet mee).
+    var unbooked: Int = 0
     @State private var showBreakdown = false
 
     private static let mainHelp = "Je saldo nu, plus wat er deze maand nog aan vaste posten binnenkomt en afgaat, min je anti-roodbuffer."
@@ -26,10 +28,12 @@ struct DashboardHero: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
                 .help(Self.mainHelp)
-            Text("Als alle vaste lasten en inkomsten van \(monthName) zijn binnen, houd je dit over.")
+            Text(SpendableExplanation(spendable).sentence)
                 .font(.title3).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
+                .help("Als alle vaste lasten en inkomsten van \(monthName) zijn binnen, houd je dit over.")
+            if unbooked > 0 { unbookedWarning }
             (Text("Besteedbaar nu: ").foregroundStyle(.secondary)
                 + Text(spendable.spendable.formatted()).fontWeight(.semibold)
                     .foregroundColor(spendable.spendable.isNegative ? Theme.negative : .primary))
@@ -55,6 +59,22 @@ struct DashboardHero: View {
                     .padding(.top, 14)
             }
         }
+    }
+
+    /// Zolang er banktransacties wachten, klopt het grote getal nog niet.
+    private var unbookedWarning: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
+            Text(unbooked == 1
+                 ? "Nog niet compleet: 1 banktransactie op je betaalrekening is nog niet geboekt en telt hier nog niet mee."
+                 : "Nog niet compleet: \(unbooked) banktransacties op je betaalrekening zijn nog niet geboekt en tellen hier nog niet mee.")
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Boeken") { model.selection = .review }
+                .controlSize(.small)
+                .help("Ga naar Importeren en nakijken om deze banktransacties te boeken.")
+        }
+        .font(.callout)
+        .padding(.top, 10)
     }
 
     // MARK: De opbouw

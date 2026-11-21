@@ -57,7 +57,8 @@ final class AppModel {
     private(set) var isDemo: Bool
     /// Loopt op na elke wijziging in de database.
     private(set) var revision = 0
-    /// De app opent op de transacties, net als een bank-app.
+    /// De app opent op de transacties, net als een bank-app; met voorbeelddata op het Dashboard, waar je meteen
+    /// ziet wat er te besteden is.
     var selection: Screen = .transactions
     var settingsTab: String = "jaar"
     /// Vraag aan Transacties om te openen op deze rekening met dit filter (bv. vanuit Instellingen › Tags).
@@ -84,6 +85,7 @@ final class AppModel {
         self.isDemo = isDemo
         self.fixedToday = today
         self.year = (today ?? Day.today()).year
+        self.selection = isDemo ? .dashboard : .transactions
         observe()
         autoReconcile(announce: false)
     }
@@ -152,7 +154,7 @@ final class AppModel {
         self.db = db
         self.isDemo = isDemo
         self.year = today.year
-        self.selection = .transactions
+        self.selection = isDemo ? .dashboard : .transactions
         observe()
         autoReconcile(announce: false)
         revision += 1

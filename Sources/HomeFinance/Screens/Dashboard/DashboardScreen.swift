@@ -173,7 +173,7 @@ private struct DashboardHome: View {
 
     @ViewBuilder private var hero: some View {
         if let spendable = data.dashboard.spendable {
-            DashboardHero(spendable: spendable)
+            DashboardHero(spendable: spendable, unbooked: data.dashboard.unbookedCheckingTransactions)
         } else {
             DashboardYearMissingCard(year: data.dashboard.today.year)
         }
