@@ -79,7 +79,8 @@ enum SelfTest {
                                  proposals.filter { $0.otherHalf != nil }.count)
     }
 
-    /// Nog rechtzetten meldde na het laden zijn blokken (D4): aantal blokken en hoeveel er openstaan.
+    /// Te doen meldde na het laden zijn kaartjes: hoeveel er getekend worden (minstens 1: "Er is niets te doen.")
+    /// en hoeveel er openstaan.
     private static var settleUp: (blocks: Int, open: Int)?
 
     static func settleUpLoaded(blocks: Int, open: Int) {
@@ -207,11 +208,15 @@ enum SelfTest {
         check(rx != nil && rx?.deposits == tx?.deposits && rx?.otherHalves == tx?.otherHalves,
               "Nakijken en Transacties tonen dezelfde terugbetalingen en andere helften (D2)")
 
-        // 3a4. Nog rechtzetten laadde zijn vier blokken; de teller in de zijbalk is het aantal open blokken (D4).
-        write("     nog rechtzetten: \(settleUp.map { "\($0.blocks) blokken, \($0.open) open" } ?? "niet geladen")")
-        check(settleUp?.blocks == 4, "Te doen toont vier blokken (D4)")
+        // 3a4. Te doen toont alleen kaartjes met inhoud (of "Er is niets te doen."); de teller in de zijbalk is het
+        // aantal kaartjes.
+        let expectedCards = model.read(SettleUpData()) { try SettleUpData.read($0, today: model.today) }.cards
+        write("     te doen: \(settleUp.map { "\($0.blocks) getekend, \($0.open) kaartjes" } ?? "niet geladen")"
+              + " (verwacht: \(expectedCards.isEmpty ? "niets te doen" : expectedCards.joined(separator: ", ")))")
+        check(settleUp?.blocks == max(expectedCards.count, 1) && settleUp?.open == expectedCards.count,
+              "Te doen toont alleen de kaartjes met inhoud")
         check(settleUp.map { SidebarBadges.count(for: .settleUp, model: model) == $0.open } ?? false,
-              "teller van Te doen in de zijbalk = aantal open blokken (D4)")
+              "teller van Te doen in de zijbalk = aantal kaartjes")
 
         // 3b. Transacties: de kop blijft zichtbaar en het downloadblok (6a) staat eronder, ook in het kleinste venster.
         await checkTransactionsHeader(model: model)
@@ -356,11 +361,13 @@ enum SelfTest {
         // Zijbalk: links in beeld, breed genoeg, met alle rijen.
         let rows = visibleSidebarRowCount()
         let sidebarOK = (sidebar.map { $0.minX >= -0.5 && $0.width >= 150 } ?? false) && rows >= expectedRows
-        // Nog rechtzetten: de vier blokken staan in beeld, binnen de ruimte naast de zijbalk (D4).
+        // Te doen: de kaartjes (of "Er is niets te doen.") staan in beeld, binnen de ruimte naast de zijbalk.
         if stop.screen == .settleUp {
+            let expected = settleUp?.blocks ?? -1
             let blocks = probeFrames.filter { $0.key.hasPrefix("rechtzetten-blok-") }.map(\.value)
             let inside = blocks.allSatisfy { $0.width > 0 && $0.minX >= left - 1 && $0.maxX <= right + 1 }
-            check(blocks.count == 4 && inside, "Te doen: vier blokken binnen beeld (\(label), gezien: \(blocks.count))")
+            check(blocks.count == expected && inside,
+                  "Te doen: \(expected) kaartje(s) binnen beeld (\(label), gezien: \(blocks.count))")
         }
 
         check(sidebarOK, "zijbalk zichtbaar: \(where_)"

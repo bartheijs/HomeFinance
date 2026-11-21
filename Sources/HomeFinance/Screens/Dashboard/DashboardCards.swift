@@ -92,7 +92,7 @@ private struct DashboardAttentionLook {
             icon = "arrow.uturn.left.circle"; tint = .secondary; action = "Bekijk"; target = .tags
             help = "Uitgaven met deze tag waarvan je het geld nog terugkrijgt."
         case .unconfirmedSettlement, .unconfirmedSettlements:
-            icon = "questionmark.circle"; tint = Theme.warning; action = "Bekijk"; target = .reimbursements
+            icon = "questionmark.circle"; tint = Theme.warning; action = "Bekijk"; target = .settleUp
             help = "Je hebt deze overboeking met spaar afgevinkt, maar hij is nog niet in een bankbestand gezien. Controleer of je hem hebt overgemaakt, of importeer een nieuw bankbestand."
         case .temporaryLoanOutstanding:
             icon = "arrow.uturn.backward.circle"; tint = Theme.warning; action = "Bekijk"; target = .transactions

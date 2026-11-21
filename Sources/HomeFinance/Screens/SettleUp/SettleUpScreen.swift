@@ -3,28 +3,37 @@ import GRDB
 import HFCore
 import HFInsight
 
-/// Wat er nog rechtgezet moet worden, in vier blokken (UX-stap D4). Alleen lezen uit HFInsight; de cijfers zijn
-/// dezelfde als op Nog overboeken, Voorgeschoten en Transacties. Rekent zelf niets.
+/// Te doen (was "Nog rechtzetten"): wat nog een handeling vraagt, in hoogstens drie kaartjes. Een kaartje staat er
+/// alleen als er iets in staat. Alleen lezen uit HFInsight; de cijfers zijn dezelfde als op Nog overboeken, Tags
+/// en Transacties. Rekent zelf niets.
 struct SettleUpData: Equatable {
     /// Gemarkeerde boekingen die nog met spaar overgeboekt moeten worden (gesaldeerd).
     var open: OpenReimbursements?
     /// Vastgelegde overboekingen met spaar (nieuwste eerst).
     var transfers: [SavingsTransferDetail] = []
-    /// Tags waarvan je nog voorgeschoten geld terugkrijgt.
+    /// Tags met "Krijg ik terug" waarvan nog iets terug te ontvangen is.
     var advances: [TagSettlementSummary] = []
     /// Tijdelijk van spaar geleend en nog niet teruggeboekt.
     var loan: Money = .zero
 
-    /// Blok 1: open boekingen, of een vastgelegde overboeking die nog niet is afgevinkt.
+    /// Vastgelegd maar nog niet afgevinkt.
     var pendingTransfers: [SavingsTransferDetail] { transfers.filter { !$0.done } }
-    var hasTransfer: Bool { !(open?.entries.isEmpty ?? true) || !pendingTransfers.isEmpty }
-    /// Blok 4: afgevinkt, maar nog niet aan beide kanten in een bankbestand gezien (oudste eerst).
+    /// Afgevinkt, maar nog niet aan beide kanten in een bankbestand gezien (oudste eerst).
     var waitingForBank: [SavingsTransferDetail] { transfers.filter { $0.done && !$0.bankConfirmed }.reversed() }
-
-    /// Het aantal blokken waar iets openstaat (de teller in de zijbalk).
-    var openBlockCount: Int {
-        [hasTransfer, !advances.isEmpty, loan > .zero, !waitingForBank.isEmpty].filter { $0 }.count
+    /// Kaartje Nog overboeken: nog over te maken (open boekingen of een niet-afgevinkte overboeking), of afgevinkt
+    /// en wachtend op de bank.
+    var hasTransfer: Bool {
+        !(open?.entries.isEmpty ?? true) || !pendingTransfers.isEmpty || !waitingForBank.isEmpty
     }
+
+    /// De kaartjes die er staan, in volgorde (de zelftest kijkt of ze in beeld zijn).
+    var cards: [String] {
+        (hasTransfer ? ["Nog overboeken"] : []) + (advances.isEmpty ? [] : ["Terug te ontvangen"])
+            + (loan > .zero ? ["Tijdelijk geleend van spaar"] : [])
+    }
+
+    /// Het aantal kaartjes (de teller in de zijbalk).
+    var openBlockCount: Int { cards.count }
 
     static func read(_ db: Database, today: Day) throws -> SettleUpData {
         SettleUpData(open: try Insight.openReimbursements(db),
@@ -42,15 +51,17 @@ struct SettleUpScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScreenHeader("Te doen",
-                         subtitle: "Alles wat nog een handeling van jou vraagt, of nog terug moet komen. Per blok staat de volgende stap.")
+            ScreenHeader("Te doen")
             if let data {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        transferBlock(data)
-                        advancesBlock(data)
-                        loanBlock(data)
-                        bankBlock(data)
+                        if data.cards.isEmpty {
+                            Text("Er is niets te doen.").font(.title3)
+                                .selfTestProbe("rechtzetten-blok-leeg")
+                        }
+                        if data.hasTransfer { transferBlock(data) }
+                        if !data.advances.isEmpty { advancesBlock(data) }
+                        if data.loan > .zero { loanBlock(data) }
                     }
                     .frame(maxWidth: 760, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -62,26 +73,30 @@ struct SettleUpScreen: View {
         }
         .task(id: ReloadKey(revision: model.revision, year: model.year)) {
             data = model.read(SettleUpData()) { try SettleUpData.read($0, today: model.today) }
-            SelfTest.settleUpLoaded(blocks: 4, open: data?.openBlockCount ?? 0)
+            SelfTest.settleUpLoaded(blocks: max(data?.cards.count ?? 0, 1), open: data?.openBlockCount ?? 0)
         }
     }
 
-    // MARK: 1. Nog overboeken
+    // MARK: Nog overboeken (met de status per regel)
 
     @ViewBuilder private func transferBlock(_ data: SettleUpData) -> some View {
-        block("Nog overboeken", icon: "arrow.left.arrow.right.circle", isOpen: data.hasTransfer,
-              explanation: "Betaald vanaf je betaalrekening terwijl het bij een potje hoort (of andersom). Je zet het in één overboeking recht.",
-              empty: "Er hoeft niets van of naar spaar overgeboekt te worden.") {
+        block("Nog overboeken", icon: "arrow.left.arrow.right.circle") {
             if let open = data.open, !open.entries.isEmpty {
                 step(transferStep(open), detail: TransactionsFormat.entries(open.entries.count)) {
-                    Button("Afvinken bij Nog overboeken…") { model.selection = .reimbursements }
-                        .help("Maak het bedrag over in je bank-app en vink het daarna af; dan worden de potjes geboekt.")
+                    Button("Afvinken…") { model.selection = .reimbursements }
+                        .help("Maak het bedrag over in je bank-app en vink het daarna af bij Nog overboeken.")
                 }
             }
             ForEach(data.pendingTransfers) { transfer in
-                step("Vastgelegd op \(transfer.day.short()): maak \(transfer.transferAmount.formatted()) over \(directionText(transfer.direction)) en vink af",
-                     detail: TransactionsFormat.entries(transfer.entries.count)) {
-                    Button("Naar Nog overboeken") { model.selection = .reimbursements }
+                step("Nog overmaken: \(transfer.transferAmount.formatted()) \(directionText(transfer.direction))",
+                     detail: "Vastgelegd op \(transfer.day.short())") {
+                    Button("Afvinken…") { model.selection = .reimbursements }
+                }
+            }
+            ForEach(data.waitingForBank) { transfer in
+                step("Afgevinkt, wacht op de bank: \(transfer.transferAmount.formatted()) \(directionText(transfer.direction))",
+                     detail: transfer.day.short(), muted: true) {
+                    EmptyView()
                 }
             }
         }
@@ -89,8 +104,8 @@ struct SettleUpScreen: View {
 
     private func transferStep(_ open: OpenReimbursements) -> String {
         switch open.direction {
-        case .fromSavings: "Maak \(open.transferAmount.formatted()) over van spaar naar betaal"
-        case .toSavings: "Maak \(open.transferAmount.formatted()) over van betaal naar spaar"
+        case .fromSavings: "Nog overmaken: \(open.transferAmount.formatted()) van spaar naar betaal"
+        case .toSavings: "Nog overmaken: \(open.transferAmount.formatted()) van betaal naar spaar"
         case .none: "Alleen tussen potjes: niets over te maken, wel afvinken"
         }
     }
@@ -103,29 +118,23 @@ struct SettleUpScreen: View {
         }
     }
 
-    // MARK: 2. Voorgeschoten
+    // MARK: Terug te ontvangen
 
     @ViewBuilder private func advancesBlock(_ data: SettleUpData) -> some View {
-        block("Terug te ontvangen", icon: "arrow.uturn.backward.circle", isOpen: !data.advances.isEmpty,
-              explanation: "Uitgaven met een tag die je terugkrijgt.",
-              empty: "Er komt niets meer terug.") {
+        block("Terug te ontvangen", icon: "arrow.uturn.backward.circle") {
             ForEach(data.advances) { tag in
-                step("Je krijgt nog \(tag.outstanding.formatted()) terug (\(tag.name))",
-                     detail: "Tag de terugbetaling met \(tag.name).") {
+                step("\(tag.name): \(tag.outstanding.formatted())", detail: "Tag de terugbetaling met \(tag.name).") {
                     EmptyView()
                 }
             }
-            Button("Naar Tags") { model.selection = .tags }.buttonStyle(.link)
         }
     }
 
-    // MARK: 3. Tijdelijk geleend van spaar
+    // MARK: Tijdelijk geleend van spaar
 
     @ViewBuilder private func loanBlock(_ data: SettleUpData) -> some View {
-        block("Tijdelijk geleend van spaar", icon: "hourglass", isOpen: data.loan > .zero,
-              explanation: TransactionsFormat.loanHelp,
-              empty: "Er staat niets uit van spaar.") {
-            step("Er staat nog \(data.loan.formatted()) uit", detail: "Zet het terug naar spaar en markeer die overboeking als tijdelijk geleend.") {
+        block("Tijdelijk geleend van spaar", icon: "hourglass") {
+            step("Nog terug naar spaar: \(data.loan.formatted())", detail: "Markeer die overboeking als tijdelijk geleend.") {
                 Button("Toon de boekingen") {
                     if let id = model.read(nil as Int64?, {
                         try Int64.fetchOne($0, sql: "SELECT id FROM account WHERE kind = 'betaal' AND archived = 0 ORDER BY sortOrder, id LIMIT 1")
@@ -138,39 +147,16 @@ struct SettleUpScreen: View {
         }
     }
 
-    // MARK: 4. Wacht op de bank
-
-    @ViewBuilder private func bankBlock(_ data: SettleUpData) -> some View {
-        block("Wacht op de bank", icon: "building.columns", isOpen: !data.waitingForBank.isEmpty,
-              explanation: "Overboekingen met spaar die je hebt afgevinkt, maar die nog niet in een bankbestand zijn gezien. Ze gaan vanzelf weg na het importeren.",
-              empty: "Alles wat je hebt afgevinkt, is ook bij de bank gezien.") {
-            ForEach(data.waitingForBank) { transfer in
-                step("Afgevinkt: \(transfer.transferAmount.formatted()) \(directionText(transfer.direction)) (\(transfer.day.short()))",
-                     detail: transfer.unconfirmedSince.map { since in
-                         since.adding(days: 5) <= model.today ? "Al meer dan 5 dagen niet gezien. Klopt de overboeking bij de bank?" : "Nog niet in een bankbestand gezien."
-                     } ?? "Nog niet in een bankbestand gezien.") {
-                    Button("Importeer een bankbestand") { model.selection = .review }
-                }
-            }
-        }
-    }
-
     // MARK: Opmaak
 
-    private func block<Content: View>(_ title: String, icon: String, isOpen: Bool, explanation: String, empty: String,
-                                      @ViewBuilder content: () -> Content) -> some View {
+    private func block<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: isOpen ? icon : "checkmark.circle").foregroundStyle(isOpen ? Theme.accent : Theme.positive)
+                Image(systemName: icon).foregroundStyle(Theme.accent)
                 Text(title).font(.title3.weight(.semibold))
                 Spacer(minLength: 0)
             }
-            Text(explanation).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            if isOpen {
-                content()
-            } else {
-                Text(empty).font(.callout)
-            }
+            content()
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -179,24 +165,27 @@ struct SettleUpScreen: View {
         .selfTestProbe("rechtzetten-blok-\(title)")
     }
 
-    private func step<Action: View>(_ text: String, detail: String, @ViewBuilder action: () -> Action) -> some View {
+    private func step<Action: View>(_ text: String, detail: String, muted: Bool = false,
+                                    @ViewBuilder action: () -> Action) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                stepText(text, detail: detail)
+                stepText(text, detail: detail, muted: muted)
                 Spacer(minLength: 8)
                 action()
             }
             VStack(alignment: .leading, spacing: 6) {
-                stepText(text, detail: detail)
+                stepText(text, detail: detail, muted: muted)
                 action()
             }
         }
     }
 
-    private func stepText(_ text: String, detail: String) -> some View {
+    /// Een afgevinkte regel die op de bank wacht, staat grijs.
+    private func stepText(_ text: String, detail: String, muted: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(text).fontWeight(.medium).fixedSize(horizontal: false, vertical: true)
-            Text(detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(detail).font(.caption).fixedSize(horizontal: false, vertical: true)
         }
+        .foregroundStyle(muted ? Color.secondary : Color.primary)
     }
 }
