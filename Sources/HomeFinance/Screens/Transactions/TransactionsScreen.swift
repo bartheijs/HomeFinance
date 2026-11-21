@@ -76,6 +76,13 @@ struct TransactionsScreen: View {
             store.reload(model)
         }
         .onChange(of: store.selection) { _, _ in store.selectionChanged(model) }
+        .onChange(of: model.transactionsJump, initial: true) { _, jump in
+            guard let jump else { return }
+            store.accountId = jump.accountId
+            store.criteria = TransactionsCriteria()
+            store.criteria.tagId = jump.tagId
+            model.transactionsJump = nil
+        }
         .sheet(isPresented: $showNewEntry) {
             TransactionsNewEntrySheet(store: store).environment(model)
         }

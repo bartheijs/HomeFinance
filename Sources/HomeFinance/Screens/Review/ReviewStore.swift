@@ -394,7 +394,7 @@ final class ReviewStore {
     private func makeDefault(_ row: ReviewRow) -> ReviewDraft {
         let s = row.suggestion
         var draft = ReviewDraft(label: s.label.isEmpty || s.label == "Onbekend" ? row.cleanLabel : s.label,
-                                tagIds: Set(s.tagIds))
+                                tagIds: kind == .betaal ? Set(s.tagIds) : [])   // tags alleen op de betaalrekening
         if draft.label.isEmpty { draft.label = "Onbekend" }
         // Een vaste storting gaat vóór de regels.
         if let match = row.activeMatch, match.distribution != nil, !match.allocations.isEmpty {
@@ -600,7 +600,8 @@ final class ReviewStore {
         let draft = draft(for: row)
         let s = row.suggestion
         let note = draft.note.trimmingCharacters(in: .whitespacesAndNewlines)
-        let tagIds = draft.tagIds.sorted()
+        // Tags alleen op de betaalrekening (in Nakijken staan alleen nieuwe transacties: geen tags van vroeger).
+        let tagIds = kind == .betaal ? draft.tagIds.sorted() : []
         func ids(_ target: ReviewTarget) -> (item: Int64?, pot: Int64?) {
             switch target {
             case .none: (nil, nil)
@@ -644,7 +645,7 @@ final class ReviewStore {
         let label = draft.label.trimmingCharacters(in: .whitespaces)
         return Correction(bankTransaction: row.tx, itemLabel: itemLabel, potId: potId,
                           entryLabel: label.isEmpty || label == row.suggestion.label ? nil : label,
-                          tagIds: draft.tagIds.sorted(), reimburse: reimburse)
+                          tagIds: kind == .betaal ? draft.tagIds.sorted() : [], reimburse: reimburse)
     }
 
     // MARK: Selectie

@@ -91,6 +91,8 @@ voorwaarden (`accountId` telt mee) → laagste id.
   ("Het jaar 2028 bestaat nog niet; …", "De post 'X' bestaat niet in 2027."). `targetItemLabel == nil` = divers.
 - `label`: `entryLabel` van de regel, anders `LabelCleaner.suggestedLabel` (eigen tekst van een overboeking of de
   opgeschoonde tegenpartij), anders "Onbekend".
+- `tagIds`: de tags van de regel, maar **leeg op een spaarrekening** (tags horen alleen op de betaalrekening;
+  `HFBudget` weigert ze daar). `RuleMatcher(db)` kent de spaarrekeningen zelf.
 - **Richting van verrekenen** (`Rule.reimburseDirection`, `.incoming` "erin" / `.outgoing` "eruit" / `.both`
   "beide"): heeft de regel `reimburse` en past de richting niet bij het bedrag van de transactie
   (`rule.reimburseApplies(to:) == false`), dan zijn `reimburse` false en `potId` nil, is `confidence` `.laag`
@@ -102,7 +104,8 @@ voorwaarden (`accountId` telt mee) → laagste id.
 
 `RuleMatcher(db)` laadt regels, jaren en posten één keer; `suggest(for:)` en `bestRule(for:)` zijn daarna puur
 rekenwerk (handig voor lijsten). `RuleMatcher.match(rule, transaction, ignoreEnabled:)` test één regel.
-`RuleMatcher(rules:budgetYears:budgetItems:)` werkt zonder database (previews).
+`RuleMatcher(rules:budgetYears:budgetItems:savingsAccountIds:)` werkt zonder database (previews);
+`savingsAccountIds` (standaard leeg) zijn de rekeningen waarop geen tags voorgesteld worden.
 
 ## `LabelCleaner` en `TextNormalizer`
 

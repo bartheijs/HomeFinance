@@ -13,3 +13,4 @@ dist/
 .env
 # Uitvoer van scripts/testronde.sh hoort buiten de repo; voor de zekerheid
 testronde*/
+.claude/settings.local.json

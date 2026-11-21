@@ -227,7 +227,8 @@ struct TransactionsDraft: Equatable {
            let item = lookups.item(label: itemLabel, year: day.year) {
             itemId = item.id
         }
-        if tagIds.isEmpty { tagIds = Set(suggestion.tags.map(\.id)) }
+        // Tags alleen op de betaalrekening.
+        if kind == .betaal, tagIds.isEmpty { tagIds = Set(suggestion.tags.map(\.id)) }
     }
 
     init(row: EntryRow) {
@@ -243,7 +244,7 @@ struct TransactionsDraft: Equatable {
         let s = p.suggestion, t = p.transaction
         label = s.label; day = t.day
         isIncome = !t.amount.isNegative; magnitude = t.amount.magnitude
-        tagIds = Set(s.tagIds)
+        tagIds = kind == .betaal ? Set(s.tagIds) : []   // tags alleen op de betaalrekening
         switch kind {
         case .betaal:
             itemId = s.budgetItemId
@@ -824,6 +825,28 @@ final class TransactionsStore {
         return ok ? created : nil
     }
 
+    /// Haalt een tag weg van de gekozen boekingen die hem hebben (ook op een spaarrekening, waar tags niet
+    /// meer kunnen maar van vroeger nog kunnen staan).
+    func removeTag(_ model: AppModel, ids: [TransactionsItemID], tagId: Int64) {
+        let rows = entries(in: ids).filter { $0.tags.contains { $0.id == tagId } }
+        guard !rows.isEmpty else { return }
+        let name = lookups.tag(tagId)?.name ?? "tag"
+        run(model, { "Tag ‘\(name)’ weggehaald" }) { db in
+            for row in rows {
+                try EntryService.setTags(db, entryId: row.id, tagIds: row.tags.map(\.id).filter { $0 != tagId })
+            }
+        }
+    }
+
+    /// Kunnen de gekozen boekingen een tag krijgen? Alleen op de betaalrekening.
+    var tagsAllowed: Bool { kind == .betaal }
+
+    /// Tags die op minstens één van de gekozen boekingen staan (op spaar: alleen nog om weg te halen).
+    func tagsPresent(in ids: [TransactionsItemID]) -> [HFCore.Tag] {
+        let present = Set(entries(in: ids).flatMap { $0.tags.map(\.id) })
+        return lookups.tags.filter { present.contains($0.id ?? -1) }
+    }
+
     func setTags(_ model: AppModel, row: EntryRow, _ tagIds: Set<Int64>) {
         run(model, { "Tags bijgewerkt" }) { try EntryService.setTags($0, entryId: row.id, tagIds: tagIds.sorted()) }
     }
@@ -959,7 +982,7 @@ final class TransactionsStore {
             label: d.label.trimmingCharacters(in: .whitespaces),
             budgetItemId: kind == .betaal ? d.itemId : nil,
             potId: kind == .spaar ? d.potId : (reimburse ? d.potId : nil),
-            reimburse: reimburse, tagIds: d.tagIds.sorted(), note: d.note,
+            reimburse: reimburse, tagIds: kind == .betaal ? d.tagIds.sorted() : [], note: d.note,
             temporaryLoan: kind == .betaal && d.temporaryLoan)
         var created: Int64?
         let ok = run(model, { "Boeking toegevoegd" }) { created = try EntryService.create($0, entryDraft).id }

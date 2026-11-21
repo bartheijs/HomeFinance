@@ -66,7 +66,9 @@ import Testing
             let retour = try entry(db, fx, "2027-03-04", 1_000, "Retour", tags: [tag.id!])
             try entry(db, fx, "2027-03-05", -2_000, "Restaurant", tags: [other.id!])
             try entry(db, fx, "2027-03-06", -9_900, "Zonder tag")
-            let spaar = try entry(db, fx, "2027-03-07", -7_000, "Spaarboeking met tag", tags: [tag.id!], account: fx.spaar)
+            // Tags kunnen niet meer op spaar (6h); een oudere administratie kan ze nog hebben.
+            let spaar = try entry(db, fx, "2027-03-07", -7_000, "Spaarboeking met tag", account: fx.spaar)
+            try EntryTag(entryId: spaar.id!, tagId: tag.id!).insert(db)
 
             let open = try SettlementService.open(db, tagId: tag.id!)
             #expect(open.entries.map(\.id) == [a.id, retour.id])

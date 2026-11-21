@@ -60,6 +60,11 @@ public enum BookingService {
                 throw BudgetError.allocationSumMismatch(expected: transaction.amount, actual: total)
             }
             var resolved: [(budgetItemId: Int64?, period: String?)] = []
+            // Tags die de huidige boekingen van deze transactie al hebben (alleen van belang op spaar).
+            let existingTags = account.kind == .betaal ? [] : try Int64.fetchAll(db, sql: """
+                SELECT DISTINCT tagId FROM entryTag JOIN entry ON entry.id = entryTag.entryId
+                WHERE entry.bankTransactionId = ?
+                """, arguments: [bankTransactionId])
             for allocation in allocations {
                 resolved.append(try Check.assignment(db, account: account, day: transaction.day,
                                                      amount: allocation.amount, budgetItemId: allocation.budgetItemId,
@@ -67,6 +72,7 @@ public enum BookingService {
                                                      period: allocation.period))
                 if allocation.temporaryLoan, account.kind != .betaal { throw BudgetError.temporaryLoanOnSavings }
                 try Check.tagsExist(db, allocation.tagIds)
+                try Check.tagsAllowed(account: account, tagIds: allocation.tagIds, existing: existingTags)
                 if let ruleId = allocation.ruleId { _ = try Check.fetch(db, Rule.self, ruleId, "Regel") }
             }
             try removeEntries(db, of: transaction)
@@ -187,6 +193,7 @@ public enum EntryService {
                                               reimburse: draft.reimburse, period: draft.period)
             if draft.temporaryLoan, account.kind != .betaal { throw BudgetError.temporaryLoanOnSavings }
             try Check.tagsExist(db, draft.tagIds)
+            try Check.tagsAllowed(account: account, tagIds: draft.tagIds)
             var entry = Entry(accountId: draft.accountId, day: draft.day, amount: draft.amount, label: draft.label,
                               budgetItemId: target.budgetItemId, potId: draft.potId, reimburse: draft.reimburse,
                               reviewed: draft.reviewed, note: draft.note, temporaryLoan: draft.temporaryLoan,
@@ -237,6 +244,9 @@ public enum EntryService {
                                               allowYearSwitch: entry.period != nil)
             if draft.temporaryLoan, account.kind != .betaal { throw BudgetError.temporaryLoanOnSavings }
             try Check.tagsExist(db, draft.tagIds)
+            // Bestaande tags mogen blijven zolang de boeking op dezelfde rekening blijft.
+            try Check.tagsAllowed(account: account, tagIds: draft.tagIds,
+                                  existing: draft.accountId == entry.accountId ? try tagIds(db, entryId: entryId) : [])
             entry.temporaryLoan = draft.temporaryLoan
             entry.period = target.period
             entry.accountId = draft.accountId; entry.day = draft.day; entry.amount = draft.amount
@@ -343,8 +353,15 @@ public enum EntryService {
             try SettlementService.ensureUnchanged(db, entry: entry, amount: entry.amount, accountId: entry.accountId,
                                                   tagIds: tagIds)
             try Check.tagsExist(db, tagIds)
+            try Check.tagsAllowed(account: try Check.account(db, entry.accountId), tagIds: tagIds,
+                                  existing: try self.tagIds(db, entryId: entryId))
             try Check.replaceTags(db, entryId: entryId, tagIds: tagIds)
         }
+    }
+
+    /// Kunnen boekingen op deze rekening een tag krijgen? Alleen op een betaalrekening.
+    public static func tagsAllowed(_ db: Database, accountId: Int64) throws -> Bool {
+        try Check.account(db, accountId).kind == .betaal
     }
 
     /// De tag-id's van een boeking.

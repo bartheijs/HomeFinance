@@ -34,6 +34,8 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
     /// 'Verrekenen met spaar' op een bedrag van nul. (De naam stamt uit de tijd dat het alleen bij uitgaven kon.)
     case reimburseNotExpense
     case temporaryLoanOnSavings
+    /// Tags kunnen alleen op boekingen van een betaalrekening (een tag die er al stond mag blijven of weg).
+    case tagOnSavings
     /// De boeking zit in een spaaroverboeking en mag daarom niet zo gewijzigd worden.
     case inSavingsTransfer
     /// Bedrag, dag en rekening van een boeking uit een banktransactie liggen vast.
@@ -106,6 +108,9 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
             return "'Verrekenen met spaar' kan niet bij een bedrag van nul."
         case .temporaryLoanOnSavings:
             return "'Tijdelijk geleend van spaar' kan alleen bij een boeking op een betaalrekening."
+        case .tagOnSavings:
+            return "Tags kunnen alleen op boekingen van de betaalrekening, niet op een spaarrekening. "
+                + "Haal de tag weg; een tag die er al stond mag blijven."
         case .inSavingsTransfer:
             return "Deze boeking zit in een spaaroverboeking. Verwijder eerst die spaaroverboeking."
         case .bankEntryImmutable:
@@ -311,6 +316,13 @@ enum Check {
 
     static func tagsExist(_ db: Database, _ tagIds: [Int64]) throws {
         for id in Set(tagIds) { _ = try tag(db, id) }
+    }
+
+    /// Tags alleen op een betaalrekening. Op een spaarrekening mag alleen een deel van de tags blijven die
+    /// de boeking al had (`existing`): niets nieuws erbij, weghalen mag altijd.
+    static func tagsAllowed(account: Account, tagIds: [Int64], existing: [Int64] = []) throws {
+        guard account.kind != .betaal else { return }
+        guard Set(tagIds).isSubset(of: Set(existing)) else { throw BudgetError.tagOnSavings }
     }
 
     static func replaceTags(_ db: Database, entryId: Int64, tagIds: [Int64]) throws {

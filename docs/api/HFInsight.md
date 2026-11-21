@@ -220,6 +220,8 @@ spaarrekening van de pot tellen in het potsaldo; een te vergoeden uitgave op de 
 | `topDiversExpenses(db, year:month:limit:)` | grootste diverse uitgaven van een jaar of maand |
 | `diversByTag(db, year:month:)` | `DiversBreakdown`: UIT divers per tag, "Zonder tag" als eigen groep (`tagId == nil`) |
 | `yearOverYear(db)` | `[YearTotals]` voor alle jaren met boekingen |
+| `tagUsage(db)` | `[tagId: TagUsage]`: aantal boekingen per tag, `onPayment` (betaalrekening), `onSavings` (spaarrekening, van vóór de regel "tags alleen op de betaalrekening") en `total`. Alleen tags met boekingen. |
+| `tagFilterTarget(db, tagId:)` | `TagFilterTarget?` (`accountId`, `tagId`): waar Transacties heen gaat bij een klik op "n boekingen" in Instellingen › Tags. Altijd een betaalrekening: die met de meeste boekingen met de tag, anders de eerste niet-gearchiveerde op volgorde. nil zonder betaalrekening. |
 
 ## Transacties en nakijken
 

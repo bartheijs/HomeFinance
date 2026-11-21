@@ -60,6 +60,19 @@ import HFCore
         }
     }
 
+    /// 6h: tags alleen op de betaalrekening; op een spaarrekening stelt een regel geen tag voor.
+    @Test func noTagsSuggestedOnSavings() throws {
+        try f.db.write { d in
+            try f.rule(d, Rule(name: "Storting", counterpartyContains: "Voorbeeldstorting", tagIds: "3"))
+            let t = try f.tx(d, name: "Voorbeeldstorting", cents: 2_500, account: f.savingsId)
+            let s = try RuleEngine.suggest(for: t, d)
+            #expect(s.ruleName == "Storting")
+            #expect(s.tagIds.isEmpty)
+            let b = try f.tx(d, name: "Voorbeeldstorting", cents: -2_500)
+            #expect(try RuleEngine.suggest(for: b, d).tagIds == [3])
+        }
+    }
+
     @Test func amountDiffersIsMiddenWithExpectedAmount() throws {
         try f.db.write { d in
             let r = try f.rule(d, Rule(name: "Energie", counterpartyContains: "Stroomhuis", amount: Money(euros: -150),

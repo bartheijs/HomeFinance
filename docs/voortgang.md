@@ -221,11 +221,26 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
    nog te besteden". Staat die aan, dan telt het openstaande bedrag (geld dat nog terugkomt) mee in "nog te
    besteden deze maand" en "besteedbaar". Standaard uit. Rekenen in `HFInsight`, instelling via `TagService`;
    waarschijnlijk een nieuwe migratie (bestaande niet aanpassen). Ook op het Dashboard en de telefoon tonen.
-6h. **Tags alleen op de betaalrekening, en filteren op tag** (wens van 21 november). Een tag mag alleen
-   boekingen van de betaalrekening hebben: niet kunnen kiezen bij boekingen op een spaarrekening (of weigeren
-   in `HFBudget`). Bij Instellingen › Tags wordt "n boekingen" aanklikbaar: opent Transacties met de
-   betaalrekening en het filter op die tag. (Aanleiding: een tag met één boeking op spaar was in Transacties
-   onvindbaar omdat daar de betaalrekening geselecteerd stond.)
+6h. **Tags alleen op de betaalrekening, en filteren op tag** — klaar (21 november), nog niet geïnstalleerd of
+   gecommit. (Aanleiding: een tag met één boeking op spaar was in Transacties onvindbaar omdat daar de
+   betaalrekening geselecteerd stond.)
+   - `HFBudget` weigert een tag op een boeking van een spaarrekening met `BudgetError.tagOnSavings` (boeken,
+     handmatige boeking, bewerken, `setTags`, verplaatsen naar spaar). Tags die er al stonden blijven staan,
+     mogen bij bewerken en opnieuw boeken mee en mogen weg; er komt niets bij. Geen migratie, geen data
+     aangeraakt. Nieuw: `EntryService.tagsAllowed(db, accountId:)`.
+   - Regels stellen op een spaarrekening geen tag meer voor (`RuleMatcher`).
+   - Schermen: bij een spaarrekening is de tagkeuze weg in Nakijken, Transacties (detail, menu's, toets T,
+     rechtsklik) en Nieuwe boeking, met de zin "Tags kunnen alleen op boekingen van de betaalrekening." Staat
+     er nog een tag van vroeger op een spaarboeking, dan staat die er met "Tag verwijderen" (detail) of
+     "Tag ‘…’ verwijderen" (menu's). Splitsen had geen tagkeuze.
+   - Instellingen › Tags: "n boekingen" is een link. Die opent Transacties op de betaalrekening (die met de
+     meeste boekingen met die tag) met alleen het filter op die tag, alle maanden. Staan er ook boekingen op
+     spaar, dan staat eronder "waarvan m op spaar". Logica: `Insight.tagUsage`, `Insight.tagFilterTarget`.
+   - Tests: 6 in `TagOnSavingsTests` (HFBudget), 4 in `TagUsageTests` (HFInsight), 1 in `MatchingTests`;
+     één bestaande verrekentest zet zijn spaar-tag nu rechtstreeks in de database. Testronde met
+     voorbeelddata geslaagd (526 tests, zelftest 33 OK).
+   - Nog te doen door de orchestrator: testronde op een kopie, installeren; de gebruiker de link bij
+     Instellingen › Tags laten proberen en kijken hoeveel tags er nog op spaar staan.
 6i. **Regels alleen met toestemming en aan te passen vanuit Nakijken** — klaar (21 november, nog niet
    geïnstalleerd). De app leert niet meer stil: boeken in Nakijken en in Transacties (boeken, toewijzen aan een
    post of pot) maakt of wijzigt geen regel meer.

@@ -6,16 +6,15 @@ import HFInsight
 
 struct SettingsTagsData: Equatable {
     var tags: [Tag] = []
-    var usage: [Int64: Int] = [:]
+    /// Gebruik per tag, uitgesplitst naar betaal- en spaarrekening (uit `Insight.tagUsage`).
+    var usage: [Int64: TagUsage] = [:]
     /// Openstaand bedrag per tag met verrekenen (uit `Insight.settlementOverview`).
     var outstanding: [Int64: Money] = [:]
 
     static func load(_ db: Database, today: Day) throws -> SettingsTagsData {
         var d = SettingsTagsData()
         d.tags = try Tag.order(Column("sortOrder"), Column("id")).fetchAll(db)
-        for row in try Row.fetchAll(db, sql: "SELECT tagId AS id, COUNT(*) AS n FROM entryTag GROUP BY tagId") {
-            d.usage[row["id"]] = row["n"]
-        }
+        d.usage = try Insight.tagUsage(db)
         for summary in try Insight.settlementOverview(db, today: today) { d.outstanding[summary.id] = summary.outstanding }
         return d
     }
@@ -45,11 +44,11 @@ struct SettingsTagsTab: View {
                             Divider()
                         }
                         ForEach(Array(data.tags.enumerated()), id: \.element.id) { index, tag in
-                            SettingsTagRow(tag: tag, usage: data.usage[tag.id ?? -1] ?? 0,
+                            SettingsTagRow(tag: tag, usage: data.usage[tag.id ?? -1] ?? TagUsage(tagId: tag.id ?? -1),
                                            outstanding: data.outstanding[tag.id ?? -1] ?? .zero, today: model.today,
                                            isFirst: index == 0, isLast: index == data.tags.count - 1,
                                            onSave: { save($0) }, onSettle: { setSettles(tag, from: $0) },
-                                           onMove: { move(tag, by: $0) },
+                                           onMove: { move(tag, by: $0) }, onShow: { show(tag) },
                                            onDelete: { deleteTarget = tag })
                                 .id("\(tag.id ?? 0)-\(resetToken)")
                             Divider().padding(.leading, 14)
@@ -68,7 +67,7 @@ struct SettingsTagsTab: View {
             Button("Verwijder", role: .destructive) { delete(tag) }
             Button("Annuleer", role: .cancel) {}
         } message: { tag in
-            let n = data.usage[tag.id ?? -1] ?? 0
+            let n = data.usage[tag.id ?? -1]?.total ?? 0
             Text(n > 0 ? "De tag verdwijnt van \(SettingsFormat.count(n, "boeking", "boekingen")). De boekingen zelf blijven."
                        : "Deze tag wordt nergens gebruikt.")
         }
@@ -125,6 +124,17 @@ struct SettingsTagsTab: View {
         }
     }
 
+    /// Opent Transacties op de betaalrekening met het filter op deze tag.
+    private func show(_ tag: Tag) {
+        guard let id = tag.id else { return }
+        guard let target = model.read(nil, { try Insight.tagFilterTarget($0, tagId: id) }) else {
+            model.toast = "Er is geen betaalrekening om de boekingen op te tonen"
+            return
+        }
+        model.transactionsJump = TransactionsJump(accountId: target.accountId, tagId: target.tagId)
+        model.selection = .transactions
+    }
+
     private func delete(_ tag: Tag) {
         guard let id = tag.id else { return }
         _ = write("Tag ‘\(tag.name)’ verwijderd") { db in try TagService.delete(db, tagId: id) }
@@ -140,7 +150,7 @@ struct SettingsTagsTab: View {
 
 struct SettingsTagRow: View {
     let tag: Tag
-    let usage: Int
+    let usage: TagUsage
     let outstanding: Money
     let today: Day
     let isFirst: Bool
@@ -149,6 +159,8 @@ struct SettingsTagRow: View {
     /// Verrekenen aan vanaf een dag, of uit (nil).
     var onSettle: (Day?) -> Void
     var onMove: (Int) -> Void
+    /// Opent Transacties met het filter op deze tag.
+    var onShow: () -> Void
     var onDelete: () -> Void
 
     @State private var name: String
@@ -157,12 +169,13 @@ struct SettingsTagRow: View {
     @State private var askFrom = false
     @State private var fromDate = Date()
 
-    init(tag: Tag, usage: Int, outstanding: Money, today: Day, isFirst: Bool, isLast: Bool,
+    init(tag: Tag, usage: TagUsage, outstanding: Money, today: Day, isFirst: Bool, isLast: Bool,
          onSave: @escaping (Tag) -> Void, onSettle: @escaping (Day?) -> Void,
-         onMove: @escaping (Int) -> Void, onDelete: @escaping () -> Void) {
+         onMove: @escaping (Int) -> Void, onShow: @escaping () -> Void, onDelete: @escaping () -> Void) {
         self.tag = tag; self.usage = usage; self.outstanding = outstanding; self.today = today
         self.isFirst = isFirst; self.isLast = isLast
-        self.onSave = onSave; self.onSettle = onSettle; self.onMove = onMove; self.onDelete = onDelete
+        self.onSave = onSave; self.onSettle = onSettle; self.onMove = onMove; self.onShow = onShow
+        self.onDelete = onDelete
         _name = State(initialValue: tag.name)
         _color = State(initialValue: Color(hex: tag.color))
     }
@@ -231,15 +244,31 @@ struct SettingsTagRow: View {
                 .focused($focused)
                 .onSubmit { commit() }
                 .settingsInlineField()
-            Text(usage == 0 ? "niet gebruikt" : SettingsFormat.count(usage, "boeking", "boekingen"))
-                .font(.callout).monospacedDigit().foregroundStyle(usage == 0 ? .tertiary : .secondary)
-                .frame(width: 110, alignment: .trailing)
+            usageText.frame(width: 130, alignment: .trailing)
             HStack(spacing: 2) {
                 Button { onMove(-1) } label: { Image(systemName: "chevron.up") }.disabled(isFirst).help("Omhoog")
                 Button { onMove(1) } label: { Image(systemName: "chevron.down") }.disabled(isLast).help("Omlaag")
                 Button(role: .destructive, action: onDelete) { Image(systemName: "trash") }.help("Tag verwijderen")
             }
             .buttonStyle(.borderless).controlSize(.small)
+        }
+    }
+
+    /// "n boekingen" als link naar Transacties (betaalrekening, filter op de tag). Staan er ook boekingen
+    /// van vroeger op een spaarrekening, dan staat dat eronder: die zijn daar te vinden via de spaarrekening.
+    @ViewBuilder private var usageText: some View {
+        if usage.total == 0 {
+            Text("niet gebruikt").font(.callout).foregroundStyle(.tertiary)
+        } else {
+            VStack(alignment: .trailing, spacing: 0) {
+                Button(SettingsFormat.count(usage.total, "boeking", "boekingen"), action: onShow)
+                    .buttonStyle(.link).font(.callout).monospacedDigit()
+                    .help("Toon de boekingen met ‘\(tag.name)’ in Transacties (betaalrekening)")
+                if usage.onSavings > 0 {
+                    Text("waarvan \(usage.onSavings) op spaar").font(.caption).foregroundStyle(.secondary)
+                        .help("Tags horen alleen op de betaalrekening. Deze boekingen staan op een spaarrekening; daar kun je de tag weghalen.")
+                }
+            }
         }
     }
 

@@ -42,6 +42,12 @@ enum Screen: String, CaseIterable, Identifiable, Hashable {
     static let insight: [Screen] = [.reports, .rules]
 }
 
+/// Transacties openen op een rekening met het filter op een tag.
+struct TransactionsJump: Equatable {
+    var accountId: Int64
+    var tagId: Int64
+}
+
 /// Gedeelde toestand van de app: de database, het gekozen jaar en de navigatie.
 /// Schermen laden hun gegevens opnieuw wanneer `revision` verandert (na elke schrijfactie).
 @MainActor @Observable
@@ -54,6 +60,9 @@ final class AppModel {
     /// De app opent op de transacties, net als een bank-app.
     var selection: Screen = .transactions
     var settingsTab: String = "jaar"
+    /// Vraag aan Transacties om te openen op deze rekening met dit filter (bv. vanuit Instellingen › Tags).
+    /// Transacties neemt het over en zet het terug op nil.
+    var transactionsJump: TransactionsJump?
     /// Het begrotingsjaar dat de schermen tonen.
     var year: Int
     /// Vaste "vandaag" voor snapshots en tests; normaal nil (= echte datum).

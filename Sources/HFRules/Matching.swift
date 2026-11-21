@@ -78,15 +78,21 @@ public struct RuleMatcher: Sendable {
     private let years: Set<Int>
     /// Per jaartal de posten: genormaliseerd label → (id, label).
     private let items: [Int: [String: Int64]]
+    /// Rekeningen waarop geen tags voorgesteld worden (spaarrekeningen: tags alleen op de betaalrekening).
+    private let savingsAccountIds: Set<Int64>
 
     /// Laadt regels, jaren en posten uit de database.
     public init(_ db: Database) throws {
         try self.init(rules: Rule.fetchAll(db), budgetYears: BudgetYear.fetchAll(db),
-                      budgetItems: BudgetItem.order(Column("sortOrder"), Column("id")).fetchAll(db))
+                      budgetItems: BudgetItem.order(Column("sortOrder"), Column("id")).fetchAll(db),
+                      savingsAccountIds: Set(Account.filter(Column("kind") == AccountKind.spaar.rawValue)
+                                                .fetchAll(db).compactMap(\.id)))
     }
 
     /// Voor tests en previews: zonder database.
-    public init(rules: [Rule], budgetYears: [BudgetYear] = [], budgetItems: [BudgetItem] = []) {
+    public init(rules: [Rule], budgetYears: [BudgetYear] = [], budgetItems: [BudgetItem] = [],
+                savingsAccountIds: Set<Int64> = []) {
+        self.savingsAccountIds = savingsAccountIds
         self.rules = rules.sorted { ($0.priority, $0.id ?? .max) < ($1.priority, $1.id ?? .max) }
         var yearById: [Int64: Int] = [:]
         for y in budgetYears { if let id = y.id { yearById[id] = y.year } }
@@ -173,7 +179,8 @@ public struct RuleMatcher: Sendable {
         s.targetItemLabel = Self.filled(rule.targetItemLabel)
         s.potId = rule.targetPotId
         s.label = Self.filled(rule.entryLabel) ?? fallbackLabel
-        s.tagIds = rule.tagIdList
+        // Tags alleen op de betaalrekening: op een spaarrekening stelt een regel geen tag voor.
+        s.tagIds = savingsAccountIds.contains(tx.accountId) ? [] : rule.tagIdList
         s.reimburse = rule.reimburse
         s.amountDiffers = match.amountDiffers
         s.expectedAmount = match.amountDiffers ? rule.amount : nil

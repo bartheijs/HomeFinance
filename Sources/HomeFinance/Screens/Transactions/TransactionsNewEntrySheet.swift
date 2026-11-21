@@ -57,12 +57,17 @@ struct TransactionsNewEntrySheet: View {
                         }
                     }
                     LabeledContent("Tags") {
-                        TransactionsTagEditor(tags: store.lookups.tags, selection: $draft.tagIds) { name, color, settles in
-                            guard let id = store.createTag(model, name: name, color: color, settles: settles, ids: []) else { return false }
-                            draft.tagIds.insert(id)
-                            return true
+                        if kind == .betaal {
+                            TransactionsTagEditor(tags: store.lookups.tags, selection: $draft.tagIds) { name, color, settles in
+                                guard let id = store.createTag(model, name: name, color: color, settles: settles, ids: []) else { return false }
+                                draft.tagIds.insert(id)
+                                return true
+                            }
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                        } else {
+                            Text(TagRuleText.savings).font(.callout).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
                         }
-                            .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                     TextField("Notitie", text: $draft.note, prompt: Text("Optioneel"), axis: .vertical)
                         .lineLimit(1...4)

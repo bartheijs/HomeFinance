@@ -147,7 +147,11 @@ private struct TransactionsSingleDetail: View {
                 actionMenu(store.kind == .betaal ? "tablecells" : "tray.full", store.kind == .betaal ? "Toewijzen aan post…" : "Toewijzen aan pot…") {
                     TransactionsAssignMenuItems(store: store, ids: ids)
                 }
-                actionMenu("tag", "Tag aan of uit (T)") { TransactionsTagMenuItems(store: store, ids: ids) }
+                if store.tagsAllowed || !row.tags.isEmpty {
+                    actionMenu("tag", store.tagsAllowed ? "Tag aan of uit (T)" : "Tag verwijderen") {
+                        TransactionsTagMenuItems(store: store, ids: ids)
+                    }
+                }
                 if canSettle {
                     actionMenu("arrow.triangle.swap", "Verrekenen met spaar… (V)") { TransactionsSettleMenuItems(store: store, ids: ids) }
                 }
@@ -230,11 +234,15 @@ private struct TransactionsSingleDetail: View {
                 Image(systemName: "questionmark.circle").font(.caption).foregroundStyle(.tertiary)
                     .help("Tags volgen waar het geld heen gaat (bv. tanken). Ze tellen niet als extra uitgave.")
             }
-            TransactionsTagEditor(tags: store.lookups.tags, selection: tagBinding, disabled: locked) { name, color, settles in
-                guard let id = store.createTag(model, name: name, color: color, settles: settles, ids: ids) else { return false }
-                // Een nieuwe transactie is nog niet geboekt: de tag gaat mee in de keuzes bij het boeken.
-                if pending != nil { store.draft.tagIds.insert(id) }
-                return true
+            if store.tagsAllowed {
+                TransactionsTagEditor(tags: store.lookups.tags, selection: tagBinding, disabled: locked) { name, color, settles in
+                    guard let id = store.createTag(model, name: name, color: color, settles: settles, ids: ids) else { return false }
+                    // Een nieuwe transactie is nog niet geboekt: de tag gaat mee in de keuzes bij het boeken.
+                    if pending != nil { store.draft.tagIds.insert(id) }
+                    return true
+                }
+            } else {
+                TransactionsSavingsTags(tags: store.tagsPresent(in: ids)) { store.removeTag(model, ids: ids, tagId: $0) }
             }
         }
     }
@@ -614,13 +622,13 @@ private struct TransactionsMultiDetail: View {
                 } label: {
                     Label(store.kind == .betaal ? "Toewijzen aan post" : "Toewijzen aan pot", systemImage: store.kind == .betaal ? "tablecells" : "tray.full")
                 }
-                if !rows.isEmpty {
+                if !rows.isEmpty, store.tagsAllowed || !store.tagsPresent(in: ids).isEmpty {
                     Menu {
                         TransactionsTagMenuItems(store: store, ids: ids)
                     } label: {
-                        Label("Tag", systemImage: "tag")
+                        Label(store.tagsAllowed ? "Tag" : "Tag verwijderen", systemImage: "tag")
                     }
-                    .help("Tag aan of uit voor alle gekozen boekingen (T)")
+                    .help(store.tagsAllowed ? "Tag aan of uit voor alle gekozen boekingen (T)" : TagRuleText.savings)
                     if rows.contains(where: { $0.accountKind == .betaal && !$0.amount.isZero }) {
                         Button { store.toggleReimburse(model, ids: ids) } label: {
                             Label("Verrekenen met spaar aan/uit", systemImage: "arrow.triangle.swap").frame(maxWidth: .infinity, alignment: .leading)

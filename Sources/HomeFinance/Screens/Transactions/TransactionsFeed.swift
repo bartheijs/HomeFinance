@@ -274,8 +274,10 @@ private struct TransactionsFeedRow: View {
                 iconMenu(store.kind == .betaal ? "tablecells" : "tray.full", help: store.kind == .betaal ? "Toewijzen aan post…" : "Toewijzen aan pot…") {
                     TransactionsAssignMenuItems(store: store, ids: [item.id])
                 }
-                iconMenu("tag", help: "Tag aan of uit") {
-                    TransactionsTagMenuItems(store: store, ids: [item.id])
+                if store.tagsAllowed || !row.tags.isEmpty {
+                    iconMenu("tag", help: store.tagsAllowed ? "Tag aan of uit" : "Tag verwijderen") {
+                        TransactionsTagMenuItems(store: store, ids: [item.id])
+                    }
                 }
                 if row.accountKind == .betaal, !row.amount.isZero {
                     Menu {
@@ -377,6 +379,10 @@ struct TransactionsTagMenuItems: View {
     let ids: [TransactionsItemID]
 
     var body: some View {
+        if store.tagsAllowed { choices } else { TransactionsSavingsTagMenuItems(store: store, ids: ids) }
+    }
+
+    @ViewBuilder private var choices: some View {
         let rows = store.items.filter { ids.contains($0.id) }.compactMap(\.entry)
         ForEach(store.lookups.tags) { tag in
             let id = tag.id ?? 0
@@ -418,8 +424,10 @@ struct TransactionsContextMenu: View {
             Menu(store.kind == .betaal ? "Toewijzen aan post" : "Toewijzen aan pot", systemImage: store.kind == .betaal ? "tablecells" : "tray.full") {
                 TransactionsAssignMenuItems(store: store, ids: ids)
             }
-            if !rows.isEmpty {
-                Menu("Tag", systemImage: "tag") { TransactionsTagMenuItems(store: store, ids: ids) }
+            if !rows.isEmpty, store.tagsAllowed || !store.tagsPresent(in: ids).isEmpty {
+                Menu(store.tagsAllowed ? "Tag" : "Tag verwijderen", systemImage: "tag") {
+                    TransactionsTagMenuItems(store: store, ids: ids)
+                }
             }
             if !expenses.isEmpty {
                 Menu("Verrekenen met spaar…", systemImage: "arrow.triangle.swap") {
@@ -508,9 +516,21 @@ private struct TransactionsTagPopover: View {
     @State private var creating = false
 
     var body: some View {
+        if store.tagsAllowed {
+            choices
+        } else {
+            TransactionsSavingsTags(tags: store.tagsPresent(in: Array(store.selection))) {
+                store.removeTag(model, ids: Array(store.selection), tagId: $0)
+            }
+            .padding(14)
+            .frame(width: 260)
+        }
+    }
+
+    private var choices: some View {
         let ids = Array(store.selection)
         let rows = store.selectedItems.compactMap(\.entry)
-        VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: 4) {
             Text(rows.count > 1 ? "Tags voor \(TransactionsFormat.entries(rows.count))" : "Tags")
                 .font(.headline).padding(.bottom, 4)
             if rows.isEmpty {

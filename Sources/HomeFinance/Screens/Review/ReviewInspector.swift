@@ -261,9 +261,14 @@ private struct ReviewDetail: View {
     private var tagRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Tags").font(.callout).foregroundStyle(.secondary)
-            ReviewFlow(spacing: 6) {
-                ForEach(store.tags) { tag in ReviewTagChip(tag: tag, isOn: tagBinding(tag.id ?? 0)) }
-                ReviewNewTagButton(row: row)
+            if store.kind == .betaal {
+                ReviewFlow(spacing: 6) {
+                    ForEach(store.tags) { tag in ReviewTagChip(tag: tag, isOn: tagBinding(tag.id ?? 0)) }
+                    ReviewNewTagButton(row: row)
+                }
+            } else {
+                Text(TagRuleText.savings).font(.callout).foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .help("Tags volgen een soort uitgave (tanken, uit eten) dwars door de posten heen. Ze tellen niet als extra uitgave.")

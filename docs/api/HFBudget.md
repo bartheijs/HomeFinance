@@ -59,6 +59,9 @@ Regels bij boeken (ook voor handmatige boekingen):
   RESERVERINGEN); `potId` alleen samen met `reimburse`; `reimburse` ("verrekenen met spaar") kan bij een
   uitgave (uit de pot) én bij een bijschrijving (doorstorten naar de pot), niet bij een bedrag van nul.
 - **Spaarrekening:** geen `budgetItemId`, geen `reimburse`; de pot hoort bij die rekening.
+- **Tags alleen op een betaalrekening.** Een tag op een boeking van een spaarrekening wordt geweigerd met
+  `BudgetError.tagOnSavings`. Uitzondering voor oudere administraties: tags die de boekingen van de transactie
+  al hadden mogen bij opnieuw boeken mee (niets nieuws erbij). Zie EntryService.
 - Opnieuw boeken of ongedaan maken wordt geweigerd zolang een boeking in een spaaroverboeking zit.
   Een koppeling als overboeking vervalt bij opnieuw boeken.
 - Hetzelfde geldt zolang een boeking verrekend is (`BudgetError.inSettlement`) of als terugstorting aan een
@@ -78,6 +81,14 @@ Regels bij boeken (ook voor handmatige boekingen):
 | `setReviewed(db, entryIds:, Bool)` | Nagekeken aan/uit. |
 | `markAllReviewed(db, accountId:) -> Int` | Alles van een rekening nagekeken (afgesloten jaren overgeslagen); geeft het aantal. |
 | `setTags(db, entryId:, tagIds:)` / `tagIds(db, entryId:)` | Tags van een boeking. |
+| `tagsAllowed(db, accountId:) -> Bool` | Kunnen boekingen op deze rekening een tag krijgen? Alleen op een betaalrekening. |
+
+**Tags alleen op de betaalrekening.** `create`, `update` en `setTags` weigeren een tag op een boeking van een
+spaarrekening met `BudgetError.tagOnSavings` ("Tags kunnen alleen op boekingen van de betaalrekening, niet op
+een spaarrekening. …"). Een tag die er al stond (van vóór deze regel) blijft staan: `update` met dezelfde tags
+mag (zolang de boeking op dezelfde rekening blijft), en `setTags` mag tags weghalen maar niet toevoegen. Er is
+geen migratie die zulke tags weghaalt; de app biedt bij zo'n boeking "Tag verwijderen" aan. Een boeking met tags
+naar een spaarrekening verplaatsen wordt ook geweigerd.
 
 Een verrekende boeking (met `settlementId`) houdt zijn bedrag, zijn rekening en de tag van de verrekening:
 `update`, `setTags` en `delete` weigeren dat met `BudgetError.inSettlement`. Label, notitie, post en extra
@@ -455,7 +466,7 @@ handmatige boeking tegenover staat.
 | `AccountService.setArchived(db, accountId:, Bool)` / `reorder(db, orderedIds:)` | Archiveren en volgorde. |
 | `AccountService.normalizeIBAN(String)` | De normalisatie zelf. |
 | `AccountService.setOpeningFromPots(db, accountId:, totalOpening:)` | Zet het beginsaldo op het niet toegewezen deel; zie PotService. |
-| `TagService.create(db, name:, color:)` / `update` / `delete` / `reorder` | Naam uniek (hoofdletterongevoelig), kleur `#RRGGBB`. `update` laat `settles` ongemoeid (dat loopt via `SettlementService`). `delete` wordt geweigerd met `tagHasSettlements` als de tag verrekeningen heeft (echte, of een beginstand met boekingen), zodat de historie niet stil verdwijnt; een lege beginstand houdt het niet tegen. |
+| `TagService.create(db, name:, color:)` / `update` / `delete` / `reorder` | Naam uniek (hoofdletterongevoelig), kleur `#RRGGBB`. `update` laat `settles` ongemoeid (dat loopt via `SettlementService`). `delete` wordt geweigerd met `tagHasSettlements` als de tag verrekeningen heeft (echte, of een beginstand met boekingen), zodat de historie niet stil verdwijnt; een lege beginstand houdt het niet tegen. Tags komen alleen op boekingen van een betaalrekening (zie EntryService). |
 
 ## Aannames
 
