@@ -68,6 +68,12 @@ Algemeen: **te veel informatie**.
 
 ## Incidentele transacties (pagina achter het kaartje Incidenteel)
 
-- Een **lijst met alle incidentele transacties** (alles zonder vaste post) van de gekozen maand.
-- **Sorteren op datum en op bedrag**, oplopend en aflopend.
-- **Filteren op inkomsten / uitgaven** (en alles).
+Opbouw van boven naar beneden, voor de gekozen maand:
+
+1. **Totalen**: Totaal in · Totaal uit · Saldo.
+2. **Uitgaven per tag** in die maand (alle tags met bedrag; niet "top tags").
+3. **De 5 grootste uitgaven** van die maand.
+4. **Alle transacties in een lijst**, met:
+   - sorteren op **datum** en op **bedrag**, oplopend en aflopend;
+   - filter **inkomsten / uitgaven** (en alles).
+5. **Geen links naar andere pagina's** op deze pagina.
