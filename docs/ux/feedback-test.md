@@ -47,3 +47,6 @@ Algemeen: **te veel informatie**.
     besteden negatief), het saldo sluit niet aan na een import, de laatste import is lang geleden, een grote
     verwachte uitgave komt eraan, afgevinkte verrekeningen die nog niet bij de bank gezien zijn.
 - **Knop "Maandgrid" rechtsboven weg.** De gebruiker verwacht het maandgrid weinig te gebruiken.
+- **Kaartjes Periodiek en Incidenteel tonen zowel inkomende als uitgaande transacties** (in en uit, elk met
+  totaal). Op de pagina erachter een **filter in / uit** (en alles).
+- **Maandgrid in de zijbalk onder Inzicht**, direct onder Rapporten (niet meer bij Begroting).
