@@ -92,7 +92,7 @@ Opbouw van boven naar beneden, voor de gekozen maand:
 - **Het woord "voorgeschoten" verdwijnt** overal.
 - Schakelaars bij een tag:
   - "Verrekenen" → **"Krijg ik terug"**;
-  - "Telt mee in nog te besteden" → **"Tel alvast mee bij 'nog te besteden'"** (twee schakelaars blijven).
+  - "Telt mee in nog te besteden" → **"Tel mee bij 'nog te besteden'"** (twee schakelaars blijven).
 - Status bij een tag met "Krijg ik terug": **"Nog terug te ontvangen: € …"**.
 - **Knop "Het is binnen…" / "Ontvangen…" weg.** De gebruiker tagt de terugbetaling gewoon met de tag; volgens de
   rekenregel (openstaand = − som van de boekingen met de tag zonder verrekening, plus startbedrag) wordt het
