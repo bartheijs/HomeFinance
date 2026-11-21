@@ -364,6 +364,8 @@ final class TransactionsStore {
     var newTagTarget: TransactionsNewTagTarget?
     /// Gemarkeerde boekingen die nog met spaar verrekend moeten worden, gesaldeerd.
     private(set) var openReimbursements: HFInsight.OpenReimbursements?
+    /// Welke bankbestanden de gebruiker moet downloaden om bij te werken (6a).
+    private(set) var downloadAdvice: DownloadAdvice?
 
     var selection = Set<TransactionsItemID>()
     var showDetail = false
@@ -437,6 +439,7 @@ final class TransactionsStore {
         }
         loanOutstanding = model.read(Money.zero) { try Insight.temporaryLoanOutstanding($0, on: model.today) }
         openReimbursements = model.read(nil as HFInsight.OpenReimbursements?) { try Insight.openReimbursements($0) }
+        downloadAdvice = model.read(nil as DownloadAdvice?) { try Insight.downloadAdvice($0, today: model.today) }
         let kind = kind
         labels = model.read(labels) { try Insight.allLabels($0, accountKind: kind) }
         settlements = model.read([]) {

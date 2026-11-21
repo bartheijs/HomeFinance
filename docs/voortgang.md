@@ -138,6 +138,20 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
 6. **Grotere schermpunten** hieronder oppakken, als de gebruiker dat wil.
 6a, 6b en 6c (wensen van 21 november) zijn gebouwd op 21 november; zie "21 november" hierboven. **Maar zie
    "Let op" bovenaan: die versie werkte niet bij de gebruiker en is teruggedraaid.**
+6a. **Downloadinstructie op Transacties** — opnieuw gebouwd, klaar (21 november), nog niet geïnstalleerd.
+   Onder de rekeningkaarten staat één rustig blok: "Bijwerken: download bij de bank de CSV-export (zip, één
+   bestand per rekening) van … , van … tot en met …", met daaronder waar de begindag vandaan komt en dat overlap
+   geen kwaad kan (dubbele regels worden overgeslagen). Begindag: de vroegste laatste banktransactie over alle
+   niet-gearchiveerde rekeningen (die dag bewust als overlap); zonder eerdere import de startdatum van het
+   beginsaldo. Aanwijzen toont per rekening de laatste banktransactie.
+   Verschil met de versie uit `16b21a1`: rekenwerk én teksten zitten in `HFInsight/DownloadAdvice.swift`
+   (6 tests in `DownloadAdviceTests`); de view is gewone tekst die over meer regels afbreekt, zonder
+   `.fixedSize` (die kon in een laag venster de kop van het scherm boven uit beeld duwen; niet bewezen als
+   oorzaak van de eerdere storing). De zelftest controleert nu op Transacties, op de huidige én de kleinste
+   venstermaat (1100 × 700), dat de kop onder de werkbalk zichtbaar is, dat het downloadblok in beeld staat
+   en dat het onder de kop staat (meetpunt `.selfTestProbe`, doet buiten de zelftest niets).
+   Testronde met voorbeelddata: GESLAAGD (498 tests, zelftest 31 OK). Nog: testronde op een kopie, installeren,
+   en de gebruiker laten kijken naar de kop van Transacties en de zijbalk.
 6e. **Vaste storting niet herkennen bij een heel ander bedrag** — klaar (21 november), nog niet geïnstalleerd.
    Wat er gebouwd is: `DistributionService.recognize` stelt aan de spaarkant geen verdeling meer voor als het
    bedrag minder dan de helft of meer dan anderhalf keer het totaal van de storting is (`isFarFromTotal`); het

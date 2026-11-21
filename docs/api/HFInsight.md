@@ -228,6 +228,7 @@ spaarrekening van de pot tellen in het potsaldo; een te vergoeden uitgave op de 
 | `searchEntries(db, filter:)` | `EntrySearchResult`: `rows` (één pagina), `totalCount` en `totalSum` (alle gevonden boekingen) |
 | `reviewQueue(db, accountId:)` | `[ReviewItem]`: banktransacties met status `nieuw`, oudste eerst, met `bookedAmount` en `remaining` |
 | `recentEntries(db, limit:)` | de laatste boekingen |
+| `downloadAdvice(db, today:)` | `DownloadAdvice?`: welke bankbestanden je downloadt om bij te werken (nil zonder rekeningen) |
 
 ```swift
 var filter = EntryFilter(accountId: accountId, year: 2027, month: 3, text: "tank", sort: .dayDescending, limit: 50)
@@ -242,6 +243,21 @@ bankomschrijving), `budgetItemId`, `potId`, `tagId`, `diversOnly`, `unreviewedOn
 
 `EntryRow` bevat de boeking plus `accountName`, `accountKind`, `itemLabel`, `potName`, `settlementId`, `tags` en `bank`
 (`BankFields`, nil bij handinvoer); `isDivers` is true voor een boeking op een betaalrekening zonder vaste post.
+
+### Downloadadvies (`downloadAdvice`)
+
+Voor het blok onder de rekeningkaarten op het scherm Transacties (`Sources/HFInsight/DownloadAdvice.swift`).
+`DownloadAdvice` heeft `accounts` (`[DownloadAccount]`: niet-gearchiveerde rekeningen in de volgorde van de app,
+elk met `lastBankDay` = datum van de laatste banktransactie en `fromDay`), `from`, `through` (= `today`) en
+`hasEarlierImport`.
+
+- `fromDay` van een rekening is haar laatste banktransactiedatum, of zonder banktransacties de startdatum van het
+  beginsaldo (`Account.openingDate`), nooit later dan vandaag.
+- `from` is de vroegste `fromDay` over alle rekeningen. Die dag zit er bewust in als overlap: de import slaat
+  regels over die er al zijn.
+- De teksten voor het scherm komen ook hieruit: `instruction` ("Bijwerken: download bij de bank de CSV-export (zip,
+  één bestand per rekening) van A en B, van … tot en met …"), `note` (waar de begindag vandaan komt en dat overlap
+  geen kwaad kan) en `perAccount` (per rekening de laatste banktransactie, voor de uitleg bij het aanwijzen).
 
 ## Verrekenen per tag
 

@@ -37,6 +37,14 @@ enum SelfTest {
         sidebarRows.insert(screen)
     }
 
+    /// Laatst gemeten plek (in venstercoördinaten, oorsprong linksboven) van views met `.selfTestProbe(_:)`.
+    private static var probeFrames: [String: CGRect] = [:]
+
+    static func probe(_ name: String, frame: CGRect) {
+        guard isOn else { return }
+        probeFrames[name] = frame
+    }
+
     // MARK: Logbestand
 
     private nonisolated(unsafe) static var handle: FileHandle?
@@ -111,6 +119,9 @@ enum SelfTest {
             model.errorMessage = nil
         }
 
+        // 3b. Transacties: de kop blijft zichtbaar en het downloadblok (6a) staat eronder, ook in het kleinste venster.
+        await checkTransactionsHeader(model: model)
+
         // 4. De zijbalk staat er na de ronde nog (een zijbalk die later leeg wordt, valt hier op).
         let rowsAfter = visibleSidebarRowCount()
         check(rowsAfter >= expected.count,
@@ -119,6 +130,34 @@ enum SelfTest {
         // 5. Fouten in read/perform over de hele ronde.
         check(model.failures.isEmpty, "geen fouten in model.read/perform (\(model.failures.count))")
         for f in model.failures.prefix(20) { write("     \(f)") }
+    }
+
+    private static func checkTransactionsHeader(model: AppModel) async {
+        model.selection = .transactions
+        guard let window = mainWindow() else { return }
+        let original = window.frame
+        // Gewone maat, daarna de kleinste maat die het venster toelaat (1100 × 700 inhoud).
+        let sizes: [(String, NSSize?)] = [("huidige venstermaat", nil), ("kleinste venstermaat", NSSize(width: 1100, height: 700))]
+        for (label, size) in sizes {
+            probeFrames = [:]  // alleen metingen na deze maatwijziging tellen
+            if let size { window.setContentSize(size) }
+            try? await Task.sleep(for: .milliseconds(600))
+            let height = window.contentView?.bounds.height ?? 0
+            // Onder de werkbalk: een kop die eronder of erboven wegvalt, telt als niet zichtbaar.
+            let top = max(0, height - window.contentLayoutRect.maxY)
+            let inWindow: (CGRect) -> Bool = { $0.width > 0 && $0.height > 0 && $0.minY >= top - 0.5 && $0.maxY <= height + 0.5 }
+            let header = await waitValue(.seconds(3)) { probeFrames["transacties-kop"] } until: { $0.map(inWindow) ?? false }
+            check(header.map(inWindow) ?? false, "Transacties: kop zichtbaar in het venster (\(label))"
+                  + (header.map { " y \(Int($0.minY))–\(Int($0.maxY)), zichtbaar gebied \(Int(top))–\(Int(height))" } ?? ", niet gezien"))
+            let block = await waitValue(.seconds(3)) { probeFrames["transacties-downloadblok"] } until: { $0.map(inWindow) ?? false }
+            check(block.map(inWindow) ?? false, "Transacties: downloadblok verscheen in het venster (\(label))"
+                  + (block.map { " y \(Int($0.minY))–\(Int($0.maxY))" } ?? ", niet gezien"))
+            if let header, let block {
+                check(block.minY >= header.maxY - 0.5, "Transacties: downloadblok staat onder de kop (\(label))")
+            }
+        }
+        window.setFrame(original, display: true)
+        try? await Task.sleep(for: .milliseconds(300))
     }
 
     private static func finish() {
@@ -178,5 +217,18 @@ enum SelfTest {
 
     private static func allSubviews(of view: NSView) -> [NSView] {
         view.subviews + view.subviews.flatMap { allSubviews(of: $0) }
+    }
+}
+
+// MARK: - Meetpunt voor de zelftest
+
+extension View {
+    /// Meldt in de zelftest waar deze view in het venster staat. Buiten de zelftest verandert er niets.
+    @ViewBuilder func selfTestProbe(_ name: String) -> some View {
+        if SelfTest.isOn {
+            onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { SelfTest.probe(name, frame: $0) }
+        } else {
+            self
+        }
     }
 }

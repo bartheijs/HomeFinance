@@ -96,6 +96,8 @@ Dat doet vier dingen en schrijft alles naar de map achter `--uit` (nooit in deze
 3. **Zelftest**: de echte app start met voorbeelddata in een tijdelijk bestand, opent het gewone venster en
    klikt zelf alle schermen in de zijbalk langs. Per controle staat er OK of FOUT in `zelftest-voorbeeld.log`:
    verscheen de zijbalk met alle regels, verscheen elk scherm binnen 5 seconden, kwam er geen foutmelding.
+   Op Transacties kijkt hij ook, op de gewone en de kleinste venstermaat, of de kop zichtbaar blijft en het
+   downloadblok eronder staat.
    Na hooguit 90 seconden stopt de app altijd.
 4. **Kerncijfers**: saldi per rekening, het saldo van elke pot, "besteedbaar nu", "nog te besteden deze maand"
    en een paar aantallen, in `kerncijfers-voorbeeld.json`.

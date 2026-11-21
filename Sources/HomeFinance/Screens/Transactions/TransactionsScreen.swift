@@ -31,8 +31,10 @@ struct TransactionsScreen: View {
                     .keyboardShortcut("n", modifiers: .command)
                     .help("Iets met de hand toevoegen dat niet via de bank liep (⌘N)")
                 }
+                .selfTestProbe("transacties-kop")
                 VStack(alignment: .leading, spacing: 14) {
                     accountCards
+                    if let advice = store.downloadAdvice { downloadBlock(advice) }
                     TransactionsFilterBar(store: store, searchFocused: $searchFocused)
                     if store.criteria.hasFilters, store.criteria.status != .newOnly, store.totalEntryCount > 0 {
                         TransactionsSummaryLine(store: store)
@@ -133,6 +135,21 @@ struct TransactionsScreen: View {
             }
             .padding(.vertical, 1)
         }
+    }
+
+    /// Rustig blok onder de rekeningen: welke bankbestanden je downloadt om bij te werken (6a). Gewone tekst die
+    /// over meer regels mag afbreken; geen vaste maten.
+    private func downloadBlock(_ advice: DownloadAdvice) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "arrow.down.circle").foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(advice.instruction)
+                Text(advice.note).foregroundStyle(.secondary)
+            }
+        }
+        .font(.caption)
+        .help(advice.perAccount)
+        .selfTestProbe("transacties-downloadblok")
     }
 
     /// Eén regel boven de feed, alleen als er nieuwe transacties zijn.
