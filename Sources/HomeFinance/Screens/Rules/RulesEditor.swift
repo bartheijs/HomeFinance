@@ -20,6 +20,11 @@ struct RulesEditor: View {
     var onDelete: () -> Void
     var onMove: (Int) -> Void
     var onClose: () -> Void
+    /// Verwijderen en kopiëren tonen (niet in de sheet vanuit Nakijken).
+    var showsManageButtons = true
+    var saveTitle = "Bewaar"
+    /// Vaste annuleerknop (sheet) in plaats van Annuleer/Herstel.
+    var cancelTitle: String?
 
     @State private var showConfidenceHelp = false
     @FocusState private var labelFocused: Bool
@@ -61,7 +66,7 @@ struct RulesEditor: View {
 
     private var actionBar: some View {
         HStack(spacing: 8) {
-            if !isNew {
+            if !isNew && showsManageButtons {
                 Button(role: .destructive, action: onDelete) { Image(systemName: "trash") }
                     .help("Regel verwijderen")
                 Button(action: onDuplicate) { Image(systemName: "plus.square.on.square") }
@@ -69,10 +74,14 @@ struct RulesEditor: View {
                     .help("Maak een kopie van deze regel (⌘D)")
             }
             Spacer()
-            Button(isNew ? "Annuleer" : "Herstel", action: onRevert)
-                .disabled(!isNew && !isDirty)
-                .help(isNew ? "Deze nieuwe regel niet bewaren" : "Zet de regel terug zoals hij bewaard is")
-            Button("Bewaar", action: onSave)
+            if let cancelTitle {
+                Button(cancelTitle, action: onRevert).help("Sluiten zonder deze wijzigingen")
+            } else {
+                Button(isNew ? "Annuleer" : "Herstel", action: onRevert)
+                    .disabled(!isNew && !isDirty)
+                    .help(isNew ? "Deze nieuwe regel niet bewaren" : "Zet de regel terug zoals hij bewaard is")
+            }
+            Button(saveTitle, action: onSave)
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut("s", modifiers: .command)
                 .disabled(!isDirty && !isNew)
@@ -226,10 +235,8 @@ struct RulesEditor: View {
     private var aboutSection: some View {
         Section {
             LabeledContent("Herkomst",
-                           value: draft.origin == .geleerd ? "geleerd van een correctie" : "zelf gemaakt")
-                .help(draft.origin == .geleerd
-                      ? "Deze regel past zich aan als je dezelfde tegenpartij weer anders boekt."
-                      : "Een zelf gemaakte regel wordt nooit automatisch aangepast.")
+                           value: draft.origin == .geleerd ? "vanuit een boeking" : "zelf gemaakt")
+                .help("Een regel verandert alleen als je dat zelf doet: hier, of met ‘Regel bijwerken met deze keuze’ in Nakijken.")
             LabeledContent("Gebruikt",
                            value: draft.hitCount == 0 ? "nog nooit"
                                 : "\(draft.hitCount)×, laatst op \(RulesText.lastUsed(draft.lastUsed))")

@@ -667,7 +667,8 @@ final class TransactionsStore {
 
     func bookAllCertain(_ model: AppModel) { bookSuggested(model, certainPending) }
 
-    /// Boekt één nieuwe transactie met de eigen keuzes en leert ervan.
+    /// Boekt één nieuwe transactie met de eigen keuzes. Er wordt geen regel gemaakt of gewijzigd (6i); deed een
+    /// regel precies dit voorstel, dan telt die als gebruikt.
     func book(_ model: AppModel, _ p: TransactionsPending, with draft: TransactionsDraft) {
         let kind = kind
         let unchanged = draft == TransactionsDraft(pending: p, kind: kind)
@@ -675,7 +676,6 @@ final class TransactionsStore {
                                           ruleId: unchanged ? p.suggestion.ruleId : nil,
                                           confidence: p.suggestion.confidence)
         let correction = correction(p.transaction, draft, suggestedLabel: p.suggestion.label)
-        var learned: LearnResult?
         remember(itemLabel: correction.itemLabel)
         if kind == .spaar { remember(potId: draft.potId) }
         if selection.contains(.bank(p.id)) { reselectBankId = p.id }
@@ -683,10 +683,10 @@ final class TransactionsStore {
         let loan = allocation.temporaryLoan
         run(model, {
             if loan { return "Geboekt en gemarkeerd als tijdelijk geleend. Uitstaand: \(self.loanOutstanding.formatted())" }
-            return learned.flatMap { $0.outcome == .unchanged ? nil : $0.message } ?? "Geboekt op ‘\(name)’"
+            return "Geboekt op ‘\(name)’"
         }) { db in
             try BookingService.book(db, bankTransactionId: p.id, allocations: [allocation])
-            learned = try RuleEngine.learn(from: correction, db)
+            _ = try RuleEngine.afterBooking(correction, remember: nil, db)
         }
     }
 
@@ -714,12 +714,10 @@ final class TransactionsStore {
         let missing = (rows.map(\.day) + news.map(\.transaction.day)).filter { !resolve($0).found }.count
         let total = rows.count + news.count
         let isSingle = total == 1
-        var learned: LearnResult?
         if isSingle, let p = news.first, selection.contains(.bank(p.id)) { reselectBankId = p.id }
         remember(itemLabel: itemLabel)
         let name = itemLabel ?? "Divers"
         run(model, {
-            if let learned, learned.outcome != .unchanged { return learned.message }
             if missing > 0 {
                 return "\(TransactionsFormat.number(total - missing)) op ‘\(name)’ gezet; \(missing) niet (de post bestaat niet in dat jaar)"
             }
@@ -731,12 +729,7 @@ final class TransactionsStore {
                 var e = try EntryService.draft(db, entryId: row.id)
                 e.budgetItemId = target.id
                 try EntryService.update(db, entryId: row.id, e)
-                // Leren van een correctie, behalve bij een deel van een splitsing.
-                if isSingle, let bankId = row.bankTransactionId, row.bank?.amount == row.amount,
-                   let transaction = try BankTransaction.fetchOne(db, key: bankId) {
-                    var d = TransactionsDraft(row: row); d.itemId = target.id
-                    learned = try RuleEngine.learn(from: self.correction(transaction, d, suggestedLabel: nil), db)
-                }
+                // Geen regel leren (6i): een regel ontstaat alleen met toestemming in Nakijken of bij Regels.
             }
             for p in news {
                 let target = resolve(p.transaction.day)
@@ -744,8 +737,8 @@ final class TransactionsStore {
                 var d = TransactionsDraft(pending: p, kind: .betaal); d.itemId = target.id
                 try BookingService.book(db, bankTransactionId: p.id, allocations: [
                     d.allocation(amount: p.transaction.amount, kind: .betaal, confidence: p.suggestion.confidence)])
-                let result = try RuleEngine.learn(from: self.correction(p.transaction, d, suggestedLabel: p.suggestion.label), db)
-                if isSingle { learned = result }
+                _ = try RuleEngine.afterBooking(self.correction(p.transaction, d, suggestedLabel: p.suggestion.label),
+                                                remember: nil, db)
             }
         }
     }
@@ -772,7 +765,8 @@ final class TransactionsStore {
                 var d = TransactionsDraft(pending: p, kind: .spaar); d.potId = potId
                 try BookingService.book(db, bankTransactionId: p.id, allocations: [
                     d.allocation(amount: p.transaction.amount, kind: .spaar, confidence: p.suggestion.confidence)])
-                _ = try RuleEngine.learn(from: self.correction(p.transaction, d, suggestedLabel: p.suggestion.label), db)
+                _ = try RuleEngine.afterBooking(self.correction(p.transaction, d, suggestedLabel: p.suggestion.label),
+                                                remember: nil, db)
             }
         }
     }

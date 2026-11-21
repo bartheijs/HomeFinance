@@ -31,14 +31,14 @@ struct RulesScreen: View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 ScreenHeader("Regels",
-                             subtitle: "Regels worden vanzelf geleerd van je correcties in Nakijken. Hier stel je ze bij.") {
+                             subtitle: "Een regel ontstaat als je in Nakijken ‘Onthoud als regel’ aanvinkt, of als je hem hier maakt.") {
                     Button { request(.new) } label: { Label("Nieuwe regel", systemImage: "plus") }
                         .keyboardShortcut("n", modifiers: .command)
                         .help("Maak zelf een regel (⌘N)")
                 }
                 if loaded && data.rules.isEmpty && !isNew {
                     EmptyState(title: "Nog geen regels",
-                               message: "Regels ontstaan vanzelf zodra je transacties boekt in Importeren en nakijken: van elke keuze wordt geleerd. Je kunt er ook zelf een maken.",
+                               message: "Vink bij het boeken in Importeren en nakijken ‘Onthoud als regel’ aan, of maak hier zelf een regel.",
                                icon: "wand.and.stars", actionTitle: "Nieuwe regel") { request(.new) }
                 } else {
                     VStack(spacing: 0) {

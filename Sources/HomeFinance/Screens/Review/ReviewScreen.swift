@@ -152,7 +152,7 @@ struct ReviewBanner: View {
             row(icon: "checkmark.circle", text: notice.text) {
                 if notice.undo != nil {
                     Button("Maak ongedaan") { store.undo(model) }
-                        .help("Draait de laatste actie terug, ook een geleerde regel.")
+                        .help("Draait de laatste actie terug, ook een regel die daarbij bewaard of bijgewerkt is.")
                 }
                 Button { store.notice = nil } label: { Image(systemName: "xmark") }
                     .buttonStyle(.borderless).help("Sluit deze melding")

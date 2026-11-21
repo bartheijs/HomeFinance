@@ -107,7 +107,7 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
 | Onderdeel | Stand |
 |---|---|
 | Importeren met naad op saldo (`HFImport`) en importvenster | Klaar, 71 tests. In gebruik: de eerste import van de gebruiker (14 november) sloot aan op het beginsaldo. |
-| Nakijken, boeken, regels die bijleren (`HFRules`, `HFBudget`) | Klaar en in gebruik. Tags direct zichtbaar en aan te maken bij nakijken (16 november). |
+| Nakijken, boeken, regels (`HFRules`, `HFBudget`) | Klaar en in gebruik. Tags direct zichtbaar en aan te maken bij nakijken (16 november). Regels alleen met toestemming ("Onthoud als regel", 6i, 21 november). |
 | Vaste storting met verdeling en herkenning | Klaar, met scherm (Potten › Vaste stortingen). |
 | Potten: beginbedrag, in de min, spaardoel (ook uit onderdelen), vooruitblik met projecten | Klaar, met schermen. |
 | Verrekenen met spaar (twee richtingen, boekt bij afvinken, bankregel hangt er later aan) | Klaar, met scherm. Open verrekeningen tellen mee in "nog te besteden". Na een sluitende import stemt de app vanzelf af. |
@@ -177,16 +177,24 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
    in `HFBudget`). Bij Instellingen › Tags wordt "n boekingen" aanklikbaar: opent Transacties met de
    betaalrekening en het filter op die tag. (Aanleiding: een tag met één boeking op spaar was in Transacties
    onvindbaar omdat daar de betaalrekening geselecteerd stond.)
-6i. **Regels alleen met toestemming en aan te passen vanuit Nakijken** (wens van 21 november).
-   - Nakijken krijgt bij elke boeking "Onthoud als regel", **standaard uit**. Zonder vinkje boekt de app alleen
-     en leert hij niets (nu leert `RuleEngine` bij elke correctie automatisch).
-   - Vinkje aan: één samenvattingszin van de regel ("Voortaan bij X: post …, verrekenen met … bij geld eruit")
-     met "Aanpassen…", dat de regeleditor opent, voorgevuld: voorwaarden (tegenpartij, IBAN, omschrijving
-     bevat, bedrag) en acties (post, pot, verrekenen en richting, omschrijving, tags). Pas na opslaan bestaat hij.
-   - Bij een voorstel van een bestaande regel: "Regel aanpassen…" bij "Waarom dit voorstel?". Wijkt de keuze af
-     van de regel, dan niet stil bijwerken maar "Regel bijwerken met deze keuze?" (standaard uit).
-   - Daarna (afspraak met de gebruiker): de 15 bestaande, automatisch geleerde regels wissen (eerst een kopie)
-     en ze bij volgende imports met aandacht opnieuw maken.
+6i. **Regels alleen met toestemming en aan te passen vanuit Nakijken** — klaar (21 november, nog niet
+   geïnstalleerd). De app leert niet meer stil: boeken in Nakijken en in Transacties (boeken, toewijzen aan een
+   post of pot) maakt of wijzigt geen regel meer.
+   - Nakijken: onder "Waar hoort dit bij?" staat het vinkje "Onthoud als regel", **standaard uit**. Aan: één
+     samenvattingszin uit `RuleEngine.summary` ("Voortaan bij Stichting X: post Divers, verrekenen met pot Y bij
+     geld eruit, omschrijving 'Z'") en "Aanpassen…", dat de regeleditor als sheet opent, voorgevuld met
+     voorwaarden en acties. De regel wordt bewaard bij het boeken, zoals hij er staat.
+   - Deed een regel het voorstel en kiest de gebruiker iets anders: "Regel bijwerken met deze keuze" (standaard
+     uit), met dezelfde zin en "Aanpassen…". Zonder vinkje blijft de regel ongewijzigd: een uitzondering.
+     Neemt de gebruiker het voorstel ongewijzigd over, dan staat er geen vinkje en telt de regel als gebruikt.
+   - Bij "Waarom dit voorstel?" (Meer opties): "Regel aanpassen…" opent die regel in de editor; bewaren geldt meteen.
+   - Niet bij een splitsing, een vaste storting of een verrekening (daar leerde de app ook niet van).
+   - Ongedaan maken na het boeken draait ook een bewaarde of bijgewerkte regel terug.
+   - Logica in `HFRules/RuleProposal.swift` (`ruleProposal`, `applyChoice`, `afterBooking`, `summary`), 9 tests.
+     Het oude `learn` roept de app niet meer aan.
+   - Nog te doen door de orchestrator: de 15 bestaande, automatisch geleerde regels wissen (eerst een kopie);
+     de gebruiker maakt ze bij volgende imports met aandacht opnieuw.
+   - Mogelijke vervolgstap: ook in Transacties "Onthoud als regel" bij het boeken van een nieuwe transactie.
 6d. **Versie zichtbaar in Instellingen › Over** — klaar (21 november). `scripts/run.sh` zet bij elke build de
    korte commit-hash (met een `+` als er niet-gecommitte wijzigingen waren) en de bouwdatum in `Info.plist`
    (`HFBuildCommit`, `HFBuildDate`; `CFBundleVersion` is het aantal commits). Over toont bv. "Versie 1.0 ·

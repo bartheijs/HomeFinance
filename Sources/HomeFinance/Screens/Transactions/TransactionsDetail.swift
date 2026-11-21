@@ -208,7 +208,7 @@ private struct TransactionsSingleDetail: View {
                     .help("De pot op deze spaarrekening waar het bedrag bij komt of af gaat.")
             }
             if let p = pending {
-                Text(p.suggestion.confidence == .geen ? "Geen regel herkent deze transactie. Wat je kiest onthoudt de app voor de volgende keer."
+                Text(p.suggestion.confidence == .geen ? "Geen regel herkent deze transactie. Wat je kiest geldt alleen voor deze boeking."
                                                       : "Voorstel (\(p.suggestion.confidence.title.lowercased())): \(p.suggestion.reason)")
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -550,7 +550,7 @@ private struct TransactionsSingleDetail: View {
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(locked || (store.matchChoice.map { $0.distribution == nil }
                                          ?? store.draft.label.trimmingCharacters(in: .whitespaces).isEmpty))
-                    .help("Boekt de transactie met deze keuzes (⌘⏎). Wijkt je keuze af van het voorstel, dan leert de app ervan.")
+                    .help("Boekt de transactie met deze keuzes (⌘⏎). Er wordt geen regel gemaakt of gewijzigd.")
             } else {
                 Text(store.isTextDirty ? "Getypte tekst is nog niet bewaard" : "Keuzes worden meteen bewaard")
                     .font(.caption).foregroundStyle(store.isTextDirty ? Theme.warning : Color.secondary)

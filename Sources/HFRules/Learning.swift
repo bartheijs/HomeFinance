@@ -44,6 +44,8 @@ public struct LearnResult: Equatable, Sendable {
 
 extension RuleEngine {
 
+    /// Het oude, automatische leren. De app roept dit sinds 6i niet meer aan (zie `ruleProposal` en
+    /// `afterBooking`); het blijft voor de tests van het leren van verrekenen en richting.
     /// Leert van een correctie. Maakt een geleerde regel voor de tegenpartij (IBAN, anders naam, anders een
     /// trefwoord uit een herkenbare omschrijving) of past de bestaande geleerde regel aan.
     /// Handmatige regels worden nooit aangepast; een regel met alleen een bedrag wordt nooit geleerd.
@@ -55,19 +57,7 @@ extension RuleEngine {
 
         let itemLabel = RuleMatcher.filled(correction.itemLabel)
         let chosenLabel = RuleMatcher.filled(correction.entryLabel)
-        // Zoals de winnende regel voor déze richting voorstelt: in de andere richting dan waarin verrekenen met
-        // spaar gekozen is, zonder verrekenen en zonder pot.
-        let sameAsProposal: Bool = {
-            guard let winner = best?.rule else { return false }
-            var rule = winner
-            if !rule.reimburseApplies(to: tx.amount) { rule.reimburse = false; rule.targetPotId = nil }
-            return TextNormalizer.normalize(rule.targetItemLabel ?? "") == TextNormalizer.normalize(itemLabel ?? "")
-                && rule.targetPotId == correction.potId
-                && Set(rule.tagIdList) == Set(correction.tagIds)
-                && rule.reimburse == correction.reimburse
-                && (chosenLabel == nil
-                    || TextNormalizer.normalize(chosenLabel!) == TextNormalizer.normalize(suggestion.label))
-        }()
+        let sameAsProposal = best.map { Self.matches(correction, $0.rule, suggestedLabel: suggestion.label) } ?? false
 
         func onlyRecordUse(_ rule: Rule) throws -> LearnResult {
             var used = rule

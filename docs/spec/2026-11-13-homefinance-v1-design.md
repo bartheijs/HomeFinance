@@ -25,7 +25,7 @@ wacht (zie `docs/voortgang.md`).
 | Datums | `Day` (jaar-maand-dag, zonder tijdzone), in de database als `yyyy-MM-dd`. |
 | Rekeningen | Meerdere: betaalrekening(en) en spaarrekening(en). Alle potten staan op één spaarrekening. |
 | Import | De zip van de bank (één CSV per rekening, 19 kolommen zonder kop; bevestigd met echte bestanden), ook los CSV of PDF. Saldoketen, dubbelen, en bij de eerste import aansluiting op het beginsaldo. |
-| Categorisatie | Regels, die bijleren van elke correctie. Geen AI in v1. |
+| Categorisatie | Regels die de gebruiker zelf maakt of bijwerkt, ook vanuit Nakijken ("Onthoud als regel"). Geen AI in v1. |
 | Login | Geen. De Mac is de beveiliging. |
 | Taal | Interface Nederlands. Code, commentaar in code mag Nederlands; identifiers Engels. |
 | Telefoon | Geen hosting: de app schrijft een pagina (HTML zonder scripts en PDF) naar een cloudmap. |
@@ -39,7 +39,7 @@ wacht (zie `docs/voortgang.md`).
 |---|---|---|
 | `HFCore` | `Money`, `Day`, records, schema en migraties (`AppDatabase`) | GRDB |
 | `HFImport` | CSV lezen per bankprofiel, saldoketen, dubbelen, import naar `bankTransaction` | HFCore |
-| `HFRules` | Regels toepassen op banktransacties, voorstellen met zekerheid, leren van correcties | HFCore |
+| `HFRules` | Regels toepassen op banktransacties, voorstellen met zekerheid, regelconcept bij een boeking | HFCore |
 | `HFBudget` | Schrijven: boeken, splitsen, potten, overboekingen, afstemming, jaar en posten beheren | HFCore |
 | `HFInsight` | Lezen: maandgrid, status vaste posten, saldo, besteedbaar, potsaldi, rapportcijfers, zoeken | HFCore |
 | `HFBackup` | Back-up en herstel, voorbeelddata, export als CSV en als Excel-bestand per jaar | HFCore |
@@ -153,8 +153,8 @@ Zie `Sources/HFCore/Records.swift` (records met uitleg) en `Schema.swift` (tabel
 - Volgorde van herkennen bij nieuwe banktransacties: verrekeningen, dan vaste stortingen, dan regels.
 - **Een regel verrekent alleen in één richting** (`Rule.reimburseDirection`: geld erin, geld eruit of beide).
   In de andere richting stelt dezelfde regel de post, de omschrijving en de tags voor, maar géén verrekenen en
-  géén pot, met zekerheid laag en een melding (twijfelgeval in Nakijken). Leren vult de richting met die van de
-  transactie waarbij de gebruiker verrekenen koos. Bestaande regels met verrekenen kregen bij migratie v9 de
+  géén pot, met zekerheid laag en een melding (twijfelgeval in Nakijken). Het regelconcept in Nakijken vult de richting
+  met die van de transactie waarbij de gebruiker verrekenen koos. Bestaande regels met verrekenen kregen bij migratie v9 de
   richting van hun laatste boeking met verrekenen, en zonder zo'n boeking "geld erin" (alleen bijschrijving)
   als veilige keuze. Aanleiding: een regel op de rekening van een kind, geleerd van geld dat binnenkwam voor
   haar spaarpot, haalde ook zakgeld dat naar het kind ging van die spaarpot af.
@@ -205,9 +205,21 @@ Zekerheid en volgorde:
 4. Alleen bedrag → `laag`.
 5. Geen regel → `geen`.
 
-Binnen dezelfde zekerheid wint de laagste `priority`, daarna de meest specifieke regel. Een correctie van de
-gebruiker maakt een geleerde regel of past de bestaande geleerde regel voor die tegenpartij aan. Een regel met
-alleen een bedrag wordt nooit automatisch geleerd.
+Binnen dezelfde zekerheid wint de laagste `priority`, daarna de meest specifieke regel.
+
+**Regels alleen met toestemming** (sinds 21 november, 6i). Boeken maakt of wijzigt nooit vanzelf een regel.
+- Geen regel deed een voorstel: in Nakijken staat "Onthoud als regel", standaard uit. Aangevinkt toont het één
+  samenvattingszin ("Voortaan bij X: post …, verrekenen met pot … bij geld eruit, omschrijving '…'") en
+  "Aanpassen…" (de regeleditor, voorgevuld). Het concept: voorwaarde op de tegenpartij (IBAN, anders naam,
+  anders een trefwoord uit een herkenbare omschrijving), een bedrag erbij als het doel een vaste post is en
+  tegenpartij en bedrag al eerder voorkwamen, en als acties de keuze (post, pot, verrekenen met richting,
+  omschrijving, tags). De regel wordt bewaard bij het boeken, precies zoals getoond.
+- Een regel deed een voorstel en de keuze wijkt af: "Regel bijwerken met deze keuze", standaard uit. Aan: die
+  regel krijgt de nieuwe acties, zijn voorwaarden blijven. Uit: de boeking is een uitzondering, de regel blijft.
+- De keuze is gelijk aan het voorstel: geen vinkje; de regel telt als gebruikt (`hitCount`, `lastUsed`).
+- Bij "Waarom dit voorstel?" opent "Regel aanpassen…" de voorstellende regel in de editor.
+- Een regel met alleen een bedrag kan zo niet ontstaan (de editor eist een voorwaarde; het concept heeft altijd
+  een tegenpartij of trefwoord). Transacties maakt geen regels.
 
 ## Schermen
 

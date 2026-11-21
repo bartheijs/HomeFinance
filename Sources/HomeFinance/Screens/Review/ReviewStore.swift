@@ -110,6 +110,18 @@ struct ReviewRow: Identifiable, Equatable {
     var tx: BankTransaction { item.transaction }
 }
 
+/// "Onthoud als regel" of "Regel bijwerken met deze keuze?" in het detail, met de samenvatting uit HFRules.
+struct ReviewRuleOption: Equatable {
+    /// Het concept werkt de regel bij die het voorstel deed (anders: een nieuwe regel).
+    var isUpdate: Bool
+    var isOn: Bool
+    /// De regel zoals hij bewaard wordt als het vinkje aan staat.
+    var rule: Rule
+    /// "Voortaan bij …: post …" (uit `RuleEngine.summary`).
+    var summary: String
+    var title: String { isUpdate ? "Regel bijwerken met deze keuze" : "Onthoud als regel" }
+}
+
 /// Melding onder de wachtrij, met de mogelijkheid om de laatste actie terug te draaien.
 struct ReviewNotice: Identifiable {
     let id = UUID()
@@ -215,6 +227,13 @@ final class ReviewStore {
     private var chosenMatches: [Int64: DistributionMatch] = [:]
     /// Keuze van de gebruiker tussen vaste storting (true) en één pot (false), per transactie.
     private var distributionChoice: [Int64: Bool] = [:]
+    /// "Onthoud als regel" / "Regel bijwerken" aangevinkt, per transactie (standaard uit).
+    private var rememberRule: Set<Int64> = []
+    /// Regelconcept dat de gebruiker in de editor aanpaste, met de keuze waarbij dat gebeurde.
+    private var customRules: [Int64: (correction: Correction, rule: Rule)] = [:]
+    /// Voorkomt dat het scherm bij elke tekening de regels opnieuw uit de database haalt.
+    @ObservationIgnored private var proposalCache: [Int64: (correction: Correction, proposal: RuleProposal)] = [:]
+    @ObservationIgnored private var summaryCache: [Int64: (rule: Rule, text: String)] = [:]
 
     // MARK: Afgeleid
 
@@ -346,6 +365,10 @@ final class ReviewStore {
         drafts = drafts.filter { ids.contains($0.key) }
         chosenMatches = chosenMatches.filter { ids.contains($0.key) }
         distributionChoice = distributionChoice.filter { ids.contains($0.key) }
+        rememberRule = rememberRule.intersection(ids)
+        customRules = customRules.filter { ids.contains($0.key) }
+        proposalCache = [:]
+        summaryCache = [:]
         defaults = defaults.filter { ids.contains($0.key) }
         for row in rows {
             let fresh = makeDefault(row)
@@ -465,7 +488,7 @@ final class ReviewStore {
         guard let id = created?.id else { return nil }
         model.read(()) { db in tags = try Tag.fetchAll(db, sql: "SELECT * FROM tag ORDER BY sortOrder, id") }
         var d = draft(for: row)
-        d.tagIds.insert(id)   // gaat zo ook mee in de Correction voor RuleEngine.learn
+        d.tagIds.insert(id)   // gaat zo ook mee in het regelconcept (Onthoud als regel)
         setDraft(d, for: row)
         model.toast = settles ? "Tag \"\(name)\" gemaakt met verrekenen" : "Tag \"\(name)\" gemaakt"
         return nil
@@ -488,6 +511,74 @@ final class ReviewStore {
         if draft == defaults[row.id] { drafts[row.id] = nil } else { drafts[row.id] = draft }
     }
     func resetDraft(for row: ReviewRow) { drafts[row.id] = nil }
+
+    // MARK: Regels alleen met toestemming
+
+    /// Wat de regels met de huidige keuze zouden doen (uit HFRules; schrijft niets).
+    private func ruleProposal(for row: ReviewRow, _ model: AppModel) -> RuleProposal? {
+        let draft = draft(for: row)
+        // Een gesplitste boeking, een vaste storting of een verrekening wordt niet als regel onthouden.
+        guard !draft.isSplit, row.match == nil, row.settlement == nil else { return nil }
+        let correction = correction(for: row)
+        if let cached = proposalCache[row.id], cached.correction == correction { return cached.proposal }
+        let proposal: RuleProposal? = model.read(nil) { try RuleEngine.ruleProposal(for: correction, $0) }
+        if let proposal { proposalCache[row.id] = (correction, proposal) }
+        return proposal
+    }
+
+    /// De regel die bewaard wordt als het vinkje aan staat: het concept, of de versie uit de editor. Is de keuze
+    /// daarna nog veranderd, dan neemt die versie de nieuwe keuze over (de voorwaarden blijven).
+    private func shownRule(for row: ReviewRow, _ proposal: RuleProposal) -> Rule? {
+        if let custom = customRules[row.id] {
+            let correction = correction(for: row)
+            return custom.correction == correction ? custom.rule : RuleEngine.applyChoice(correction, to: custom.rule)
+        }
+        return proposal.draft
+    }
+
+    /// De optie onder "Waar hoort dit bij?", of nil als er niets aan te bieden is (bijvoorbeeld als de keuze
+    /// gelijk is aan het voorstel van een regel).
+    func ruleOption(for row: ReviewRow, _ model: AppModel) -> ReviewRuleOption? {
+        guard let proposal = ruleProposal(for: row, model), proposal.offersChoice,
+              let rule = shownRule(for: row, proposal) else { return nil }
+        let summary: String
+        if let cached = summaryCache[row.id], cached.rule == rule {
+            summary = cached.text
+        } else {
+            summary = model.read("") { try RuleEngine.summary(of: rule, $0) }
+            summaryCache[row.id] = (rule, summary)
+        }
+        return ReviewRuleOption(isUpdate: proposal.isUpdate, isOn: rememberRule.contains(row.id), rule: rule,
+                                summary: summary)
+    }
+
+    func setRemember(_ on: Bool, for row: ReviewRow) {
+        if on { rememberRule.insert(row.id) } else { rememberRule.remove(row.id); customRules[row.id] = nil }
+    }
+
+    /// De gebruiker paste het concept aan in de editor. Geeft een foutmelding, of nil als het goed is.
+    func setCustomRule(_ rule: Rule, for row: ReviewRow) -> String? {
+        do { try RuleEngine.validate(rule) } catch { return error.localizedDescription }
+        customRules[row.id] = (correction(for: row), rule)
+        rememberRule.insert(row.id)
+        return nil
+    }
+
+    /// De regel die het voorstel deed, om hem vanuit Nakijken aan te passen.
+    func proposingRule(for row: ReviewRow, _ model: AppModel) -> Rule? {
+        guard let id = row.suggestion.ruleId else { return nil }
+        return model.read(nil) { try RuleEngine.rule(id: id, $0) }
+    }
+
+    /// Bewaart een aangepaste bestaande regel en haalt de voorstellen opnieuw op.
+    /// Geeft een foutmelding, of nil als het gelukt is.
+    func saveRule(_ rule: Rule, _ model: AppModel) -> String? {
+        var rule = rule
+        do { try model.db.write { try RuleEngine.save(&rule, $0) } } catch { return error.localizedDescription }
+        model.toast = "Regel ‘\(rule.name)’ bewaard"
+        load(model)
+        return nil
+    }
 
     /// Wat er nog niet verdeeld is in een splitsing.
     func remaining(_ draft: ReviewDraft, for row: ReviewRow) -> Money {
@@ -599,7 +690,8 @@ final class ReviewStore {
 
     // MARK: Boeken en overslaan
 
-    /// Boekt de geselecteerde transactie met het voorstel zoals het er staat, en leert van de keuze.
+    /// Boekt de geselecteerde transactie met de keuze zoals die er staat. Een regel wordt alleen bewaard of
+    /// bijgewerkt als "Onthoud als regel" of "Regel bijwerken met deze keuze" aan staat.
     func bookCurrent(_ model: AppModel) {
         guard let row = singleRow else { return }
         if let settlement = row.settlement {
@@ -610,12 +702,16 @@ final class ReviewStore {
         if let problem = problem(for: row) { model.errorMessage = problem; return }
         let draft = draft(for: row)
         let allocations = allocations(for: row, reviewed: true)
+        // Alleen een regel bewaren als de gebruiker dat aanvinkte (6i); anders telt hoogstens het gebruik.
+        let learnable = !draft.isSplit && row.match == nil
+        let remember: Rule? = learnable && rememberRule.contains(row.id)
+            ? ruleProposal(for: row, model).flatMap { $0.offersChoice ? shownRule(for: row, $0) : nil } : nil
+        let correction = correction(for: row)
         var learned: LearnResult?
         let ok = model.perform {
             try model.db.write { db in
                 _ = try BookingService.book(db, bankTransactionId: row.id, allocations: allocations)
-                // Van een vaste storting leert de app geen regel: die wordt al herkend.
-                if !draft.isSplit, row.match == nil { learned = try RuleEngine.learn(from: correction(for: row), db) }
+                if learnable { learned = try RuleEngine.afterBooking(correction, remember: remember, db) }
             }
         }
         guard ok else { return }

@@ -1,6 +1,7 @@
 # HFRules — publieke API
 
-Regels toepassen op banktransacties, voorstellen met zekerheid, leren van correcties.
+Regels toepassen op banktransacties, voorstellen met zekerheid, een regelconcept bij een boeking (alleen
+bewaard met toestemming van de gebruiker).
 De module **stelt alleen voor** en beheert regels; boeken (`Entry`) doet `HFBudget`.
 Hangt alleen af van `HFCore` en GRDB. Alle functies krijgen een `Database` en draaien dus binnen
 `appDatabase.read { db in … }` of `appDatabase.write { db in … }`.
@@ -19,12 +20,19 @@ let s = suggestions[transaction.id!]!
 // s.confidence (.hoog/.midden/.laag/.geen), s.budgetItemId, s.potId, s.label, s.tagIds, s.reimburse,
 // s.reason ("Regel 'Energie': tegenpartij en bedrag"), s.amountDiffers + s.expectedAmount, s.warnings
 
-// Na het boeken (door HFBudget) met een andere of dezelfde keuze:
+// Nakijken: wat zou de regel worden bij deze keuze? Schrijft niets.
+let correction = Correction(bankTransaction: transaction, itemLabel: "Energie", potId: nil,
+                            entryLabel: nil, tagIds: [], reimburse: false)
+let proposal = try appDatabase.read { db in try RuleEngine.ruleProposal(for: correction, db) }
+// proposal.offersChoice → toon "Onthoud als regel" (of bij proposal.isUpdate "Regel bijwerken met deze keuze")
+let zin = try appDatabase.read { db in try RuleEngine.summary(of: proposal.draft!, db) }
+// "Voortaan bij Stroomhuis (NL00TEST0000000050): post Energie"
+
+// Na het boeken (door HFBudget): remember = het (eventueel in de editor aangepaste) concept, of nil (vinkje uit).
 let result = try appDatabase.write { db in
-    try RuleEngine.learn(from: Correction(bankTransaction: transaction, itemLabel: "Energie",
-                                          potId: nil, entryLabel: nil, tagIds: [], reimburse: false), db)
+    try RuleEngine.afterBooking(correction, remember: vinkjeAan ? concept : nil, db)
 }
-// result.outcome: .created / .updated / .unchanged; result.message: "Regel geleerd: 'Stroomhuis' → post 'Energie'"
+// result.outcome: .created / .updated / .unchanged; result.message: "Regel bewaard: Voortaan bij …"
 // Ongedaan maken:
 try appDatabase.write { db in try RuleEngine.undoLearning(result, db) }
 ```
@@ -44,8 +52,12 @@ try appDatabase.write { db in try RuleEngine.undoLearning(result, db) }
 | `setEnabled(ruleId:, _ enabled: Bool, _ db)` | Aan/uit; gooit `RuleError.notFound`. |
 | `reorder(ruleIds: [Int64], _ db)` | Genoemde regels krijgen priority 10, 20, 30 … in die volgorde; de rest volgt in de oude volgorde. |
 | `testRule(_ rule, against: db, limit: Int? = nil) -> [RuleTestHit]` | Welke bestaande banktransacties (alle statussen, nieuwste eerst) een — eventueel niet opgeslagen — regel herkent. Negeert `enabled`. |
-| `learn(from: Correction, _ db, now: Date = Date()) -> LearnResult` | Leren van een correctie (zie onder). |
-| `undoLearning(_ result: LearnResult, _ db)` | Gemaakte regel verwijderen of aangepaste regel terugzetten. |
+| `ruleProposal(for: Correction, _ db) -> RuleProposal` | Het regelconcept bij een keuze; schrijft niets (zie "Regels alleen met toestemming"). |
+| `applyChoice(_ correction: Correction, to: Rule) -> Rule` | Zet post, pot, verrekenen (met richting), omschrijving en tags van de keuze in een regel; voorwaarden, naam en volgorde blijven. Puur rekenwerk. |
+| `afterBooking(_ correction:, remember: Rule?, _ db, now:) -> LearnResult` | Na het boeken: `remember` bewaren (`created`/`updated`), of zonder `remember` alleen het gebruik tellen als de keuze gelijk was aan het voorstel. |
+| `summary(of: Rule, _ db) -> String` | Eén zin: "Voortaan bij X: post …, verrekenen met pot … bij geld eruit, omschrijving '…', tags …". Ook `summary(of:potName:tagNames:)` zonder database. |
+| `undoLearning(_ result: LearnResult, _ db)` | Bewaarde regel verwijderen of bijgewerkte regel terugzetten. |
+| `learn(from: Correction, _ db, now: Date = Date()) -> LearnResult` | Het oude, automatische leren (zie onder). De app roept dit sinds 6i niet meer aan. |
 
 `RuleError` is een `LocalizedError` met Nederlandse meldingen (`errorDescription`).
 
@@ -101,7 +113,32 @@ rekenwerk (handig voor lijsten). `RuleMatcher.match(rule, transaction, ignoreEna
   omschrijving (pinbetaling, `/NAME/…/`, `Naam: …`; anders de omschrijving zelf, hoogstens 40 tekens).
 - `TextNormalizer.normalize(_:)` en `normalizeIban(_:)`: dezelfde vergelijking als de regels gebruiken.
 
-## Leren (`learn`)
+## Regels alleen met toestemming (6i)
+
+De app maakt of wijzigt nooit vanzelf een regel bij een boeking. Nakijken biedt een vinkje aan (standaard uit).
+
+`RuleProposal`: `proposingRule` (de regel die het voorstel deed, of nil), `matchesProposal` (de keuze is gelijk
+aan wat die regel voor déze transactie voorstelt, dus in de andere richting dan waarin verrekenen geldt zonder
+verrekenen en pot), `draft` (het concept), `isUpdate` (`draft.id != nil`) en `offersChoice` (er is een concept
+en de keuze is niet gelijk aan het voorstel van een regel).
+
+- **Een regel deed het voorstel** → `draft` is die regel met `applyChoice` (zelfde id, voorwaarden blijven).
+  Nakijken toont dan "Regel bijwerken met deze keuze". Is de keuze gelijk aan het voorstel, dan is er geen
+  keuze (`offersChoice == false`) en telt `afterBooking` het gebruik.
+- **Geen regel** → een nieuwe regel (`origin == .geleerd`, id nil) voor de tegenpartij: IBAN, anders de naam,
+  anders een trefwoord uit een herkenbare omschrijving. Bedrag als voorwaarde alleen bij een vaste post en als
+  tegenpartij + bedrag minstens twee keer gezien zijn. `priority` achteraan (hoogste + 10, afgerond op tientallen).
+  Lukt geen tegenpartij of trefwoord, dan is `draft` nil en biedt Nakijken niets aan.
+- **Verrekenen en richting** gaan via `learnReimburse` (zie onder, punt 6).
+- `afterBooking(correction, remember:)`:
+  - `remember` gezet → `RuleEngine.save` (met `validate`), `created` of `updated` (`previousRule` = de oude
+    versie, voor `undoLearning`); `message` "Regel bewaard: Voortaan bij …" / "Regel bijgewerkt: …".
+  - `remember == nil` en de keuze gelijk aan het voorstel → `recordUse` (`unchanged`, `usedRuleId` gezet).
+  - `remember == nil` en de keuze wijkt af → niets (`unchanged`, de boeking is een uitzondering).
+
+## Oud: automatisch leren (`learn`)
+
+Niet meer gebruikt door de app (sinds 6i); de beschrijving blijft voor de tests en `learnReimburse`.
 
 `Correction`: `bankTransaction`, `itemLabel` (nil = divers), `potId`, `entryLabel` (nil = voorgesteld label),
 `tagIds`, `reimburse`. `LearnResult`: `outcome`, `rule`, `previousRule`, `usedRuleId`, `message`.

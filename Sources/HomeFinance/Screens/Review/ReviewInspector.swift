@@ -2,6 +2,7 @@ import SwiftUI
 import HFCore
 import HFInsight
 import HFBudget
+import HFRules
 
 /// Rechterpaneel: de ruwe bankgegevens van de gekozen transactie en het voorstel dat je kunt aanpassen.
 struct ReviewInspector: View {
@@ -58,6 +59,8 @@ private struct ReviewDetail: View {
     private var isExpense: Bool { row.tx.amount.isNegative }
     /// Eigen keuze van de gebruiker voor deze transactie; nil = volg de algemene stand.
     @State private var moreOpen: Bool?
+    /// De regeleditor als sheet: het concept van "Onthoud als regel" of de regel die het voorstel deed.
+    @State private var editing: ReviewRuleEdit?
 
     private var moreBinding: Binding<Bool> {
         Binding(get: { moreOpen ?? (store.showMore || store.looksLikeLoanReturn(row)) },
@@ -89,6 +92,41 @@ private struct ReviewDetail: View {
                 .padding(22)
             }
             actions
+        }
+        .sheet(item: $editing) { edit in
+            RuleEditorSheet(rule: edit.rule, isNew: edit.rule.id == nil, year: row.tx.day.year,
+                            intro: edit.intro, saveTitle: edit.saveTitle) { rule in
+                switch edit.kind {
+                case .concept: store.setCustomRule(rule, for: row)
+                case .existing: store.saveRule(rule, model)
+                }
+            }
+        }
+    }
+
+    // MARK: Regel onthouden (alleen met toestemming)
+
+    /// Klein blok onder de keuze: standaard uit. Aan = de samenvatting van de regel en "Aanpassen…".
+    @ViewBuilder private var ruleChoice: some View {
+        if let option = store.ruleOption(for: row, model) {
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(option.title, isOn: Binding(get: { option.isOn }, set: { store.setRemember($0, for: row) }))
+                    .toggleStyle(.checkbox)
+                    .help(option.isUpdate
+                          ? "Aan: de regel die dit voorstelde krijgt voortaan deze keuze. Uit: alleen deze boeking wijkt af; de regel blijft zoals hij is."
+                          : "Aan: bij het boeken wordt een regel bewaard, zodat dit de volgende keer wordt voorgesteld. Uit: alleen boeken.")
+                if option.isOn {
+                    Text(option.summary)
+                        .font(.callout).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 20)
+                    Button("Aanpassen…") {
+                        editing = ReviewRuleEdit(kind: .concept, rule: option.rule)
+                    }
+                    .buttonStyle(.link).font(.callout).padding(.leading, 20)
+                    .help("Open de regel in de regeleditor: voorwaarden en wat hij doet. Hij wordt bewaard als je boekt.")
+                }
+            }
         }
     }
 
@@ -215,6 +253,7 @@ private struct ReviewDetail: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if store.kind == .betaal { periodChoice }
+            ruleChoice.padding(.top, 2)
         }
     }
 
@@ -267,7 +306,7 @@ private struct ReviewDetail: View {
     }
 
     private var hint: String {
-        if store.isEdited(row) { return "Je eigen keuze. De app onthoudt dit voor de volgende keer." }
+        if store.isEdited(row) { return "Je eigen keuze." }
         if row.match != nil, !row.usesDistribution {
             return "Niet de vaste storting: kies de pot waar dit geld heen gaat."
         }
@@ -280,7 +319,7 @@ private struct ReviewDetail: View {
         case .hoog: return "Voorstel van een regel: tegenpartij en bedrag kloppen."
         case .midden: return "Voorstel van een regel. Kijk even of het klopt."
         case .laag: return "Een gok op basis van het bedrag. Kijk even of het klopt."
-        case .geen: return "Geen regel gevonden. Kies zelf; de app onthoudt je keuze."
+        case .geen: return "Geen regel gevonden. Kies zelf."
         }
     }
 
@@ -318,6 +357,15 @@ private struct ReviewDetail: View {
                 Text(row.suggestion.reason.isEmpty ? "Geen regel herkent deze transactie." : row.suggestion.reason)
                 Text("Zekerheid: \(row.suggestion.confidence.title.lowercased())").foregroundStyle(.secondary)
                     .help("Zeker: tegenpartij en bedrag kloppen met een regel. Waarschijnlijk: alleen de tegenpartij of een trefwoord. Gok: alleen het bedrag. Onbekend: geen regel.")
+                if row.suggestion.ruleId != nil {
+                    Button("Regel aanpassen…") {
+                        if let rule = store.proposingRule(for: row, model) {
+                            editing = ReviewRuleEdit(kind: .existing, rule: rule)
+                        }
+                    }
+                    .buttonStyle(.link)
+                    .help("Open de regel die dit voorstelde in de regeleditor. Bewaren geldt meteen.")
+                }
             }
             .font(.callout)
             bank
@@ -398,7 +446,7 @@ private struct ReviewDetail: View {
                     .keyboardShortcut(.defaultAction)
                     .disabled(problem != nil || settlement?.isAmbiguous == true)
                     .help(settlement == nil
-                          ? "Boekt deze transactie en gaat naar de volgende (⏎). Wijkt je keuze af van het voorstel, dan leert de app een regel."
+                          ? "Boekt deze transactie en gaat naar de volgende (⏎). Een regel wordt alleen bewaard als je dat hierboven aanvinkt."
                           : "Vinkt de verrekening zo nodig af en hangt deze bankregel eraan (⏎). Er komt geen dubbele boeking.")
             }
             .controlSize(.large)
@@ -408,6 +456,22 @@ private struct ReviewDetail: View {
 }
 
 // MARK: - Onderdelen
+
+/// Wat de regeleditor in Nakijken bewerkt.
+private struct ReviewRuleEdit: Identifiable {
+    enum Kind { case concept, existing }
+    let id = UUID()
+    let kind: Kind
+    let rule: Rule
+
+    var intro: String {
+        switch kind {
+        case .concept: "Deze regel wordt bewaard als je de transactie boekt."
+        case .existing: "Deze regel deed het voorstel. Bewaren geldt meteen, ook voor de andere transacties in de wachtrij."
+        }
+    }
+    var saveTitle: String { kind == .concept ? "Gebruik" : "Bewaar" }
+}
 
 /// Keuzelijst met de vaste posten van het jaar (betaalrekening) of de potten (spaarrekening).
 struct ReviewTargetPicker: View {
