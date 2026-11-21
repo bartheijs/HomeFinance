@@ -61,6 +61,7 @@ enum SelfTest {
         FileManager.default.createFile(atPath: url.path, contents: nil)
         handle = try? FileHandle(forWritingTo: url)
         write("zelftest gestart (harde tijdslimiet \(Int(hardLimit)) s)")
+        write("versie (zoals bij Instellingen › Over): \(BuildInfo.current.displayText)")
 
         // Bewaker: werkt ook als de hoofdthread vastloopt.
         Thread.detachNewThread {

@@ -10,6 +10,13 @@ swift build -c release --product HomeFinance
 BIN="$(swift build -c release --show-bin-path)/HomeFinance"
 APP="dist/HomeFinance.app"
 
+# Welke build dit is, voor Instellingen › Over: korte commit-hash (met "+" bij niet-gecommitte wijzigingen),
+# bouwdatum en het aantal commits als CFBundleVersion.
+COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo onbekend)"
+[ -n "$(git status --porcelain 2>/dev/null)" ] && COMMIT="$COMMIT+"
+BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
+BUILD_DATE="$(date '+%Y-%m-%d %H:%M')"
+
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/HomeFinance"
@@ -27,7 +34,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleVersion</key><string>$BUILD_NUMBER</string>
+  <key>HFBuildCommit</key><string>$COMMIT</string>
+  <key>HFBuildDate</key><string>$BUILD_DATE</string>
   <key>CFBundleDevelopmentRegion</key><string>nl</string>
   <key>LSMinimumSystemVersion</key><string>15.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.finance</string>
@@ -38,7 +47,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 codesign --force --sign - "$APP" >/dev/null 2>&1 || true
-echo "Gebouwd: $APP"
+echo "Gebouwd: $APP (versie 1.0 · gebouwd $BUILD_DATE · $COMMIT)"
 case "${1:-}" in
   --build) ;;
   --install)

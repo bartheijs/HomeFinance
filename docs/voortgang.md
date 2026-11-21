@@ -163,10 +163,11 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
    in `HFBudget`). Bij Instellingen › Tags wordt "n boekingen" aanklikbaar: opent Transacties met de
    betaalrekening en het filter op die tag. (Aanleiding: een tag met één boeking op spaar was in Transacties
    onvindbaar omdat daar de betaalrekening geselecteerd stond.)
-6d. **Versie zichtbaar in Instellingen › Over** (wens van 21 november). Nu staat er altijd "Versie 1.0 (1)", zodat
-   de gebruiker niet ziet welke build draait. Laat `scripts/run.sh` bij het bouwen de korte commit-hash en de
-   bouwdatum in de app zetten (bijvoorbeeld in `Info.plist`) en toon die bij Over, bv. "gebouwd 21-11-2026,
-   versie 9cba8b0".
+6d. **Versie zichtbaar in Instellingen › Over** — klaar (21 november). `scripts/run.sh` zet bij elke build de
+   korte commit-hash (met een `+` als er niet-gecommitte wijzigingen waren) en de bouwdatum in `Info.plist`
+   (`HFBuildCommit`, `HFBuildDate`; `CFBundleVersion` is het aantal commits). Over toont bv. "Versie 1.0 ·
+   gebouwd 21-11-2026 14:50 · 7931616"; zonder die gegevens (`swift run`, `swift build`) "ontwikkelversie". De
+   tekst komt uit `BuildInfo` in HFCore (met tests). De zelftest zet dezelfde tekst als tweede regel in zijn log.
 7. **Excel-historie** (in de wacht): `HFHistory` aanpassen volgens de oplossing hieronder, proefdraaien, pas
    importeren als de jaren kloppen. Daarna de knop "Leer regels uit bankhistorie" in het scherm Regels.
 8. **Code-review** door een developer voordat de app de enige administratie wordt (zie de spec).

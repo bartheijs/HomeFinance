@@ -109,3 +109,26 @@ import GRDB
         #expect(Money(evaluating: "") == nil)
     }
 }
+
+@Suite struct BuildInfoTests {
+    @Test func showsVersionDateAndCommit() {
+        let info = BuildInfo(infoDictionary: ["CFBundleShortVersionString": "1.0", "CFBundleVersion": "42",
+                                              "HFBuildCommit": "abc1234", "HFBuildDate": "2026-11-21 14:50"])
+        #expect(info.displayText == "1.0 · gebouwd 21-11-2026 14:50 · abc1234")
+        #expect(info.isComplete)
+    }
+
+    @Test func marksUncommittedChanges() {
+        let info = BuildInfo(version: "1.0", commit: "abc1234+", builtAt: "2026-01-05 09:03")
+        #expect(info.displayText == "1.0 · gebouwd 05-01-2026 09:03 · abc1234+")
+    }
+
+    @Test func missingInformationIsDevelopmentVersion() {
+        #expect(BuildInfo(infoDictionary: nil).displayText == "ontwikkelversie")
+        #expect(BuildInfo(infoDictionary: ["CFBundleShortVersionString": "1.0", "CFBundleVersion": "1"])
+            .displayText == "ontwikkelversie")
+        #expect(BuildInfo(version: "1.0", commit: "abc1234", builtAt: "21-11-2026").displayText == "ontwikkelversie")
+        #expect(BuildInfo(version: "1.0", commit: " ", builtAt: "2026-11-21 14:50").displayText == "ontwikkelversie")
+        #expect(!BuildInfo(infoDictionary: nil).isComplete)
+    }
+}

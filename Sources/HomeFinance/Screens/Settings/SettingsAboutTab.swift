@@ -59,10 +59,5 @@ struct SettingsAboutTab: View {
 
     private var databaseURL: URL { model.isDemo ? AppModel.demoURL : AppDatabase.defaultURL }
 
-    private var version: String {
-        let info = Bundle.main.infoDictionary
-        guard let short = info?["CFBundleShortVersionString"] as? String else { return "ontwikkelversie" }
-        let build = info?["CFBundleVersion"] as? String
-        return build.map { "\(short) (\($0))" } ?? short
-    }
+    private var version: String { BuildInfo.current.displayText }
 }
