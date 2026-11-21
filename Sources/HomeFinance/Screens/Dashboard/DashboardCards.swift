@@ -125,116 +125,133 @@ private struct DashboardAttentionLook {
 
 // MARK: - Vaste posten
 
-/// Vaste posten van deze maand: hoeveel er binnen zijn en welke nog komen.
-struct DashboardFixedItemsCard: View {
-    @Environment(AppModel.self) private var model
-    let overview: FixedItemsOverview
-    /// Toon alle posten, ook de voldane (detailweergave).
-    var showAll = false
-
-    private var maxRows: Int { showAll ? Int.max : 4 }
-    private var pending: [FixedItemStatus] {
-        overview.items.filter { $0.state == .teLaat } + overview.items.filter { $0.state == .open }
-            + (showAll ? overview.items.filter { $0.state == .voldaan } : [])
+/// Filter in / uit / alles op de pagina's achter de kaartjes.
+enum DashboardInOutFilter: String, CaseIterable, Identifiable {
+    case alles, inkomsten, uitgaven
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .alles: "Alles"
+        case .inkomsten: "In"
+        case .uitgaven: "Uit"
+        }
     }
-    private var total: Int { overview.paidCount + overview.openCount + overview.lateCount }
+}
+
+/// De pagina achter het kaartje Periodieke transacties: wat er nog komt en wat al verwerkt is, inkomsten en
+/// uitgaven apart. Nooit € 0,00: altijd het plan, en bij een verwerkte post het werkelijke bedrag.
+struct DashboardFixedItemsPage: View {
+    let overview: FixedItemsOverview
+    @State private var filter: DashboardInOutFilter = .alles
+
+    private var incomeItems: [FixedItemStatus] { overview.items.filter { $0.direction == .IN } }
+    private var expenseItems: [FixedItemStatus] { overview.items.filter { $0.direction != .IN } }
 
     var body: some View {
-        DashboardCard("Vaste posten deze maand", icon: "checklist",
-                      help: "Vaste posten zijn de inkomsten en uitgaven die elke maand, elk kwartaal of elk jaar terugkomen, zoals salaris, huur en verzekeringen.") {
-            Button { model.selection = .grid } label: {
-                Image(systemName: "arrow.up.right")
+        VStack(alignment: .leading, spacing: Theme.spacing) {
+            summary
+            Picker("Toon", selection: $filter) {
+                ForEach(DashboardInOutFilter.allCases) { Text($0.title).tag($0) }
             }
-            .buttonStyle(.borderless)
-            .help("Open het maandgrid")
+            .pickerStyle(.segmented).labelsHidden().frame(width: 240)
+            if overview.items.isEmpty {
+                DashboardQuietState(icon: "calendar", title: "Geen vaste posten deze maand")
+            }
+            if filter != .uitgaven, !incomeItems.isEmpty { section("Inkomsten", incomeItems) }
+            if filter != .inkomsten, !expenseItems.isEmpty { section("Uitgaven", expenseItems) }
+        }
+    }
+
+    /// Nog binnen te komen, nog af te gaan en het saldo daarvan.
+    private var summary: some View {
+        HStack(spacing: Theme.spacing) {
+            figure("Nog binnen te komen", overview.incomeExpected)
+            figure("Nog af te gaan", overview.expensesExpected.magnitude)
+            figure("Saldo", overview.expectedNet, colored: true)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func figure(_ title: String, _ amount: Money, colored: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.callout)
+            MoneyText(amount, colored: colored, alwaysSign: colored)
+                .font(.system(.title2, design: .rounded).weight(.semibold))
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+        .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(Theme.hairline.opacity(0.6)))
+    }
+
+    private func section(_ title: String, _ items: [FixedItemStatus]) -> some View {
+        let coming = items.filter { $0.state == .teLaat } + items.filter { $0.state == .open }
+        let done = items.filter { $0.state == .voldaan }
+        return DashboardCard(title, icon: title == "Inkomsten" ? "arrow.down.circle" : "arrow.up.circle") {
+            EmptyView()
         } content: {
-            if total == 0 {
-                DashboardQuietState(icon: "calendar", title: "Geen vaste posten deze maand",
-                                    message: "Voeg vaste posten toe bij Posten.")
-            } else {
-                progress
-                if pending.isEmpty {
-                    DashboardQuietState(icon: "checkmark.circle.fill", title: "Alles is binnen",
-                                        message: "Alle vaste posten van deze maand zijn geboekt.", tint: Theme.positive)
-                } else {
-                    list
+            VStack(alignment: .leading, spacing: 0) {
+                if !coming.isEmpty {
+                    groupTitle("Nog te komen")
+                    rows(coming)
+                }
+                if !done.isEmpty {
+                    groupTitle("Verwerkt").padding(.top, coming.isEmpty ? 0 : 10)
+                    rows(done)
                 }
             }
         }
     }
 
-    private var progress: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            GeometryReader { geo in
-                let unit = (geo.size.width - 4) / CGFloat(max(total, 1))
-                HStack(spacing: 2) {
-                    segment(overview.paidCount, unit, Theme.positive)
-                    segment(overview.lateCount, unit, Theme.negative)
-                    segment(overview.openCount, unit, Color.secondary.opacity(0.3))
-                }
-                .clipShape(Capsule())
-            }
-            .frame(height: 8)
-            HStack(spacing: 12) {
-                legend(overview.paidCount, "voldaan", Theme.positive, "Geboekt: betaald of ontvangen.")
-                legend(overview.lateCount, "te laat", Theme.negative, "De verwachte dag is voorbij en er is nog niets geboekt.")
-                legend(overview.openCount, "nog verwacht", Color.secondary.opacity(0.5), "Wordt later deze maand verwacht.")
-                Spacer(minLength: 0)
-            }
-        }
+    private func groupTitle(_ text: String) -> some View {
+        Text(text).font(.callout.weight(.semibold)).padding(.bottom, 4)
     }
 
-    @ViewBuilder private func segment(_ count: Int, _ unit: CGFloat, _ color: Color) -> some View {
-        if count > 0 { Rectangle().fill(color).frame(width: max(unit * CGFloat(count), 3)) }
-    }
-
-    private func legend(_ count: Int, _ text: String, _ color: Color, _ help: String) -> some View {
-        HStack(spacing: 5) {
-            Circle().fill(color).frame(width: 7, height: 7)
-            Text("\(count)").fontWeight(.semibold).monospacedDigit()
-            Text(text).foregroundStyle(.secondary)
-        }
-        .font(.caption)
-        .lineLimit(1)
-        .help(help)
-    }
-
-    private func caption(_ item: FixedItemStatus) -> String {
-        if item.state == .voldaan { return item.day.map { "geboekt op \($0.short())" } ?? "geboekt" }
-        return item.expectedDay.map { "verwacht rond de \($0)e" } ?? "deze maand verwacht"
-    }
-
-    private var list: some View {
+    private func rows(_ items: [FixedItemStatus]) -> some View {
         VStack(spacing: 0) {
-            ForEach(Array(pending.prefix(maxRows).enumerated()), id: \.element.id) { index, item in
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 if index > 0 { Divider() }
-                HStack(spacing: 8) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(item.label).font(.callout).lineLimit(1)
-                        Text(caption(item)).font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 4)
-                    if item.state == .teLaat { Pill("te laat", color: Theme.negative, icon: "clock") }
-                    if item.state == .voldaan {
-                        Image(systemName: "checkmark").font(.caption).foregroundStyle(.secondary)
-                    }
-                    MoneyText(item.state == .voldaan ? item.actual : item.plan).font(.callout)
-                }
-                .padding(.vertical, 5)
+                row(item)
             }
-            Divider()
-            HStack {
-                if pending.count > maxRows {
-                    Text("en nog \(pending.count - maxRows) in het maandgrid").foregroundStyle(.secondary)
-                } else {
-                    Text("Nog te verwachten").foregroundStyle(.secondary)
-                }
-                Spacer()
-                MoneyText(overview.outstandingTotal, colored: true).fontWeight(.semibold)
+        }
+    }
+
+    private func row(_ item: FixedItemStatus) -> some View {
+        HStack(spacing: 8) {
+            Text(item.label).font(.callout).lineLimit(1)
+            Spacer(minLength: 4)
+            status(item)
+            amounts(item).frame(minWidth: 180, alignment: .trailing)
+        }
+        .padding(.vertical, 6)
+    }
+
+    @ViewBuilder private func status(_ item: FixedItemStatus) -> some View {
+        switch item.state {
+        case .teLaat:
+            Pill("te laat", color: Theme.negative, icon: "clock")
+        case .open:
+            Text(item.expectedDay.map { "rond de \($0)e" } ?? "deze maand").font(.callout)
+        case .voldaan:
+            if item.entryCount == 0 {
+                Pill("afgevinkt", color: Theme.info, icon: "checkmark")
+            } else {
+                Text(item.day.map { "verwerkt \($0.short())" } ?? "verwerkt").font(.callout)
             }
-            .font(.caption)
-            .padding(.top, 7)
-            .help("Het plan van alle posten die nog open of te laat zijn.")
+        }
+    }
+
+    /// Plan, en bij een verwerkte post met boeking het werkelijke bedrag.
+    @ViewBuilder private func amounts(_ item: FixedItemStatus) -> some View {
+        if item.state == .voldaan, item.entryCount > 0, item.actual != item.plan {
+            HStack(spacing: 6) {
+                if !item.plan.isZero {
+                    Text("plan \(item.plan.formatted())").font(.caption).monospacedDigit()
+                }
+                MoneyText(item.actual, colored: true).font(.callout.weight(.semibold))
+            }
+        } else {
+            MoneyText(item.plan, colored: true).font(.callout.weight(item.state == .voldaan ? .semibold : .regular))
         }
     }
 }

@@ -167,7 +167,7 @@ private struct DashboardDetailView: View {
             switch detail {
             case .fixedItems:
                 if let fixed = d.fixedItems {
-                    DashboardFixedItemsCard(overview: fixed, showAll: true).frame(width: min(width, 720))
+                    DashboardFixedItemsPage(overview: fixed).frame(width: min(width, 760))
                 } else {
                     DashboardYearMissingCard(year: d.today.year)
                 }
@@ -339,10 +339,7 @@ struct DashboardCard<Trailing: View, Content: View>: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: icon).foregroundStyle(Theme.accent)
-                Text(title).font(.headline).lineLimit(1)
-                if let help {
-                    Image(systemName: "info.circle").font(.caption).foregroundStyle(.tertiary).help(help)
-                }
+                Text(title).font(.headline).lineLimit(1).help(help ?? "")
                 Spacer(minLength: 8)
                 trailing
             }
