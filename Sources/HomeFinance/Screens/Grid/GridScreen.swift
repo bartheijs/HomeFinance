@@ -14,6 +14,8 @@ struct GridScreen: View {
     @State private var loaded = false
     /// Per post-id: naam en verdeling van de gekoppelde vaste storting, voor de tooltip van het label.
     @State private var distributionHelp: [Int64: String] = [:]
+    /// De opbouw van RESERVERINGEN (regels van de gekoppelde vaste storting), of nil.
+    @State private var buildup: ReserveBuildup?
     @State private var showDifference = false
     @State private var showLegend = false
     @State private var showOverview = false
@@ -53,6 +55,12 @@ struct GridScreen: View {
         summary = try? model.db.read { try Insight.yearSummary($0, year: model.year, today: model.today) }
         monthStatus = try? model.db.read { try Insight.fixedItemsStatus($0, year: model.year, month: statusMonth, today: model.today) }
         distributionHelp = (try? model.db.read { db in try Self.distributionHelp(db, today: model.today) }) ?? [:]
+        buildup = try? model.db.read { try Insight.reserveBuildup($0, year: model.year) }
+        if let buildup {
+            // De zin over de opbouw (en een waarschuwing als RES-regels en storting uit elkaar lopen) bij het label.
+            let extra = [buildup.sentence, buildup.warning].compactMap { $0 }.joined(separator: "\n")
+            distributionHelp[buildup.itemId] = [distributionHelp[buildup.itemId], extra].compactMap { $0 }.joined(separator: "\n\n")
+        }
         loaded = true
     }
 
@@ -69,6 +77,18 @@ struct GridScreen: View {
         return result
     }
 
+    /// Met een gekoppelde vaste storting is de opbouw van RESERVERINGEN de verdeling van die storting (één bron);
+    /// zonder koppeling tonen we de RES-regels zoals vroeger.
+    private var buildupRows: [GridItemRow]? {
+        guard let buildup, buildup.distribution != nil else { return nil }
+        return buildup.gridRows
+    }
+
+    private func hasBuildup(_ grid: MonthGrid) -> Bool {
+        if let buildupRows { return !buildupRows.isEmpty }
+        return grid.rows.contains { $0.kind == .reserveLine }
+    }
+
     /// De maand van de samenvatting boven het grid: de lopende maand, of december (voorbij jaar) of januari
     /// (toekomstig jaar).
     private var statusMonth: Int {
@@ -82,7 +102,8 @@ struct GridScreen: View {
         let firstFuture: Int = model.year < today.year ? 13 : (model.year > today.year ? 1 : today.month + 1)
         return GridOptions(year: model.year, showDifference: showDifference,
                            currentMonth: model.year == today.year ? today.month : nil,
-                           firstFutureMonth: firstFuture, editable: !(grid?.closed ?? false))
+                           firstFutureMonth: firstFuture, editable: !(grid?.closed ?? false),
+                           reserveNote: buildup?.warning)
     }
 
     // MARK: Onderdelen
@@ -113,8 +134,8 @@ struct GridScreen: View {
 
                 Menu {
                     Toggle("Toon afwijkingen van het plan", isOn: $showDifference)
-                    Toggle("Toon RES-regels", isOn: $showReserveLines)
-                        .disabled(!grid.rows.contains { $0.kind == .reserveLine })
+                    Toggle("Toon opbouw van RESERVERINGEN", isOn: $showReserveLines)
+                        .disabled(!hasBuildup(grid))
                     Divider()
                     Picker("Rijhoogte", selection: $densityRaw) {
                         Text("Compact").tag(GridDensity.compact.rawValue)
@@ -125,7 +146,7 @@ struct GridScreen: View {
                     Text("Weergave")
                 }
                 .fixedSize()
-                .help("Afwijkingen van het plan tonen (⌘D), RES-regels tonen (⌘R) en de rijhoogte kiezen.")
+                .help("Afwijkingen van het plan tonen (⌘D), de opbouw van RESERVERINGEN tonen (⌘R) en de rijhoogte kiezen.")
             }
             .background {
                 // Sneltoetsen voor de keuzes in het menu Weergave.
@@ -139,7 +160,7 @@ struct GridScreen: View {
     }
 
     private func content(_ grid: MonthGrid) -> some View {
-        let lines = GridLine.build(from: grid, showReserveLines: showReserveLines)
+        let lines = GridLine.build(from: grid, showReserveLines: showReserveLines, buildupRows: buildupRows)
         return VStack(alignment: .leading, spacing: 0) {
             if let monthStatus, !monthStatus.items.isEmpty {
                 (Text("\(Day.monthNames[statusMonth - 1].capitalized): ").fontWeight(.semibold)
@@ -154,7 +175,8 @@ struct GridScreen: View {
             }
             GridTable(grid: grid, lines: lines, density: density, options: options,
                       reserveExpanded: showReserveLines, distributionHelp: distributionHelp,
-                      onToggleReserve: { withAnimation(.easeInOut(duration: 0.15)) { showReserveLines.toggle() } })
+                      onToggleReserve: { withAnimation(.easeInOut(duration: 0.15)) { showReserveLines.toggle() } },
+                      hasBuildup: hasBuildup(grid))
                 .frame(maxHeight: GridTable.contentHeight(lineCount: lines.count, density: density))
                 .background(GridPalette.surface)
                 .clipShape(RoundedRectangle(cornerRadius: 10))

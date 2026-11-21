@@ -15,13 +15,15 @@ struct GridTable: View {
     var reserveExpanded: Bool
     var distributionHelp: [Int64: String] = [:]
     var onToggleReserve: () -> Void
+    /// Of er een opbouw onder RESERVERINGEN is om uit te klappen; nil = kijk naar de RES-regels in het grid.
+    var hasBuildup: Bool? = nil
 
     @State private var scroll: CGPoint = .zero
     @State private var popover: GridTarget?
     @State private var popoverRect: CGRect = .zero
     @State private var form: GridTarget?
 
-    private var hasReserveLines: Bool { grid.rows.contains { $0.kind == .reserveLine } }
+    private var hasReserveLines: Bool { hasBuildup ?? grid.rows.contains { $0.kind == .reserveLine } }
 
     /// Hoogte van alles samen; het vlak wordt niet hoger dan nodig.
     static func contentHeight(lineCount: Int, density: GridDensity) -> CGFloat {

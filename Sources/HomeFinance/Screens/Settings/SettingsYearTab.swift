@@ -16,6 +16,8 @@ struct SettingsYearData: Equatable {
     var balance: PlanBalance?
     /// Plan per jaar, per richting (RES = de RES-regels, die niet meetellen in de uitgaven).
     var yearPlan: [Direction: Money] = [:]
+    /// De opbouw van RESERVERINGEN: de regels van de gekoppelde vaste storting naast de oude RES-regels.
+    var buildup: ReserveBuildup?
 
     var plannedIncome: Money { yearPlan[.IN] ?? .zero }
     var plannedExpenses: Money { yearPlan[.UIT] ?? .zero }
@@ -41,6 +43,7 @@ struct SettingsYearData: Equatable {
             d.entryCounts[row["id"]] = row["n"]
         }
         d.balance = try Insight.planBalance(db, year: year)
+        d.buildup = try Insight.reserveBuildup(db, year: year)
         let grid = try Insight.monthGrid(db, year: year, today: today)
         for row in grid.rows {
             let key: Direction = row.kind == .reserveLine ? .RES : row.direction
@@ -147,7 +150,7 @@ struct SettingsYearTab: View {
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     group(.IN, title: "Inkomsten", year: year)
                     group(.UIT, title: "Uitgaven", year: year)
-                    group(.RES, title: "Reserveringen", year: year)
+                    group(.RES, title: data.buildup?.reserveLinesNote != nil ? "RES-regels (oude opbouw)" : "Reserveringen", year: year)
                 }
                 .disabled(year.closed)
             }
@@ -178,7 +181,7 @@ struct SettingsYearTab: View {
         switch direction {
         case .IN: "Geld dat binnenkomt: salaris, toeslagen en andere vaste inkomsten."
         case .UIT: "Vaste lasten die van de betaalrekening gaan, plus de regel RESERVERINGEN."
-        case .RES: "De onderdelen van de ene maandelijkse overboeking RESERVERINGEN naar de spaarrekening. Er wordt niet op geboekt; ze laten zien hoe dat bedrag is opgebouwd en welke pot ermee gevuld wordt."
+        case .RES: data.buildup?.reserveLinesNote ?? "De onderdelen van de ene maandelijkse overboeking RESERVERINGEN naar de spaarrekening. Er wordt niet op geboekt; ze laten zien hoe dat bedrag is opgebouwd en welke pot ermee gevuld wordt."
         }
     }
 
@@ -195,7 +198,7 @@ struct SettingsYearTab: View {
                         .rotationEffect(.degrees(isOpen ? 90 : 0))
                     Text(title).font(.title3.weight(.semibold))
                     Text(SettingsFormat.count(rows.count, "post", "posten")).font(.callout).foregroundStyle(.secondary)
-                    if missingTotal {
+                    if missingTotal || (direction == .RES && data.buildup?.isOutOfStep == true) {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
                     }
                     Spacer()
@@ -211,11 +214,18 @@ struct SettingsYearTab: View {
             if isOpen {
                 if direction == .RES {
                     Divider()
-                    HStack(spacing: 10) {
-                        Text("De verdeling over potten stel je voortaan in bij Vaste stortingen.")
-                            .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        Spacer()
-                        Button("Naar Vaste stortingen") { model.selection = .pots }.controlSize(.small)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 10) {
+                            Text(data.buildup?.reserveLinesNote ?? "De verdeling over potten stel je voortaan in bij Vaste stortingen.")
+                                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            Spacer()
+                            Button("Naar Vaste stortingen") { model.selection = .pots }.controlSize(.small)
+                        }
+                        if let warning = data.buildup?.warning {
+                            Label(warning, systemImage: "exclamationmark.triangle.fill")
+                                .font(.callout).foregroundStyle(Theme.warning)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     .padding(.horizontal, 18).padding(.vertical, 10)
                 }
@@ -273,6 +283,7 @@ struct SettingsYearTab: View {
             onMove: { move(item, by: $0, in: rows) }, onDelete: { deleteTarget = item })
         row.showScenario = showScenario
         row.balanceRow = data.balance?.rows.first { $0.id == item.id }
+        if item.isReserveTotal { row.buildup = data.buildup }
         row.onScenario = { setScenario(item, $0) }
         return row
     }

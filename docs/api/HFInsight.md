@@ -361,6 +361,16 @@ if let existing = LabelMatcher.similar(typed, in: labels) { /* "Bedoel je ‘\(e
 `monthlyAmount`). Voor de beginstand geldt `total == potTotal + unallocated`, waarbij `total` =
 `Account.openingBalance` + alle boekingen met notitie "Beginsaldo".
 
+### Opbouw van RESERVERINGEN (UX-stap B1)
+
+| Functie | Geeft |
+|---|---|
+| `reserveBuildup(db, year:)` | `ReserveBuildup?` (nil zonder jaar of zonder post RESERVERINGEN): de gekoppelde storting (`distribution`), haar regels (`lines`, `distributionTotal`), de som en het aantal RES-regels (`reserveLineTotal`, `reserveLineCount`), `isOutOfStep`, de zinnen `sentence`, `warning` en `reserveLinesNote`, en `gridRows` (de regels als informatieve rijen voor het maandgrid, met negatieve id's) |
+
+Alleen weergave. Het plan van RESERVERINGEN in het maandgrid, de rapporten, de maandbalans en "nog te besteden"
+blijft de som van de RES-regels (`PlanSet`), ook als er een storting met een ander totaal aan gekoppeld is.
+`warning` meldt dat verschil.
+
 ## Vooruitblik per pot
 
 Staat los van de werkelijkheid: raakt geen enkel ander cijfer. Schrijven (`ForecastItem`) doet `HFBudget`.

@@ -14,6 +14,8 @@ private struct PotsDistData: Equatable {
     var pots: [PotSummary] = []
     /// De UIT-posten van het lopende jaar.
     var items: [BudgetItem] = []
+    /// De opbouw van RESERVERINGEN in het lopende jaar (om te zien of de RES-regels en de storting uit elkaar lopen).
+    var buildup: ReserveBuildup?
 
     var checking: [Account] { accounts.filter { $0.kind == .betaal && !$0.archived } }
     var savings: [Account] { accounts.filter { $0.kind == .spaar && !$0.archived } }
@@ -41,6 +43,7 @@ private struct PotsDistData: Equatable {
                 SELECT i.* FROM budgetItem i JOIN budgetYear y ON y.id = i.yearId
                 WHERE y.year = ? AND i.direction = 'UIT' ORDER BY i.sortOrder, i.id
                 """, arguments: [today.year]))
+            data.buildup = try Insight.reserveBuildup(db, year: today.year)
             return data
         }
     }
@@ -386,7 +389,12 @@ private struct PotsDistributionEditor: View {
             .fixedSize()
             Text("Het planbedrag van deze post volgt het totaal van de storting.")
                 .font(.callout).foregroundStyle(.secondary)
-            if let summary, summary.planMatchesTotal == false, let item = summary.item, !dirty {
+            if let summary, let buildup = data.buildup, buildup.distribution?.id == summary.id, let warning = buildup.warning, !dirty {
+                // RESERVERINGEN: het plan in het maandgrid komt nog uit de RES-regels; opnieuw bewaren helpt dan niet.
+                Label(warning, systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout).foregroundStyle(Theme.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let summary, summary.planMatchesTotal == false, let item = summary.item, !dirty {
                 Label("Het plan van \(item.label) is \(item.plan.magnitude.formatted()), maar deze storting is \(summary.total.formatted()). Bewaar de storting opnieuw of pas de post aan.",
                       systemImage: "exclamationmark.triangle.fill")
                     .font(.callout).foregroundStyle(Theme.warning)

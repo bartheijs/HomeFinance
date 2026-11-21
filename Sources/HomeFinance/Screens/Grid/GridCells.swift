@@ -211,13 +211,17 @@ struct GridBodyLayer: View, Equatable {
         }
         let day = row.expectedDay.map { ", rond dag \($0)" } ?? ""
         if row.kind == .reserveTotal {
-            return "Plan per keer: \(row.plan.formatted()), \(moment)\(day).\nDit is de som van de RES-regels."
+            let note = options.reserveNote.map { "\n\($0)" } ?? ""
+            return "Plan per keer: \(row.plan.formatted()), \(moment)\(day).\nDit is de som van de RES-regels.\(note)"
         }
         return "Plan per keer: \(row.plan.formatted()), \(moment)\(day)."
     }
 
     private func yearHelp(_ row: GridItemRow) -> String {
         if row.kind == .reserveLine {
+            if row.id < 0 {
+                return "\(row.label): \(row.plan.magnitude.formatted()) per maand via de vaste storting. Telt niet mee in de totalen."
+            }
             return "\(row.label) is een onderdeel van RESERVERINGEN. Telt niet mee in de totalen."
         }
         return "\(row.label) in \(options.year)\nGeboekt: \(row.yearTotal.formatted())\nPlan heel jaar: \(row.planYearTotal.formatted())"
@@ -266,17 +270,20 @@ struct GridLabelLayer: View, Equatable {
     @ViewBuilder private func label(_ row: GridItemRow) -> some View {
         switch row.kind {
         case .reserveLine:
+            // Een negatief id is een regel van de vaste storting (de opbouw van RESERVERINGEN); anders een RES-regel.
             HStack(spacing: 5) {
                 Text(row.label).italic().lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 2)
-                Text("RES").font(.system(size: 8.5, weight: .semibold)).foregroundStyle(.tertiary)
+                Text(row.id < 0 ? "potje" : "RES").font(.system(size: 8.5, weight: .semibold)).foregroundStyle(.tertiary)
             }
             .font(.system(size: layout.fontSize))
             .foregroundStyle(.secondary)
             .padding(.leading, 30).padding(.trailing, 8)
             .frame(width: layout.labelWidth, height: layout.rowHeight, alignment: .leading)
             .background(GridPalette.reserveBand)
-            .help("\(row.label) is een RES-regel: een onderdeel van de maandelijkse overboeking RESERVERINGEN. Ter informatie; telt niet mee in de totalen.")
+            .help(row.id < 0
+                  ? "\(row.label): \(row.plan.magnitude.formatted()) per maand via de vaste storting. Ter informatie; telt niet mee in de totalen. Je wijzigt de verdeling bij Vaste stortingen."
+                  : "\(row.label) is een RES-regel: een onderdeel van de maandelijkse overboeking RESERVERINGEN. Ter informatie; telt niet mee in de totalen.")
         case .reserveTotal:
             Button(action: onToggleReserve) {
                 HStack(spacing: 4) {

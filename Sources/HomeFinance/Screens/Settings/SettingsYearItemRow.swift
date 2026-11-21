@@ -16,6 +16,8 @@ struct SettingsYearItemRow: View {
     var showScenario = false
     /// De post in de maandbalans (bedrag per maand); nil voor RES-regels.
     var balanceRow: PlanBalanceRow?
+    /// Alleen bij RESERVERINGEN: de opbouw uit de gekoppelde vaste storting.
+    var buildup: ReserveBuildup?
     /// Wat-als-bedrag zetten (met teken) of wissen (nil).
     var onScenario: (Money?) -> Void = { _ in }
     let isFirst: Bool
@@ -76,6 +78,10 @@ struct SettingsYearItemRow: View {
                     .padding(.horizontal, 7).padding(.vertical, 2)
                     .background(Color.primary.opacity(0.06), in: Capsule())
                     .help("Het planbedrag volgt de vaste storting ‘\(name)’")
+                if buildup?.isOutOfStep == true {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
+                        .help(buildup?.warning ?? "")
+                }
             } else if item.isReserveTotal {
                 Text("som van de reserveringen").font(.callout).foregroundStyle(.secondary)
             }
@@ -156,6 +162,7 @@ struct SettingsYearItemRow: View {
                 }
                 extraRow
             }
+            if let buildup { buildupBlock(buildup) }
             HStack(spacing: 8) {
                 Button { onMove(-1) } label: { Label("Omhoog", systemImage: "chevron.up") }.disabled(isFirst)
                 Button { onMove(1) } label: { Label("Omlaag", systemImage: "chevron.down") }.disabled(isLast)
@@ -169,6 +176,43 @@ struct SettingsYearItemRow: View {
         .padding(.horizontal, 18).padding(.top, 6).padding(.bottom, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.03))
+    }
+
+    /// De opbouw van RESERVERINGEN: alleen-lezen, uit de gekoppelde vaste storting (één bron voor de verdeling).
+    private func buildupBlock(_ buildup: ReserveBuildup) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Opbouw").font(.headline)
+            Text(buildup.sentence).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if !buildup.lines.isEmpty {
+                VStack(spacing: 3) {
+                    ForEach(buildup.lines) { line in
+                        HStack {
+                            Text(line.potName).lineLimit(1)
+                            Spacer(minLength: 12)
+                            Text(line.amount.formatted()).monospacedDigit().foregroundStyle(.secondary)
+                        }
+                        .font(.callout)
+                    }
+                    Divider()
+                    HStack {
+                        Text("Totaal").fontWeight(.medium)
+                        Spacer()
+                        Text(buildup.distributionTotal.formatted()).monospacedDigit().fontWeight(.medium)
+                    }
+                    .font(.callout)
+                }
+                .frame(maxWidth: 420)
+                .padding(10)
+                .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+            }
+            if let warning = buildup.warning {
+                Label(warning, systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout).foregroundStyle(Theme.warning).fixedSize(horizontal: false, vertical: true)
+            }
+            if buildup.distribution != nil {
+                Button("Verdeling wijzigen bij Vaste stortingen", action: onGoToPots).controlSize(.small)
+            }
+        }
     }
 
     /// Naam van de vaste storting waaraan deze post gekoppeld is, of nil.

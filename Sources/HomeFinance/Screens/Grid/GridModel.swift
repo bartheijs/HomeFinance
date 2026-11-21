@@ -51,6 +51,8 @@ struct GridOptions: Equatable {
     /// Eerste maand die in de toekomst ligt (13 = geen).
     var firstFutureMonth: Int
     var editable: Bool
+    /// Extra uitleg bij het plan van RESERVERINGEN (bv. dat de RES-regels en de vaste storting uit elkaar lopen).
+    var reserveNote: String? = nil
 
     func isFuture(_ month: Int) -> Bool { month >= firstFutureMonth }
     func isCurrent(_ month: Int) -> Bool { month == currentMonth }
@@ -68,11 +70,13 @@ enum GridLine: Identifiable, Equatable {
         }
     }
 
-    /// Zet de posten in de vertrouwde volgorde: inkomsten, uitgaven, met de RES-regels onder RESERVERINGEN.
-    static func build(from grid: MonthGrid, showReserveLines: Bool) -> [GridLine] {
+    /// Zet de posten in de vertrouwde volgorde: inkomsten, uitgaven, met de opbouw onder RESERVERINGEN. Is
+    /// RESERVERINGEN aan een vaste storting gekoppeld, dan is `buildupRows` de verdeling van die storting en
+    /// vervangt die de RES-regels (één bron voor de verdeling); anders tonen we de RES-regels.
+    static func build(from grid: MonthGrid, showReserveLines: Bool, buildupRows: [GridItemRow]? = nil) -> [GridLine] {
         let income = grid.rows.filter { $0.direction == .IN && $0.kind == .item }
         let expenses = grid.rows.filter { $0.direction == .UIT }
-        let reserveLines = grid.rows.filter { $0.kind == .reserveLine }
+        let reserveLines = buildupRows ?? grid.rows.filter { $0.kind == .reserveLine }
         var lines: [GridLine] = []
         if !income.isEmpty {
             lines.append(.section(title: "Inkomsten", help: "Vaste inkomsten (IN): wat er elke maand, elk kwartaal of elk jaar binnenkomt."))
