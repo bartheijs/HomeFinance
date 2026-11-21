@@ -77,3 +77,5 @@ Opbouw van boven naar beneden, voor de gekozen maand:
    - sorteren op **datum** en op **bedrag**, oplopend en aflopend;
    - filter **inkomsten / uitgaven** (en alles).
 5. **Geen links naar andere pagina's** op deze pagina.
+6. **Indeling**: punt 1 (totalen), 2 (per tag) en 3 (5 grootste uitgaven) als **drie kaartjes naast elkaar
+   bovenaan**; de lijst met alle transacties eronder.
