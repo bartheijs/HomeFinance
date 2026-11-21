@@ -88,7 +88,7 @@ begrip; een naam terugzetten is een tekstwijziging.
 | Inzicht | Rapporten |
 | *(onderaan)* | Instellingen (Rekeningen, Regels, Tags, Back-up, Telefoon, Over) |
 
-Het geplande scherm "Nog rechtzetten" (journeys-review #2) is **niet** gebouwd; de groep Vandaag heeft nu alleen
+Het scherm "Nog rechtzetten" (journeys-review #2) is in stap D gebouwd (zie `docs/voortgang.md`); in stap C had de groep Vandaag alleen
 het Dashboard.
 
 ### Woorden

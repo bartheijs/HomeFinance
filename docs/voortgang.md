@@ -90,13 +90,54 @@ Aandachtspunten voor de test door de gebruiker:
 - Niet getest met een kopie van de eigen administratie en niet in de geïnstalleerde app; alleen met voorbeelddata,
   de zelftest en schermafdrukken (Dashboard, Posten, Automatisch sparen).
 - **Zijbalk:** controleer na het starten van de echte app dat de vijf groepen met hun regels zichtbaar zijn.
-- Het scherm "Nog rechtzetten" is niet gebouwd; Vandaag heeft alleen het Dashboard.
+- Het scherm "Nog rechtzetten" was in stap C nog niet gebouwd; zie stap D.
 - "Geleend uit andere potten" heet nu "In de min, gedekt door andere potjes" (ander begrip dan tijdelijk geleend).
 - Opgeslagen omschrijvingen ("Verrekening spaar", notitie "Verrekening #id") en de sleutels van de kerncijfers zijn
   bewust niet veranderd.
 - Teksten met een naam erin lezen soms stijf ("Automatisch sparen: Maandelijkse reserveringen"); oordeel per begrip.
 
-Volgende stappen (apart, later): één plek om te boeken, scherm "Nog rechtzetten".
+Volgende stappen: zie stap D.
+
+### Stap D: één plek om te boeken (lichte variant) en Nog rechtzetten (gebouwd, nog niet getest door de gebruiker)
+
+De gebruiker begint vanuit Transacties, zoals in zijn bank-app. Daarom de lichte variant: Nakijken en Transacties
+blijven allebei, maar zijn gelijk getrokken. Vier commits, elk apart terug te draaien met `git revert <commit>`
+(D4 hangt aan D3 voor het venster "Het is binnen…" niet vast; terugdraaien in omgekeerde volgorde is het veiligst).
+
+| Commit | Wat de gebruiker ziet | Top 10 |
+|---|---|---|
+| `d26823e` D1 | Nakijken en Transacties tonen bij wachtende banktransacties dezelfde voorstellen en dezelfde regel "Nog … na te kijken · … zeker" (voorbeelddata: beide 19 wachtend, 4 zeker; eerst 4 tegen 5). In het paneel van Transacties staat nu ook "Voortaan zo indelen" (standaard uit, met samenvatting en "Aanpassen…"); de knop Boek bewaart alleen een regel als het vinkje aan staat. De controle achteraf heet **gecontroleerd** / "nog niet gecontroleerd" (filter, knoppen, Dashboard-knop "Controleren", Excel-kolom). Niets weggehaald uit Transacties. | #3 |
+| `0b1aeaf` D2 | Bij een bijschrijving die (bijna) het openstaande bedrag van een voorgeschoten tag is: in de lijst "Terug van Tanken?", in het paneel "Is dit je € … van Tanken terug?" met één knop (boekt als overig en legt de terugbetaling vast; in Nakijken met Maak ongedaan). Bij een eigen overboeking betaal ↔ spaar toont het paneel de andere helft ("+ € 250,00 op Spaarrekening, 11 jun · wacht nog op een plek") met "Bekijk". "Losse overboeking? Kies een potje" staat er nu ook bij een klein verschil met de vaste overboeking. Op beide plekken hetzelfde. | #8 |
+| `1368b6a` D3 | Nieuw scherm **Voorgeschoten** (groep Bijwerken, met teller): per tag wat je nog terugkrijgt, de open boekingen, de laatste terugbetaling, "Het is binnen…" en "Toon in Transacties". De balk op Transacties blijft, met "Naar Voorgeschoten". | #2 deel 1 |
+| `d59b28d` D4 | Nieuw scherm **Nog rechtzetten** (groep Vandaag, teller = aantal open blokken) in plaats van "Nog overboeken" in de zijbalk. Vier blokken met de volgende stap: Nog overboeken ("Maak € … over van spaar naar betaal" → afvinken bij Nog overboeken), Voorgeschoten ("Je krijgt nog € … terug (Tanken)" → Het is binnen…), Tijdelijk geleend van spaar ("Er staat nog € … uit" → de boekingen), Wacht op de bank (afgevinkt, nog niet in een bankbestand gezien). Het scherm Nog overboeken zelf blijft bestaan. | #2 deel 2 |
+
+Techniek: de gedeelde bron is `WaitingProposals` (app, lijm tussen HFRules en HFBudget) met de indeling
+`Insight.waitingGroup` en de regel `Insight.waitingCountsLine`; het vinkje is één view (`RuleConsentChoice`), de
+extra herkenning één view (`WaitingExtras`, `LooseTransferOffer`). Terugbetaling herkennen en boeken:
+`SettlementService.depositCandidates` en `bookAsDeposit` (zelfde grens van € 1,00 als `suggestDeposit`; gebruikt
+`BookingService.book` en `settle`). Nog rechtzetten leest alleen uit HFInsight (`SettleUpData`). Met tests
+(610). Elke testronde GESLAAGD; zelftest 190 → 191 → 199 → 211 OK, 0 FOUT, beide venstermaten; kerncijfers
+voorbeelddata gelijk aan `9eed3dc` (peildag 21-11-2026). Nieuwe zelftestcontroles: gelijke aantallen en gelijke
+extra herkenning op Nakijken en Transacties, vier blokken van Nog rechtzetten in beeld, teller klopt.
+
+Aandachtspunten voor de test door de gebruiker:
+- Niet getest met een kopie van de eigen administratie en niet in de geïnstalleerde app; alleen voorbeelddata,
+  de zelftest, unittests en schermafdrukken (Nakijken, Voorgeschoten, Nog rechtzetten). De knoppen in de panelen
+  (terugbetaling, Bekijk, Voortaan zo indelen in Transacties) zijn niet met de muis doorgeklikt.
+- In de voorbeeldmodus op de echte datum past geen bijschrijving bij het openstaande Tanken-bedrag; "Terug van
+  Tanken?" is wel te zien in de schermafdrukken (voorbeelddata van juni 2027) en getest in HFBudget.
+- **Gedrag dat nu anders is in Transacties:** het voorstel bij een nieuwe transactie neemt de omschrijving en
+  "tijdelijk geleend" over zoals Nakijken die voorstelt; "zeker" telt alleen nog als ook het bedrag klopt (een
+  regel met een ander bedrag of een vaste overboeking met een ander bedrag is twijfel). Klikken op het voorstel
+  boekt nog steeds zoals voorheen.
+- Nog bewust verschillend: "Boek de zekere" in Transacties zet de boekingen op gecontroleerd, in Nakijken op
+  "nog niet gecontroleerd". Gelijk trekken is een keuze van de gebruiker.
+- Nog overboeken staat niet meer in de zijbalk; je komt er via Nog rechtzetten, de balk op Transacties en het
+  Dashboard. Staat de app op Nog overboeken, dan is er in de zijbalk geen regel gemarkeerd.
+- Terugdraaien van een terugbetaling die met één klik in **Transacties** is vastgelegd: rechtsklik op de
+  bijschrijving › "Terugbetaling Tanken…" › "Eerder terugbetaald" › "Maak ongedaan"; de banktransactie blijft dan
+  geboekt als overig. In Nakijken kan het direct met "Maak ongedaan" in de melding. Op Voorgeschoten staat
+  "Het is binnen…" alleen als er iets openstaat; een knop naar de geschiedenis daar is een mogelijke aanvulling.
 
 ## Terug naar de code van 16 november (21 november 2026)
 
