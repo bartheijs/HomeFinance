@@ -307,7 +307,8 @@ final class ReviewStore {
             let items = try BudgetItem.fetchAll(db, sql: "SELECT * FROM budgetItem WHERE direction <> 'RES' ORDER BY sortOrder, id")
             itemsById = Dictionary(uniqueKeysWithValues: items.compactMap { i in i.id.map { ($0, i) } })
             var byYear: [Int: [BudgetItem]] = Dictionary(uniqueKeysWithValues: years.map { ($0.year, []) })
-            for item in items { if let year = yearById[item.yearId] { byYear[year, default: []].append(item) } }
+            // Per richting op alfabet voor de post-kiezer (Insight.itemPickerOrder, 6n).
+            for item in Insight.itemPickerOrder(items) { if let year = yearById[item.yearId] { byYear[year, default: []].append(item) } }
             itemsByYear = byYear
 
             loanOutstanding = try Insight.temporaryLoanOutstanding(db, on: model.today)

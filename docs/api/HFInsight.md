@@ -282,6 +282,12 @@ spaarpotten, binnen elke groep op alfabet (hoofdletter- en accentongevoelig, Ned
 "Geen pot" en dergelijke zet de kiezer zelf bovenaan. Het overzicht Potten en sparen (per persoon) gebruikt hem
 niet. `Insight.compareNames(_:_:)` is de vergelijking die erachter zit. Tests in `PickerOrderTests`.
 
+`Insight.itemPickerOrder(_:)` (voor `[BudgetItem]`, of generiek met `direction:` en `label:`) doet hetzelfde voor
+vaste posten: eerst UIT, dan IN (RES als laatste), binnen elke groep op alfabet met `compareNames`. Alle
+post-kiezers gebruiken hem (Nakijken "Waar hoort dit bij?", vaste storting "Hoort bij post", regeleditor, splitsen,
+nieuwe boeking, transactiedetail, filter); "Divers (geen vaste post)" en "Geen" zet de kiezer zelf bovenaan. Het
+maandgrid en het jaarplan houden hun eigen volgorde. Tests in `ItemPickerOrderTests`.
+
 ## Verrekenen per tag
 
 Voor tags met `Tag.settles`. Openstaand = − som van de boekingen op betaalrekeningen met die tag en zonder

@@ -186,7 +186,8 @@ struct TransactionsLookups: Equatable {
         for y in years { if let id = y.id { yearById[id] = y.year } }
         let items = try BudgetItem.filter(Column("direction") != Direction.RES.rawValue)
             .order(Column("sortOrder")).fetchAll(db)
-        for item in items {
+        // Per richting op alfabet, voor alle post-kiezers op dit scherm (Insight.itemPickerOrder, 6n).
+        for item in Insight.itemPickerOrder(items) {
             if let year = yearById[item.yearId] { l.itemsByYear[year, default: []].append(item) }
         }
         // Per soort op alfabet, voor alle pot-kiezers op dit scherm (Insight.pickerOrder, 6c).

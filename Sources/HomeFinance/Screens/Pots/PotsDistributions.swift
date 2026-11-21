@@ -37,10 +37,10 @@ private struct PotsDistData: Equatable {
             }
             data.accounts = try Account.order(Column("sortOrder"), Column("id")).fetchAll(db)
             data.pots = Insight.pickerOrder(try Insight.potOverview(db, today: today).accounts.flatMap(\.pots))
-            data.items = try BudgetItem.fetchAll(db, sql: """
+            data.items = Insight.itemPickerOrder(try BudgetItem.fetchAll(db, sql: """
                 SELECT i.* FROM budgetItem i JOIN budgetYear y ON y.id = i.yearId
                 WHERE y.year = ? AND i.direction = 'UIT' ORDER BY i.sortOrder, i.id
-                """, arguments: [today.year])
+                """, arguments: [today.year]))
             return data
         }
     }

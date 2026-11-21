@@ -354,11 +354,20 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
 6n. **Losse overboeking bij meer vaste stortingen** (voorstel, nog niet gepland). `DistributionService.recognize`
    (spaarkant): passen er meer vaste stortingen op tegenrekening en geen enkele op bedrag, dan nu "kies welke";
    beter: als het bedrag ver van álle totalen ligt, meteen "lijkt een losse overboeking".
-6n. **Keuzelijsten met posten op alfabet** (wens van 21 november, na test van 6c). In alle post-kiezers
-   (Nakijken "Waar hoort dit bij?", vaste storting "Hoort bij post", regeleditor, splitsen, nieuwe boeking)
-   binnen UIT en IN alfabetisch, hoofdletterongevoelig, Nederlandse sortering; "Divers (geen vaste post)" en
-   "Geen" bovenaan. Op één gedeelde plek (naast `Insight.pickerOrder`). Het maandgrid en lijsten met maanden
-   houden hun eigen volgorde.
+6n. **Keuzelijsten met posten op alfabet** — klaar (21 november, ronde 14), nog niet geïnstalleerd. In alle
+   post-kiezers (Nakijken "Waar hoort dit bij?", vaste storting "Hoort bij post", regeleditor, splitsen, nieuwe
+   boeking, transactiedetail, het menu "Post" in de lijst en het filter) staan de posten binnen UIT en IN op
+   alfabet, hoofdletter- en accentongevoelig, Nederlandse sortering ("Pot 2" vóór "Pot 10"). "Divers (geen vaste
+   post)" en "Geen" blijven bovenaan. De regeleditor heeft geen kopjes: eerst de UIT-posten op alfabet, dan de IN.
+   - Eén plek: `Insight.itemPickerOrder` in `HFInsight/PickerOrder.swift`, naast `pickerOrder` en met dezelfde
+     `compareNames`. Toegepast waar de schermen hun posten laden (`TransactionsLookups`, `ReviewStore`,
+     `PotsDistData`, `RulesData`). Het maandgrid en het jaarplan (Instellingen › Jaar) houden hun eigen volgorde.
+   - Tests: 5 in `ItemPickerOrderTests`. De zelftest controleert de volgorde van de post-kiezers niet.
+6o. **Eigen peildatum voor de gezamenlijke spaarpot op het telefoondashboard** (wens van 21 november; na
+   6k). Naast 3, 6 en 12 maanden een eigen datum kunnen kiezen. Voorstel: op de telefoonpagina een datumveld;
+   de Mac zet de verwachte stand per maand (bijv. 36 maanden vooruit, dezelfde berekening als de vooruitblik)
+   als gegevens in de pagina, en een klein script toont de stand voor de gekozen datum. Werkt zonder
+   internet. Op de Mac bestaat dit al bij de pot ("Stand op …").
 6d. **Versie zichtbaar in Instellingen › Over** — klaar (21 november). `scripts/run.sh` zet bij elke build de
    korte commit-hash (met een `+` als er niet-gecommitte wijzigingen waren) en de bouwdatum in `Info.plist`
    (`HFBuildCommit`, `HFBuildDate`; `CFBundleVersion` is het aantal commits). Over toont bv. "Versie 1.0 ·

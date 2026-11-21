@@ -23,10 +23,10 @@ struct RulesData: Equatable {
         d.pots = Insight.pickerOrder(try Pot.order(Column("accountId"), Column("sortOrder"), Column("id")).fetchAll(db))
         d.tags = try Tag.order(Column("sortOrder"), Column("id")).fetchAll(db)
         if let y = try BudgetYear.filter(Column("year") == year).fetchOne(db), let yearId = y.id {
-            d.itemLabels = try BudgetItem
+            d.itemLabels = Insight.itemPickerOrder(try BudgetItem
                 .filter(Column("yearId") == yearId && Column("direction") != Direction.RES.rawValue)
                 .order(Column("sortOrder"), Column("id"))
-                .fetchAll(db).map(\.label)
+                .fetchAll(db)).map(\.label)
         }
         d.transactionCount = try BankTransaction.fetchCount(db)
         d.labels = try Insight.allLabels(db)

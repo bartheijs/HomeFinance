@@ -1,7 +1,7 @@
 import Foundation
 import HFCore
 
-// MARK: - Volgorde van potten in keuzelijsten
+// MARK: - Volgorde van potten en posten in keuzelijsten
 
 extension Insight {
     /// Volgorde van potten in een keuzelijst: eerst de reserveringspotten, dan de spaarpotten, binnen elke groep
@@ -38,6 +38,31 @@ extension Insight {
                               range: nil, locale: dutch)
         if loose != .orderedSame { return loose }
         return a.compare(b, options: [.numeric], range: nil, locale: dutch)
+    }
+
+    /// Volgorde van vaste posten in een keuzelijst: eerst UIT, dan IN (en RES als laatste), binnen elke groep op
+    /// alfabet met dezelfde vergelijking als de pot-kiezers (`compareNames`). Gelijke labels houden hun oude volgorde.
+    /// Eén plek voor alle post-kiezers; "Divers (geen vaste post)" en "Geen" zet de kiezer zelf bovenaan.
+    /// Het maandgrid en het jaarplan houden hun eigen volgorde en gebruiken dit niet.
+    public static func itemPickerOrder<T>(_ items: [T], direction: (T) -> Direction, label: (T) -> String) -> [T] {
+        items.enumerated().sorted { a, b in
+            let da = directionRank(direction(a.element)), db = directionRank(direction(b.element))
+            if da != db { return da < db }
+            switch compareNames(label(a.element), label(b.element)) {
+            case .orderedAscending: return true
+            case .orderedDescending: return false
+            case .orderedSame: return a.offset < b.offset
+            }
+        }.map(\.element)
+    }
+
+    /// `itemPickerOrder` voor posten uit de database.
+    public static func itemPickerOrder(_ items: [BudgetItem]) -> [BudgetItem] {
+        itemPickerOrder(items, direction: \.direction, label: \.label)
+    }
+
+    private static func directionRank(_ direction: Direction) -> Int {
+        switch direction { case .UIT: return 0; case .IN: return 1; case .RES: return 2 }
     }
 
     private static func kindRank(_ kind: PotKind) -> Int {
