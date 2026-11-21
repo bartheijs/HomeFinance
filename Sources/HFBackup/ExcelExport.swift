@@ -188,7 +188,7 @@ extension Backup {
         sheet.add([.text("UIT"), .money(try flow("<"))])
         let balanceRow = sheet.add([.text("Op de rekening"), .money(balance)])
         let antiRoodRow = sheet.add([.text("Anti-rood"), .money(budgetYear.antiRood)])
-        let borrowedRow = sheet.add([.text("Tijdelijk geleend"), .money(borrowed)])
+        let borrowedRow = sheet.add([.text("Tijdelijk geleend van spaar"), .money(borrowed)])
         sheet.add([.text("Besteedbaar", bold: true),
                    .formula("\(Xlsx.ref(1, balanceRow))-\(Xlsx.ref(1, antiRoodRow))-\(Xlsx.ref(1, borrowedRow))",
                             balance - budgetYear.antiRood - borrowed, bold: true)])
@@ -201,7 +201,7 @@ extension Backup {
         var sheet = XlsxSheet(name: "Transacties", widths: [12, 11, 22, 34, 28, 8, 20, 13, 11, 11, 11, 30, 28, 40],
                               freezeColumns: 0, autoFilter: true)
         sheet.add(["Datum", "Telt mee in", "Rekening", "Omschrijving", "Post of pot", "Divers", "Tags", "Bedrag",
-                   "Vergoeden uit spaar", "Tijdelijk geleend", "Nagekeken", "Notitie", "Tegenpartij",
+                   "Nog overboeken met spaar", "Tijdelijk geleend van spaar", "Nagekeken", "Notitie", "Tegenpartij",
                    "Bankomschrijving"].map { .text($0, bold: true) })
         let rows = try Row.fetchCursor(db, sql: """
             SELECT e.day, \(period) AS period, a.name AS account, a.kind AS kind, e.label, i.label AS item, p.name AS pot,

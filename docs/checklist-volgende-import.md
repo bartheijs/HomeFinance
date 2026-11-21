@@ -33,7 +33,7 @@ Vink af wat klopt. Klopt iets niet, maak dan een screenshot en noteer wat je zag
       ook een nieuwe tag aan te maken vanuit dat scherm.
 - [ ] **Nieuw: boekingen die elkaar opheffen** (heen en terug, zelfde bedrag) boek je als divers, zonder pot.
       Daarover mag geen melding meer verschijnen.
-- [ ] **Verrekeningen met spaar.** Heb je eerder iets afgevinkt als "verrekenen met spaar", dan herkent de import
+- [ ] **Verrekeningen met spaar.** Heb je eerder iets afgevinkt bij "Nog overboeken" (vroeger "verrekenen met spaar"), dan herkent de import
       de overboeking en koppelt hem. De verrekening staat daarna niet meer als open.
 
 ## 4. Dashboard controleren
@@ -78,6 +78,6 @@ de vaste storting naar de pot *Zorg voorschieten (uit studiegeld)*; aan de betaa
 zorgverzekeraar. Bij de jaarbetaling zelf:
 
 - [ ] Vanaf de **spaarrekening** betaald: boek de afschrijving op de pot *Zorg voorschieten*. Geen post.
-- [ ] Vanaf de **betaalrekening** betaald: kies **Divers** met **Verrekenen met spaar: Zorg voorschieten**, maak
+- [ ] Vanaf de **betaalrekening** betaald: kies **Divers** met **Nog overboeken met spaar: Zorg voorschieten**, maak
       het bedrag over van spaar naar betaal en vink de verrekening af. **Niet** op de post van de verzekeraar,
       anders telt de premie dubbel.

@@ -214,7 +214,7 @@ Wat erin zit, van 1 januari van het jaar van `today` t/m `today`:
 - Uitgaven met `reimburse` en pot (zakgeld, kleding per kind, rijlessen, garage, tandarts …, de rente op de
   privélening): elke maand op de 27e verrekend in één afgevinkte `SavingsTransfer` met de boekingen van het
   afvinken (notitie `Verrekening #<id>`, `Setting` `savingsTransfer.<id>.entries`) en aan beide kanten de
-  bankregel. In de laatste 10 dagen staat één verrekening die **vastgelegd maar niet afgevinkt** is (op de 27e,
+  banktransactie. In de laatste 10 dagen staat één verrekening die **vastgelegd maar niet afgevinkt** is (op de 27e,
   anders op `today − 5`); zij dekt de geboekte uitgaven tot `today − 10`, en haar overboeking zit in de zip.
 - Eén afstemming met verschil € 0,00 op `bookedThrough`.
 

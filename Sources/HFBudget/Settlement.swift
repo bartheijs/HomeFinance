@@ -57,7 +57,7 @@ public enum SettlementService {
             var tag = try Check.tag(db, tagId)
             guard tag.settles else { throw BudgetError.tagNotSettling(tag: tag.name) }
             guard tag.startSettlementId == nil else {
-                throw BudgetError.validation("Het startbedrag van ‘\(tag.name)’ is al verrekend. Maak die verrekening "
+                throw BudgetError.validation("Het startbedrag van ‘\(tag.name)’ is al terugbetaald. Maak die terugbetaling "
                     + "eerst ongedaan om het te wijzigen.")
             }
             guard !amount.isNegative else {
@@ -98,7 +98,7 @@ public enum SettlementService {
             guard tag.settles else { throw BudgetError.tagNotSettling(tag: tag.name) }
             let ids = Array(Set(entryIds))
             guard !ids.isEmpty || includeStart else {
-                throw BudgetError.validation("Kies minstens één boeking om te verrekenen.")
+                throw BudgetError.validation("Kies minstens één voorgeschoten boeking die terugbetaald is.")
             }
             guard !includeStart || tag.startIsOpen else {
                 throw BudgetError.validation("Het startbedrag van ‘\(tag.name)’ staat niet (meer) open.")
@@ -153,7 +153,7 @@ public enum SettlementService {
     @discardableResult
     public static func linkDeposit(_ db: Database, settlementId: Int64, depositEntryId: Int64?) throws -> SettlementResult {
         try atomic(db) {
-            var settlement = try Check.fetch(db, Settlement.self, settlementId, "Verrekening")
+            var settlement = try Check.fetch(db, Settlement.self, settlementId, "Terugbetaling")
             guard !settlement.isOpening || depositEntryId == nil else {
                 throw BudgetError.depositInvalid("Aan een beginstand kan geen storting gekoppeld worden.")
             }
@@ -162,19 +162,19 @@ public enum SettlementService {
                 let entry = try Check.entry(db, depositEntryId)
                 let account = try Check.account(db, entry.accountId)
                 guard account.kind == .betaal, entry.amount > .zero else {
-                    throw BudgetError.depositInvalid("De terugstorting moet een bijschrijving op een betaalrekening zijn.")
+                    throw BudgetError.depositInvalid("De terugbetaling moet een bijschrijving op een betaalrekening zijn.")
                 }
                 let hasTag = try Bool.fetchOne(db, sql: """
                     SELECT EXISTS(SELECT 1 FROM entryTag WHERE entryId = ? AND tagId = ?)
                     """, arguments: [depositEntryId, settlement.tagId]) ?? false
                 guard !hasTag else {
-                    throw BudgetError.depositInvalid("De terugstorting mag zelf niet de tag van de verrekening hebben; "
+                    throw BudgetError.depositInvalid("De terugbetaling mag zelf niet de tag van het voorgeschoten geld hebben; "
                         + "haal de tag van de bijschrijving af.")
                 }
                 let other = try Int64.fetchOne(db, sql: "SELECT id FROM settlement WHERE depositEntryId = ? AND id <> ?",
                                                arguments: [depositEntryId, settlementId])
                 guard other == nil else {
-                    throw BudgetError.depositInvalid("Deze bijschrijving is al aan een andere verrekening gekoppeld.")
+                    throw BudgetError.depositInvalid("Deze bijschrijving is al gekoppeld aan een andere terugbetaling.")
                 }
                 deposit = entry
             }
@@ -188,9 +188,9 @@ public enum SettlementService {
     /// gebruik `enable` met een andere datum, of `disable`.
     public static func delete(_ db: Database, settlementId: Int64) throws {
         try atomic(db) {
-            let settlement = try Check.fetch(db, Settlement.self, settlementId, "Verrekening")
+            let settlement = try Check.fetch(db, Settlement.self, settlementId, "Terugbetaling")
             guard !settlement.isOpening else {
-                throw BudgetError.validation("De beginstand kan niet verwijderd worden. Zet verrekenen opnieuw aan "
+                throw BudgetError.validation("De beginstand kan niet verwijderd worden. Zet ‘Voorgeschoten’ opnieuw aan "
                     + "met een andere datum, of zet het uit.")
             }
             try db.execute(sql: "UPDATE entry SET settlementId = NULL WHERE settlementId = ?", arguments: [settlementId])
@@ -214,7 +214,7 @@ public enum SettlementService {
 
     /// Een bestaande verrekening met haar storting en het verschil, bv. voor de historie.
     public static func result(_ db: Database, settlementId: Int64) throws -> SettlementResult {
-        let settlement = try Check.fetch(db, Settlement.self, settlementId, "Verrekening")
+        let settlement = try Check.fetch(db, Settlement.self, settlementId, "Terugbetaling")
         let deposit = try settlement.depositEntryId.flatMap { try Entry.fetchOne(db, key: $0) }
         return SettlementResult(settlement: settlement, deposit: deposit)
     }

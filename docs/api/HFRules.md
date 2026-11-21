@@ -200,7 +200,7 @@ Niet meer gebruikt door de app (sinds 6i); de beschrijving blijft voor de tests 
    - Géén verrekenen bij een regel met `.both` → alleen nog de andere richting.
    - Géén verrekenen in de richting van de regel → verrekenen uit.
    "Gelijk aan het voorstel" (stap 2) vergelijkt met wat de regel voor déze richting voorstelt (dus zonder
-   verrekenen en pot in de andere richting). Het bericht noemt de richting: "…, verrekenen met spaar bij geld erin".
+   verrekenen en pot in de andere richting). Het bericht noemt de richting: "…, nog overboeken met spaar bij geld erin".
 
 `learn` telt het gebruik alleen in geval 2. Roep `recordUse` niet nog eens aan voor dezelfde boeking.
 
@@ -218,7 +218,7 @@ pas als verrekenen aan gaat. In `Rule(...)` is de standaard `.both` (het oude ge
 
 Legt een bankexport naast de geïmporteerde Excel-historie (`Entry` zonder banktransactie met
 `note == HistoryRuleSeeder.historyNote`, "Excel-historie") en stelt per tegenpartij een regel voor.
-De bankregels zijn losse `BankTransaction`-waarden (`id == nil`); ze worden **niet opgeslagen en niet geboekt**.
+De banktransacties zijn losse `BankTransaction`-waarden (`id == nil`); ze worden **niet opgeslagen en niet geboekt**.
 `propose` schrijft niets, `apply` schrijft alleen regels.
 
 ```swift
@@ -255,7 +255,7 @@ let rules = try appDatabase.write { db in
 
 Zijn er meer kandidaten, dan wordt alleen gekozen als ze onderling gelijk zijn (zelfde post, label en tags) of
 als bij precies één kandidaat alle woorden van het historielabel in de naam of omschrijving van de bank staan;
-anders telt de bankregel als dubbelzinnig.
+anders telt de banktransactie als dubbelzinnig.
 
 **Voorstel per tegenpartij** (IBAN, anders naam, anders een trefwoord uit een herkenbare omschrijving):
 - al een regel voor die tegenpartij (handmatig of geleerd, aan of uit; het bedrag van die regel telt niet mee)

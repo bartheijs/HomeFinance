@@ -91,7 +91,7 @@ struct DashboardHero: View {
             }
             ForEach(spendable.returningTags) { tag in
                 line("Komt nog terug: \(tag.name)", tag.amount, sign: "+",
-                     help: "Openstaand bij de tag ‘\(tag.name)’: geld dat je hebt voorgeschoten en nog terugkrijgt. Het telt mee omdat ‘telt mee in nog te besteden’ aan staat (Instellingen › Tags).")
+                     help: "Voorgeschoten (\(tag.name)): geld dat je nog terugkrijgt. Het telt mee omdat ‘telt mee in nog te besteden’ aan staat (Instellingen › Tags).")
             }
             if !spendable.returningTags.isEmpty {
                 Text("Voorgeschoten geld dat nog terugkomt, telt hier alvast mee.")
@@ -124,11 +124,11 @@ struct DashboardHero: View {
             }
             if !spendable.pendingSettlement.isZero {
                 HStack(spacing: 6) {
-                    Text("Nog te verrekenen met spaar")
+                    Text("Nog over te boeken met spaar")
                     Spacer(minLength: 4)
                     Text(spendable.pendingSettlement.formatted(alwaysSign: true)).monospacedDigit()
                 }
-                .help("Uitgaven die nog uit een potje komen (of geld dat nog naar een potje moet). Hier telt het alvast mee alsof het verrekend is.")
+                .help("Uitgaven die nog uit een potje komen (of geld dat nog naar een potje moet). Hier telt het alvast mee alsof het al is overgeboekt.")
             }
             Divider()
             total("Nog te besteden", spendable.spendableEndOfMonth).help(Self.mainHelp)

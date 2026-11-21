@@ -124,8 +124,8 @@ struct TransactionsNewTagForm: View {
                 }
             }
             VStack(alignment: .leading, spacing: 2) {
-                Toggle("Verrekenen", isOn: $settles)
-                Text("Uitgaven met deze tag stort je later terug op de betaalrekening; wat openstaat zie je boven de lijst.")
+                Toggle("Voorgeschoten", isOn: $settles)
+                Text("Uitgaven die je voorschiet en terugkrijgt, zoals tankkosten van je werk; wat je nog terugkrijgt zie je boven de lijst.")
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

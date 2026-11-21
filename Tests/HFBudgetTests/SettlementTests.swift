@@ -212,7 +212,7 @@ import Testing
             #expect(try SettlementService.history(db, tagId: tag.id!).allSatisfy(\.isOpening))
             // De storting is weer vrij en wordt opnieuw voorgesteld.
             #expect(try SettlementService.suggestDeposit(db, tagId: tag.id!, asOf: d("2027-03-31")).map(\.id) == [storting.id])
-            #expect(throws: BudgetError.notFound(what: "Verrekening", id: result.settlement.id!)) {
+            #expect(throws: BudgetError.notFound(what: "Terugbetaling", id: result.settlement.id!)) {
                 try SettlementService.delete(db, settlementId: result.settlement.id!)
             }
         }
@@ -250,7 +250,7 @@ import Testing
                 try BookingService.book(db, bankTransactionId: t.id!, allocations: [Allocation(amount: c(-4_000), label: "x")])
             }
             #expect(throws: BudgetError.depositLinked) { try BookingService.unbook(db, bankTransactionId: stortingTx.id!) }
-            #expect(BudgetError.inSettlement.localizedDescription.contains("verrekend"))
+            #expect(BudgetError.inSettlement.localizedDescription.contains("terugbetaald"))
 
             // Wat wel mag: een tag erbij, label en notitie wijzigen.
             try EntryService.setTags(db, entryId: manual.id!, tagIds: [tag.id!, other.id!])

@@ -216,7 +216,7 @@ import Testing
                 try BookingService.book(db, bankTransactionId: af.id!, allocations: [Allocation(amount: c(-13_050), label: "x")])
             }
             #expect(throws: BudgetError.savingsTransferBooking) { try EntryService.delete(db, entryId: spaarEntries[0].id!) }
-            #expect(BudgetError.savingsTransferBooking.localizedDescription.contains("Verrekenen met spaar"))
+            #expect(BudgetError.savingsTransferBooking.localizedDescription.contains("Nog overboeken"))
             #expect(throws: BudgetError.self) { try SavingsTransferService.reopen(db, savingsTransferId: transfer.id!) }
             #expect(throws: BudgetError.self) { try SavingsTransferService.delete(db, savingsTransferId: transfer.id!) }
             // Label en notitie wijzigen mag wel.
@@ -352,7 +352,7 @@ import Testing
             #expect(try SavingsTransferService.recognize(db, bankTransaction: bijGoed)?.transfer?.id == transfer.id)
             try SavingsTransferService.markDone(db, savingsTransferId: transfer.id!, on: d("2027-04-06"))
             #expect(try balance(db, spaar2) == c(-2_000) && (try balance(db, fx.spaar) == c(500_000)))
-            #expect(BudgetError.potRequiresReimburse.localizedDescription.contains("verrekenen met spaar"))
+            #expect(BudgetError.potRequiresReimburse.localizedDescription.contains("Nog overboeken met spaar"))
         }
     }
 }

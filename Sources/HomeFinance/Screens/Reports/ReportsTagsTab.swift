@@ -59,9 +59,9 @@ struct ReportsTagsTab: View {
 
     private func settlementLine(_ s: TagSettlementSummary) -> String {
         var text = s.openCount == 0
-            ? "Verrekenen: er staat niets open."
-            : "Verrekenen: \(s.outstanding.formatted()) staat nog open (\(s.openCount) \(s.openCount == 1 ? "boeking" : "boekingen"))."
-        if showsSettledThisYear { text += " Dit jaar verrekend: \(s.settledThisYear.formatted())." }
+            ? "Voorgeschoten: niets meer terug te krijgen."
+            : "Voorgeschoten: nog terug te krijgen: \(s.outstanding.formatted()) (\(s.openCount) \(s.openCount == 1 ? "boeking" : "boekingen"))."
+        if showsSettledThisYear { text += " Dit jaar terugbetaald: \(s.settledThisYear.formatted())." }
         return text
     }
 
@@ -72,7 +72,7 @@ struct ReportsTagsTab: View {
             if let settlement = data.settlements.first(where: { $0.id == tag.id }) {
                 Label(settlementLine(settlement), systemImage: "arrow.left.arrow.right")
                     .foregroundStyle(.secondary)
-                    .help("Verrekenen: deze uitgaven worden later teruggestort op de betaalrekening. Openstaand is wat nog niet is teruggestort.")
+                    .help("Voorgeschoten: deze uitgaven krijg je later terug. Nog terug te krijgen is wat nog niet terugbetaald is.")
             }
             chart(tag).frame(height: 320)
             if let month {

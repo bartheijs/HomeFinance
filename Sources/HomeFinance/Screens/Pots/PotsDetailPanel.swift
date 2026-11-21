@@ -98,9 +98,9 @@ struct PotsDetailPanel: View {
             if !pot.pendingSettlement.isZero {
                 HStack(spacing: 10) {
                     Text(PotsFormat.pending(pot.pendingSettlement)).font(.callout).foregroundStyle(.secondary)
-                    Button("Naar verrekenen") { model.selection = .reimbursements }
+                    Button("Naar Nog overboeken") { model.selection = .reimbursements }
                         .buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout)
-                        .help("Open Verrekenen met spaar om deze boekingen met de pot te verrekenen.")
+                        .help("Open Nog overboeken om deze boekingen met de pot recht te zetten.")
                 }
             }
 

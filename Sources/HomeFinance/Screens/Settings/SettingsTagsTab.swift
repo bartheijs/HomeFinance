@@ -36,7 +36,7 @@ struct SettingsTagsTab: View {
             VStack(alignment: .leading, spacing: Theme.spacing) {
                 Text("Met tags volg je waar geld aan opgaat, dwars door posten heen: tanken, uit eten, vakantie. Een tag is geen extra uitgave; hij telt alleen mee in de rapporten.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Text("**Verrekenen** is voor uitgaven die je later terugstort op de betaalrekening, zoals tanken. De app houdt bij wat er nog openstaat.")
+                Text("**Voorgeschoten** is voor uitgaven die je voorschiet en terugkrijgt, zoals tankkosten van je werk. De app houdt bij wat je nog terugkrijgt.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Text("Stond er bij de start van de app al iets open, zet dat dan als **startbedrag** bij de tag. Met **telt mee in nog te besteden** reken je het openstaande bedrag alvast mee als geld dat terugkomt.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -124,11 +124,11 @@ struct SettingsTagsTab: View {
     private func setSettles(_ tag: Tag, from: Day?) {
         guard let id = tag.id else { return }
         if let from {
-            _ = write("Verrekenen staat aan voor ‘\(tag.name)’ vanaf \(from.short(withYear: true))") { db in
+            _ = write("Voorgeschoten staat aan voor ‘\(tag.name)’ vanaf \(from.short(withYear: true))") { db in
                 _ = try SettlementService.enable(db, tagId: id, from: from)
             }
         } else {
-            _ = write("Verrekenen staat uit voor ‘\(tag.name)’") { db in try SettlementService.disable(db, tagId: id) }
+            _ = write("Voorgeschoten staat uit voor ‘\(tag.name)’") { db in try SettlementService.disable(db, tagId: id) }
         }
     }
 
@@ -237,17 +237,17 @@ struct SettingsTagRow: View {
     /// Schakelaar "Verrekenen"; bij aanzetten eerst de vraag vanaf welke datum.
     private var settleLine: some View {
         HStack(spacing: 8) {
-            Toggle("Verrekenen", isOn: Binding(get: { tag.settles }, set: { on in
+            Toggle("Voorgeschoten", isOn: Binding(get: { tag.settles }, set: { on in
                 if on { fromDate = SettingsFormat.date(today); askFrom = true } else { onSettle(nil) }
             }))
             .toggleStyle(.switch).controlSize(.mini)
-            .help("Voor uitgaven die je later terugstort op de betaalrekening, zoals tanken. De app houdt bij wat er nog openstaat.")
+            .help("Voor uitgaven die je voorschiet en terugkrijgt, zoals tankkosten van je werk. De app houdt bij wat je nog terugkrijgt.")
             .popover(isPresented: $askFrom, arrowEdge: .bottom) { fromPopover }
             if tag.settles {
                 Text("openstaand").foregroundStyle(.secondary)
                 Text(outstanding.formatted()).monospacedDigit()
                     .foregroundStyle(outstanding.isZero ? Color.secondary : Color.primary)
-                    .help("Wat je nog moet terugstorten: de uitgaven met deze tag die nog niet verrekend zijn.")
+                    .help("Nog terug te krijgen: de uitgaven met deze tag die nog niet terugbetaald zijn.")
             }
             Spacer(minLength: 0)
         }
@@ -264,7 +264,7 @@ struct SettingsTagRow: View {
             } else {
                 Text(tag.startAmount.formatted()).monospacedDigit()
                 if let day = tag.startDay { Text("op \(day.short(withYear: true))").foregroundStyle(.secondary) }
-                if tag.startSettlementId != nil { Text("· verrekend").foregroundStyle(.secondary) }
+                if tag.startSettlementId != nil { Text("· terugbetaald").foregroundStyle(.secondary) }
             }
             if tag.startSettlementId == nil {
                 Button(tag.startAmount.isZero ? "Voeg toe…" : "Wijzig…") {
@@ -285,7 +285,7 @@ struct SettingsTagRow: View {
     private var startPopover: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Startbedrag voor ‘\(tag.name)’").font(.headline)
-            Text("Geld dat bij de start van de app al was voorgeschoten en nog terug moet komen. Het telt mee in het openstaande bedrag en verreken je samen met de boekingen. Leeg of 0 haalt het weg.")
+            Text("Geld dat bij de start van de app al was voorgeschoten en nog terug moet komen. Het telt mee in wat je nog terugkrijgt en gaat mee als het geld terug is. Leeg of 0 haalt het weg.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Text("Bedrag")
@@ -320,8 +320,8 @@ struct SettingsTagRow: View {
 
     private var fromPopover: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Verrekenen voor ‘\(tag.name)’").font(.headline)
-            Text("Vanaf welke datum tellen uitgaven mee als openstaand? Alles van daarvoor geldt als al verrekend.")
+            Text("Voorgeschoten voor ‘\(tag.name)’").font(.headline)
+            Text("Vanaf welke datum tellen uitgaven mee als openstaand? Alles van daarvoor geldt als al terugbetaald.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             DatePicker("Vanaf", selection: $fromDate, displayedComponents: .date)
             HStack {

@@ -172,21 +172,21 @@ private struct ReviewDetail: View {
             if let transfer = settlement.transfer {
                 Label(store.title(of: transfer), systemImage: "arrow.left.arrow.right").fontWeight(.medium)
                 Text(transfer.done
-                     ? "Dit is de overboeking van een verrekening met spaar die je al hebt afgevinkt. De bankregel wordt eraan gehangen; er komt geen boeking bij."
-                     : "Dit is de overboeking van een verrekening met spaar die nog niet is afgevinkt. Bij afvinken worden de potten en de betaalrekening geboekt op \(row.tx.day.short()); de bankregel wordt eraan gehangen.")
+                     ? "Dit is een overboeking met spaar die je bij Nog overboeken al hebt afgevinkt. De banktransactie wordt eraan gekoppeld; er komt geen boeking bij."
+                     : "Dit is een overboeking met spaar die je bij Nog overboeken nog niet hebt afgevinkt. Bij afvinken worden de potten en de betaalrekening geboekt op \(row.tx.day.short()); de banktransactie wordt eraan gekoppeld.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
-                Text("Er passen meer verrekeningen met spaar bij deze overboeking. Kies welke het is.")
+                Text("Er passen meer overboekingen bij Nog overboeken bij deze banktransactie. Kies welke het is.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 ForEach(settlement.transfers) { transfer in
                     Button(store.title(of: transfer) + (transfer.done ? "" : " · nog afvinken")) {
                         store.attachSettlement(transfer, to: row, model)
                     }
-                    .help(transfer.done ? "Hangt de bankregel aan deze verrekening." : "Vinkt deze verrekening af en hangt de bankregel eraan.")
+                    .help(transfer.done ? "Koppelt de banktransactie aan deze overboeking." : "Vinkt deze overboeking af en koppelt de banktransactie eraan.")
                 }
             }
         }
-        .help("Verrekenen met spaar: wat je van de betaalrekening betaalde maar uit een pot hoort te komen (of andersom) maak je in één keer over. Deze bankregel is die overboeking.")
+        .help("Nog overboeken: wat je van de betaalrekening betaalde maar uit een pot hoort te komen (of andersom) maak je in één keer over. Deze banktransactie is die overboeking.")
     }
 
     // MARK: Waar hoort dit bij
@@ -452,7 +452,7 @@ private struct ReviewDetail: View {
                     .disabled(problem != nil || settlement?.isAmbiguous == true)
                     .help(settlement == nil
                           ? "Boekt deze transactie en gaat naar de volgende (⏎). Een regel wordt alleen bewaard als je dat hierboven aanvinkt."
-                          : "Vinkt de verrekening zo nodig af en hangt deze bankregel eraan (⏎). Er komt geen dubbele boeking.")
+                          : "Vinkt de overboeking zo nodig af en koppelt deze banktransactie eraan (⏎). Er komt geen dubbele boeking.")
             }
             .controlSize(.large)
         }
@@ -657,9 +657,9 @@ struct ReviewSettlePicker: View {
     var body: some View {
         let reserve = store.pots(kind: .reservering), saving = store.pots(kind: .spaar)
         HStack(spacing: 6) {
-            Text(selection == nil ? "Verrekenen met spaar" : (isExpense ? "Verrekenen met spaar · komt uit pot" : "Verrekenen met spaar · gaat naar pot"))
+            Text(selection == nil ? "Nog overboeken met spaar" : (isExpense ? "Nog overboeken met spaar · komt uit pot" : "Nog overboeken met spaar · gaat naar pot"))
                 .foregroundStyle(.secondary).lineLimit(1)
-            Picker("Verrekenen met spaar", selection: $selection) {
+            Picker("Nog overboeken met spaar", selection: $selection) {
                 Text("Nee").tag(Int64?.none)
                 if allowsWithoutPot, selection == Self.withoutPot {
                     Text("Ja, pot nog kiezen").tag(Int64?.some(Self.withoutPot))
@@ -674,7 +674,7 @@ struct ReviewSettlePicker: View {
             .labelsHidden().fixedSize()
         }
         .font(.callout).controlSize(.small)
-        .help("Voor iets dat je van de betaalrekening hebt betaald maar uit een pot hoort te komen, of geld dat binnenkomt en door moet naar een pot. Je maakt het later in één keer over bij Verrekenen met spaar.")
+        .help("Voor iets dat je van de betaalrekening hebt betaald maar uit een pot hoort te komen, of geld dat binnenkomt en door moet naar een pot. Je maakt het later in één keer over bij Nog overboeken.")
     }
 }
 
@@ -721,8 +721,8 @@ struct ReviewNewTagButton: View {
             }
             if store.kind == .betaal {
                 VStack(alignment: .leading, spacing: 3) {
-                    Toggle("Verrekenen", isOn: $settles)
-                    Text("Voor uitgaven die je later terugstort op de betaalrekening, zoals tanken.")
+                    Toggle("Voorgeschoten", isOn: $settles)
+                    Text("Voor uitgaven die je voorschiet en terugkrijgt, zoals tankkosten van je werk.")
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }

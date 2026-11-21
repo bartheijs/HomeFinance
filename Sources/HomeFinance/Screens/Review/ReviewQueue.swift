@@ -105,8 +105,8 @@ struct ReviewQueueRow: View {
     @ViewBuilder private func proposal(_ draft: ReviewDraft) -> some View {
         let s = row.suggestion
         if let settlement = row.settlement {
-            label(settlement.transfer.map { store.title(of: $0) } ?? "Kies verrekening", attention: true)
-                .help("De overboeking van een verrekening met spaar. Deze boek je niet opnieuw; je hangt hem aan de verrekening.")
+            label(settlement.transfer.map { store.title(of: $0) } ?? "Kies overboeking", attention: true)
+                .help("Een overboeking met spaar die je bij Nog overboeken hebt vastgelegd. Deze boek je niet opnieuw; je koppelt hem eraan.")
         } else if let match = row.match, match.looksSeparate, !row.usesDistribution, !store.isEdited(row),
                   draft.target == .none {
             label("Losse overboeking? Kies pot", attention: true)

@@ -154,7 +154,7 @@ private struct TransactionsSingleDetail: View {
                     }
                 }
                 if canSettle {
-                    actionMenu("arrow.triangle.swap", "Verrekenen met spaar… (V)") { TransactionsSettleMenuItems(store: store, ids: ids) }
+                    actionMenu("arrow.triangle.swap", "Nog overboeken met spaar… (V)") { TransactionsSettleMenuItems(store: store, ids: ids) }
                 }
                 if row.accountKind == .betaal {
                     action("hourglass", (row.temporaryLoan ? "Tijdelijk geleend van spaar staat aan. " : "Tijdelijk geleend van spaar. ") + TransactionsFormat.loanHelp, active: row.temporaryLoan) {
@@ -259,13 +259,13 @@ private struct TransactionsSingleDetail: View {
                 .fixedSize(horizontal: false, vertical: true)
             switch progress.kind {
             case .toTransfer:
-                Button("Naar Verrekenen met spaar") { model.selection = .reimbursements }
+                Button("Naar Nog overboeken") { model.selection = .reimbursements }
                     .controlSize(.small)
                     .help("Open het scherm waar je de overboeking met spaar afvinkt")
             case .toReceive(let tagId, let name):
-                Button("Verrekenen…") { store.startSettle(tagId: tagId) }
+                Button("Het geld is terug…") { store.startSettle(tagId: tagId) }
                     .controlSize(.small)
-                    .help("Open het venster waarin je de terugbetaling voor \(name) verrekent")
+                    .help("Open het venster waarin je aangeeft dat je het voorgeschoten geld voor \(name) hebt teruggekregen")
             }
         }
         .padding(12)
@@ -277,7 +277,7 @@ private struct TransactionsSingleDetail: View {
 
     private var settleRow: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Toggle("Verrekenen met spaar", isOn: reimburseBinding)
+            Toggle("Nog overboeken met spaar", isOn: reimburseBinding)
                 .disabled(inTransfer)
                 .help(TransactionsFormat.settleHelp + " (V)")
             if reimburseBinding.wrappedValue {
@@ -298,13 +298,13 @@ private struct TransactionsSingleDetail: View {
     /// Een boeking die een verrekening zelf heeft gemaakt: niets te bewerken hier.
     private var settlementBookingBox: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Hoort bij een verrekening met spaar; ongedaan maken doe je bij Verrekenen met spaar", systemImage: "arrow.triangle.swap")
+            Label("Hoort bij een overboeking met spaar; ongedaan maken doe je bij Nog overboeken", systemImage: "arrow.triangle.swap")
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
             if let pot = row?.potName {
                 Text("Pot \(pot)").font(.callout).foregroundStyle(.secondary)
             }
-            Button("Naar Verrekenen met spaar") { model.selection = .reimbursements }
+            Button("Naar Nog overboeken") { model.selection = .reimbursements }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -314,23 +314,23 @@ private struct TransactionsSingleDetail: View {
     /// Een bankregel die de overboeking van een verrekening met spaar is: aanhangen, niet boeken.
     private func transferSection(_ p: TransactionsPending, _ match: SavingsTransferMatch) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Verrekening spaar").font(.headline)
+            Text("Overboeking met spaar").font(.headline)
             Text(match.isAmbiguous
-                 ? "Dit bedrag past bij meer verrekeningen. Kies bij welke deze overboeking hoort."
-                 : "Dit is de overboeking van een verrekening met spaar. Hij wordt niet opnieuw geboekt, maar aan de verrekening gehangen.")
+                 ? "Dit bedrag past bij meer overboekingen bij Nog overboeken. Kies bij welke deze banktransactie hoort."
+                 : "Dit is een overboeking met spaar die je bij Nog overboeken hebt vastgelegd. Hij wordt niet opnieuw geboekt, maar eraan gekoppeld.")
                 .font(.callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             ForEach(match.transfers) { transfer in
                 Button {
                     store.attachTransfer(model, p, transfer: transfer)
                 } label: {
-                    Text("\(transfer.done ? "Aanhangen" : "Afvinken en aanhangen"): verrekening van \(transfer.day.short(withYear: true)), \(transfer.amount.magnitude.formatted())")
+                    Text("\(transfer.done ? "Koppelen" : "Afvinken en koppelen"): overboeking van \(transfer.day.short(withYear: true)), \(transfer.amount.magnitude.formatted())")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .help(transfer.done ? "Hangt deze bankregel aan de boekingen van de afgevinkte verrekening"
-                                    : "Vinkt de verrekening af op de dag van deze bankregel (dan wordt hij geboekt) en hangt de bankregel eraan")
+                .help(transfer.done ? "Koppelt deze banktransactie aan de boekingen van de afgevinkte overboeking"
+                                    : "Vinkt de overboeking af op de dag van deze banktransactie (dan wordt hij geboekt) en koppelt de banktransactie eraan")
             }
-            Button("Naar Verrekenen met spaar") { model.selection = .reimbursements }
+            Button("Naar Nog overboeken") { model.selection = .reimbursements }
                 .buttonStyle(.link).font(.caption)
         }
         .disabled(locked)
@@ -404,7 +404,7 @@ private struct TransactionsSingleDetail: View {
     private var moreSummary: String {
         var parts: [String] = []
         if !(row?.note ?? store.draft.note).isEmpty { parts.append("notitie") }
-        if row?.temporaryLoan ?? store.draft.temporaryLoan { parts.append("tijdelijk geleend") }
+        if row?.temporaryLoan ?? store.draft.temporaryLoan { parts.append("tijdelijk geleend van spaar") }
         if store.extra.parts.count > 1 { parts.append("gesplitst") }
         return parts.joined(separator: " · ")
     }
@@ -441,10 +441,10 @@ private struct TransactionsSingleDetail: View {
                 }
                 if let row, row.accountKind == .betaal, !row.amount.isNegative {
                     ForEach(store.lookups.tags.filter(\.settles)) { tag in
-                        Button("Verrekening \(tag.name)…", systemImage: "arrow.left.arrow.right") {
+                        Button("Terugbetaling \(tag.name)…", systemImage: "arrow.left.arrow.right") {
                             store.startSettle(tagId: tag.id ?? 0, deposit: row)
                         }
-                        .help("Deze bijschrijving is de terugstorting voor \(tag.name): verreken er de openstaande boekingen mee")
+                        .help("Deze bijschrijving is de terugbetaling van wat je voor \(tag.name) hebt voorgeschoten")
                     }
                 }
                 if store.extra.parts.count > 1 { partsSection }
@@ -458,7 +458,7 @@ private struct TransactionsSingleDetail: View {
                     } else {
                         Button("Boeking ongedaan maken…") { confirmUnbook = true }
                             .disabled(inTransfer)
-                            .help(inTransfer ? "Kan niet zolang de boeking in een verrekening met spaar zit"
+                            .help(inTransfer ? "Kan niet zolang de boeking in een overboeking met spaar zit"
                                              : "Haalt de boeking weg; de transactie staat daarna weer als nieuw in de lijst")
                     }
                 }
@@ -477,9 +477,9 @@ private struct TransactionsSingleDetail: View {
     }
 
     private var transferText: String {
-        guard let transfer = store.extra.savingsTransfer else { return "Zit in een verrekening met spaar; uitzetten kan bij Verrekenen met spaar." }
-        return "Zit in de verrekening van \(transfer.day.short(withYear: true))" + (transfer.done ? " (gedaan)." : " (nog niet gedaan).")
-            + " Uitzetten kan bij Verrekenen met spaar."
+        guard let transfer = store.extra.savingsTransfer else { return "Zit in een overboeking met spaar; uitzetten kan bij Nog overboeken." }
+        return "Zit in de overboeking van \(transfer.day.short(withYear: true))" + (transfer.done ? " (gedaan)." : " (nog niet gedaan).")
+            + " Uitzetten kan bij Nog overboeken."
     }
 
     private func field<Content: View>(_ title: String, help: String? = nil, @ViewBuilder content: () -> Content) -> some View {
@@ -571,7 +571,7 @@ private struct TransactionsSingleDetail: View {
     private var footer: some View {
         HStack(spacing: 8) {
             if isSettlementBooking || pending?.transferMatch != nil {
-                Text("Verrekeningen beheer je bij Verrekenen met spaar").font(.caption).foregroundStyle(.secondary)
+                Text("Overboekingen met spaar beheer je bij Nog overboeken").font(.caption).foregroundStyle(.secondary)
                 Spacer()
             } else if let p = pending {
                 Button("Sla over") { store.skip(model, ids: ids) }
@@ -657,9 +657,9 @@ private struct TransactionsMultiDetail: View {
                     .help(store.tagsAllowed ? "Tag aan of uit voor alle gekozen boekingen (T)" : TagRuleText.savings)
                     if rows.contains(where: { $0.accountKind == .betaal && !$0.amount.isZero }) {
                         Button { store.toggleReimburse(model, ids: ids) } label: {
-                            Label("Verrekenen met spaar aan/uit", systemImage: "arrow.triangle.swap").frame(maxWidth: .infinity, alignment: .leading)
+                            Label("Nog overboeken met spaar aan/uit", systemImage: "arrow.triangle.swap").frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .help("Zet verrekenen met spaar aan voor alle gekozen boekingen; staat het overal al aan, dan gaat het uit (V). De pot kies je per boeking of via rechtsklik.")
+                        .help("Zet ‘Nog overboeken met spaar’ aan voor alle gekozen boekingen; staat het overal al aan, dan gaat het uit (V). De pot kies je per boeking of via rechtsklik.")
                     }
                     if rows.contains(where: { $0.accountKind == .betaal }) {
                         Button { store.toggleTemporaryLoan(model, ids: ids) } label: {

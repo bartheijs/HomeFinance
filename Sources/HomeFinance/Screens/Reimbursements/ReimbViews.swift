@@ -34,7 +34,7 @@ struct ReimbOpenRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Toggle("Meenemen in de verrekening", isOn: Binding(get: { selected }, set: { _ in toggle() }))
+            Toggle("Meenemen in de overboeking", isOn: Binding(get: { selected }, set: { _ in toggle() }))
                 .toggleStyle(.checkbox).labelsHidden()
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.label.isEmpty ? "Zonder omschrijving" : entry.label).lineLimit(1)
@@ -56,7 +56,7 @@ struct ReimbOpenRow: View {
         .contextMenu {
             Button(selected ? "Niet meenemen" : "Meenemen", action: toggle)
             Divider()
-            Button("Niet meer verrekenen met spaar", systemImage: "xmark.circle", action: stopSettling)
+            Button("Niet meer bij Nog overboeken", systemImage: "xmark.circle", action: stopSettling)
         }
     }
 
@@ -172,7 +172,7 @@ struct ReimbHistoryRow: View {
                     Image(systemName: "ellipsis.circle")
                 }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                .help("Verrekening ongedaan maken")
+                .help("Overboeking ongedaan maken")
             }
             .font(.body)
             .padding(.horizontal, 18).padding(.vertical, 9)
@@ -204,15 +204,15 @@ struct ReimbHistoryRow: View {
 
     private var bankHelp: String {
         switch (transfer.checkingBankConfirmed, transfer.savingsBankConfirmed) {
-        case (true, false): "Gezien op de betaalrekening, nog niet op de spaarrekening. De app herkent de bankregel bij je volgende import."
-        case (false, true): "Gezien op de spaarrekening, nog niet op de betaalrekening. De app herkent de bankregel bij je volgende import."
-        default: "De app herkent de overboeking bij je volgende import en hangt hem aan deze verrekening."
+        case (true, false): "Gezien op de betaalrekening, nog niet op de spaarrekening. De app herkent de banktransactie bij je volgende import."
+        case (false, true): "Gezien op de spaarrekening, nog niet op de betaalrekening. De app herkent de banktransactie bij je volgende import."
+        default: "De app herkent de overboeking bij je volgende import en koppelt hem aan deze overboeking."
         }
     }
 
     private var details: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Verrekende boekingen").font(.callout.weight(.medium)).foregroundStyle(.secondary).padding(.bottom, 2)
+            Text("Overgeboekte boekingen").font(.callout.weight(.medium)).foregroundStyle(.secondary).padding(.bottom, 2)
             ForEach(transfer.entries) { entry in
                 line(entry.day, entry.label.isEmpty ? "Zonder omschrijving" : entry.label,
                      entry.potName.map { entry.amount > .zero ? "naar pot \($0)" : "uit pot \($0)" } ?? "geen pot", entry.amount)

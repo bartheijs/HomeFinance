@@ -290,7 +290,7 @@ final class ReviewStore {
             }
         }
         guard attached > 0 else { return }
-        let text = attached == 1 ? "1 verrekening herkend en afgehandeld" : "\(attached) verrekeningen herkend en afgehandeld"
+        let text = attached == 1 ? "1 overboeking met spaar herkend en afgehandeld" : "\(attached) overboekingen met spaar herkend en afgehandeld"
         notice = ReviewNotice(text: text)
     }
 
@@ -500,7 +500,7 @@ final class ReviewStore {
         var d = draft(for: row)
         d.tagIds.insert(id)   // gaat zo ook mee in het regelconcept (Onthoud als regel)
         setDraft(d, for: row)
-        model.toast = settles ? "Tag \"\(name)\" gemaakt met verrekenen" : "Tag \"\(name)\" gemaakt"
+        model.toast = settles ? "Tag \"\(name)\" gemaakt, met voorgeschoten aan" : "Tag \"\(name)\" gemaakt"
         return nil
     }
 
@@ -707,7 +707,7 @@ final class ReviewStore {
         guard let row = singleRow else { return }
         if let settlement = row.settlement {
             if let transfer = settlement.transfer { attachSettlement(transfer, to: row, model) }
-            else { model.errorMessage = "Er passen meer verrekeningen bij deze overboeking. Kies rechts welke het is." }
+            else { model.errorMessage = "Er passen meer overboekingen bij Nog overboeken bij deze banktransactie. Kies rechts welke het is." }
             return
         }
         if let problem = problem(for: row) { model.errorMessage = problem; return }
@@ -755,7 +755,7 @@ final class ReviewStore {
     private func book(_ chosen: [ReviewRow], _ model: AppModel, reviewedIfEdited: Bool) {
         guard !chosen.isEmpty else { return }
         guard !chosen.contains(where: { $0.settlement != nil }) else {
-            model.errorMessage = "In de selectie zit de overboeking van een verrekening met spaar. Die boek je niet opnieuw: hang hem apart aan."
+            model.errorMessage = "In de selectie zit een overboeking met spaar uit Nog overboeken. Die boek je niet opnieuw: koppel hem apart."
             return
         }
         let requests = chosen.map { row in
@@ -780,12 +780,12 @@ final class ReviewStore {
 
     /// "Te verrekenen met spaar: nu € 310,00 van spaar naar betaal", na een boeking met Verrekenen met spaar.
     private func settlementBalanceText(_ model: AppModel) -> String {
-        model.read("Te verrekenen met spaar") { db in
+        model.read("Nog over te boeken met spaar") { db in
             let open = try Insight.openReimbursements(db)
             switch open.direction {
-            case .fromSavings: return "Te verrekenen met spaar: nu \(open.transferAmount.formatted()) van spaar naar betaal"
-            case .toSavings: return "Te verrekenen met spaar: nu \(open.transferAmount.formatted()) van betaal naar spaar"
-            case .none: return "Te verrekenen met spaar: per saldo niets over te maken"
+            case .fromSavings: return "Nog over te boeken met spaar: nu \(open.transferAmount.formatted()) van spaar naar betaal"
+            case .toSavings: return "Nog over te boeken met spaar: nu \(open.transferAmount.formatted()) van betaal naar spaar"
+            case .none: return "Nog over te boeken met spaar: per saldo niets over te maken"
             }
         }
     }
@@ -801,7 +801,7 @@ final class ReviewStore {
             }
         }
         guard ok else { return }
-        let text = transfer.done ? "Bankregel aan de verrekening gehangen" : "Verrekening afgevinkt en bankregel aangehangen"
+        let text = transfer.done ? "Banktransactie aan de overboeking gekoppeld" : "Overboeking afgevinkt en banktransactie gekoppeld"
         model.toast = text
         notice = ReviewNotice(text: text)
         finish(model, handled: [row.id])
@@ -809,7 +809,7 @@ final class ReviewStore {
 
     /// "Verrekening van 12 jun (€ 310,00)".
     func title(of transfer: SavingsTransfer) -> String {
-        "Verrekening van \(transfer.day.short()) (\(transfer.amount.magnitude.formatted()))"
+        "Overboeking van \(transfer.day.short()) (\(transfer.amount.magnitude.formatted()))"
     }
 
     func skipSelection(_ model: AppModel) {

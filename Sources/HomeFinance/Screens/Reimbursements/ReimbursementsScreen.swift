@@ -24,18 +24,18 @@ struct ReimbursementsScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScreenHeader("Verrekenen met spaar",
+            ScreenHeader("Nog overboeken",
                          subtitle: "Wat je van de betaalrekening betaalde maar uit een pot hoort te komen, en wat binnenkwam maar naar een pot moet: samen één bedrag om over te maken.")
             content
         }
         .task(id: ReloadKey(revision: model.revision, year: model.year)) { reload() }
-        .confirmationDialog("Verrekening van \(toUndo?.transferAmount.formatted() ?? "") ongedaan maken?",
+        .confirmationDialog("Overboeking van \(toUndo?.transferAmount.formatted() ?? "") ongedaan maken?",
                             isPresented: Binding(get: { toUndo != nil }, set: { if !$0 { toUndo = nil } }),
                             presenting: toUndo) { transfer in
             Button("Maak ongedaan", role: .destructive) { undo(transfer) }
             Button("Annuleer", role: .cancel) {}
         } message: { transfer in
-            Text("De boekingen van het verrekenen verdwijnen en de \(ReimbFormat.bookings(transfer.entries.count)) staan weer open. Heb je het bedrag al overgemaakt, dan moet je het daarna opnieuw verrekenen.")
+            Text("De boekingen van deze overboeking verdwijnen en de \(ReimbFormat.bookings(transfer.entries.count)) staan weer open. Heb je het bedrag al overgemaakt, dan zet je het daarna opnieuw op overgeboekt.")
         }
     }
 
@@ -73,7 +73,7 @@ struct ReimbursementsScreen: View {
         ContentUnavailableView {
             Label("Er staat niets open", systemImage: "checkmark.circle")
         } description: {
-            Text("Heb je iets van de betaalrekening betaald dat uit een pot hoort te komen, of kwam er iets binnen dat naar een pot moet? Zet dan bij die boeking 'Verrekenen met spaar' aan in Nakijken of Transacties. Hij verschijnt daarna hier.")
+            Text("Heb je iets van de betaalrekening betaald dat uit een pot hoort te komen, of kwam er iets binnen dat naar een pot moet? Zet dan bij die boeking ‘Nog overboeken met spaar’ aan in Nakijken of Transacties. Hij verschijnt daarna hier.")
         } actions: {
             HStack {
                 Button("Naar Nakijken") { model.selection = .review }
@@ -91,7 +91,7 @@ struct ReimbursementsScreen: View {
                 ForEach(groups) { Text("\($0.title) (\($0.entries.count))").tag($0.id) }
             }
             .pickerStyle(.segmented).labelsHidden().fixedSize()
-            Text("Er staan boekingen open voor meer dan één paar rekeningen. Je verrekent ze per paar.")
+            Text("Er staan boekingen open voor meer dan één paar rekeningen. Je boekt ze per paar over.")
                 .font(.callout).foregroundStyle(.secondary)
         }
     }
@@ -121,17 +121,17 @@ struct ReimbursementsScreen: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(betweenPots
                          ? "Er hoeft niets overgemaakt te worden. Met de knop werkt de app je potten meteen bij."
-                         : "Maak het bedrag eerst over in je bank-app. Daarna zet je het hier op verrekend; de app werkt je potten en beide rekeningen meteen bij en herkent de overboeking bij je volgende import.")
+                         : "Maak het bedrag eerst over in je bank-app. Daarna zet je het hier op overgeboekt; de app werkt je potten en beide rekeningen meteen bij en herkent de overboeking bij je volgende import.")
                         .font(.callout).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 14) {
                         Button { settle(selection) } label: {
-                            Text(betweenPots ? "Verreken tussen potten" : "Ik heb dit overgemaakt").padding(.horizontal, 6)
+                            Text(betweenPots ? "Boek over tussen potten" : "Ik heb dit overgemaakt").padding(.horizontal, 6)
                         }
                         .buttonStyle(.borderedProminent).controlSize(.extraLarge)
                         .keyboardShortcut(.return, modifiers: .command)
                         .disabled(selection.withoutPot > 0)
-                        .help("Zet de aangevinkte boekingen op verrekend en boekt alles meteen (⌘↩).")
+                        .help("Zet de aangevinkte boekingen op overgeboekt en boekt alles meteen (⌘↩).")
                         DatePicker(betweenPots ? "op" : "overgemaakt op",
                                    selection: Binding(get: { date }, set: { date = $0; dateTouched = true }),
                                    displayedComponents: .date)
@@ -152,7 +152,7 @@ struct ReimbursementsScreen: View {
     }
 
     private func headline(_ selection: ReimbSelection) -> String {
-        if selection.isEmpty { return "Niets aangevinkt om te verrekenen" }
+        if selection.isEmpty { return "Niets aangevinkt om over te boeken" }
         if selection.net > .zero { return "Maak over van spaar naar betaal" }
         if selection.net < .zero { return "Maak over van betaal naar spaar" }
         return "Niets over te maken; wel te verschuiven tussen potten"
@@ -235,17 +235,17 @@ struct ReimbursementsScreen: View {
         ReimbPanel(tint: Theme.warning) {
             HStack(alignment: .center, spacing: 14) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Vastgelegd op \(transfer.day.short(withYear: true)), nog niet verrekend").font(.callout).foregroundStyle(.secondary)
+                    Text("Vastgelegd op \(transfer.day.short(withYear: true)), nog niet overgeboekt").font(.callout).foregroundStyle(.secondary)
                     Text("\(transfer.transferAmount.formatted()) \(ReimbFormat.direction(transfer.direction))")
                         .font(.title3.weight(.medium)).monospacedDigit()
                     Text(ReimbFormat.bookings(transfer.entries.count)).font(.callout).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 12)
                 Button("Toch niet…") { toUndo = transfer }
-                    .help("Verwijdert deze verrekening; de boekingen staan dan weer open.")
-                Button("Zet op verrekend") { markDone(transfer) }
+                    .help("Verwijdert deze overboeking; de boekingen staan dan weer open.")
+                Button("Zet op overgeboekt") { markDone(transfer) }
                     .buttonStyle(.borderedProminent)
-                    .help("Boekt deze verrekening op de gekozen datum en werkt de potten bij.")
+                    .help("Boekt deze overboeking op de gekozen datum en werkt de potten bij.")
             }
             .padding(18)
         }
@@ -257,8 +257,8 @@ struct ReimbursementsScreen: View {
         let waiting = data.history.filter { data.unconfirmed.contains($0.id) }.count
         return ReimbPanel {
             HStack(spacing: 0) {
-                disclosureHeader("Eerdere verrekeningen", count: data.history.count, open: historyOpen,
-                                 help: "Klik om de eerdere verrekeningen te tonen of te verbergen.") {
+                disclosureHeader("Eerdere overboekingen", count: data.history.count, open: historyOpen,
+                                 help: "Klik om de eerdere overboekingen te tonen of te verbergen.") {
                     historyOpen.toggle()
                 }
                 if waiting > 0 && !historyOpen {
@@ -266,7 +266,7 @@ struct ReimbursementsScreen: View {
                           systemImage: "exclamationmark.triangle.fill")
                         .font(.callout).foregroundStyle(Theme.warning)
                         .padding(.trailing, 18)
-                        .help("Deze verrekeningen zijn meer dan 5 dagen geleden gedaan, maar de overboeking is nog niet in een bankbestand herkend.")
+                        .help("Deze overboekingen zijn meer dan 5 dagen geleden gedaan, maar de overboeking is nog niet in een bankbestand herkend.")
                 }
             }
             if historyOpen {
@@ -308,7 +308,7 @@ struct ReimbursementsScreen: View {
         guard !selection.isEmpty else { return }
         let day = Day(date: date)
         let ids = selection.entries.map(\.id)
-        model.perform("Verrekend. De potten zijn bijgewerkt.") {
+        model.perform("Overgeboekt. De potten zijn bijgewerkt.") {
             try model.db.write { db in
                 let transfer = try SavingsTransferService.createSavingsTransfer(db, entryIds: ids, day: day)
                 guard let id = transfer.id else { return }
@@ -319,14 +319,14 @@ struct ReimbursementsScreen: View {
 
     private func markDone(_ transfer: SavingsTransferDetail) {
         let day = Day(date: date)
-        model.perform("Verrekend. De potten zijn bijgewerkt.") {
+        model.perform("Overgeboekt. De potten zijn bijgewerkt.") {
             try model.db.write { db in _ = try SavingsTransferService.markDone(db, savingsTransferId: transfer.id, on: day) }
         }
     }
 
     /// Heropenen en verwijderen in één keer. Hangt er al een bankregel aan, dan weigert de service met uitleg.
     private func undo(_ transfer: SavingsTransferDetail) {
-        model.perform("Verrekening ongedaan gemaakt; de boekingen staan weer open") {
+        model.perform("Overboeking ongedaan gemaakt; de boekingen staan weer open") {
             try model.db.write { db in
                 if transfer.done { _ = try SavingsTransferService.reopen(db, savingsTransferId: transfer.id) }
                 try SavingsTransferService.delete(db, savingsTransferId: transfer.id)
@@ -341,7 +341,7 @@ struct ReimbursementsScreen: View {
     }
 
     private func stopSettling(_ entry: EntryRow) {
-        model.perform("\(entry.label) wordt niet meer verrekend") {
+        model.perform("\(entry.label) staat niet meer bij Nog overboeken") {
             try model.db.write { db in _ = try EntryService.setReimburse(db, entryId: entry.id, false, potId: nil) }
         }
     }

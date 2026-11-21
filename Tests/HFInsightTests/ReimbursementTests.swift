@@ -86,9 +86,9 @@ private let today = Fixture.today
         #expect(o.direction == .none)
         #expect(o.perPot.map(\.amount) == [eur(75), eur(120), eur(-195)])
         #expect(try attention() == .openReimbursements(amount: .zero, count: 3, direction: .none))
-        #expect(try attention()?.message == "3 boekingen te verrekenen tussen potten.")
+        #expect(try attention()?.message == "3 boekingen over te boeken tussen potten.")
         #expect(AttentionItem.openReimbursements(amount: .zero, count: 1, direction: .none).message
-                == "1 boeking te verrekenen tussen potten.")
+                == "1 boeking over te boeken tussen potten.")
     }
 
     @Test func samePotBothWaysAndPendingPerPot() throws {
@@ -280,7 +280,7 @@ private let today = Fixture.today
         #expect(try unconfirmed(today: d("2027-03-10")) == [item])      // precies 5 dagen
         #expect(try unconfirmed(today: d("2027-03-11")) == [item])
         #expect(try detail().unconfirmedSince == d("2027-03-05"))
-        #expect(item.message == "Verrekening van € 105,00 op 05-03-2027 is nog niet gezien in een bankbestand.")
+        #expect(item.message == "Overboeking met spaar van € 105,00 op 05-03-2027 is nog niet gezien in een bankbestand.")
 
         // De bankregel op de betaalrekening hangt eraan: nog niet aan beide kanten.
         try attachBank([made.checking], account: f.betaal, amount: -105, fingerprint: "fp-verrekening-betaal")
@@ -442,7 +442,7 @@ private let today = Fixture.today
         let list = try items()
         let summary = AttentionItem.unconfirmedSettlements(count: 3, total: eur(155), oldestDay: d("2027-01-31"))
         #expect(list == [summary])
-        #expect(summary.message == "3 verrekeningen (samen € 155,00) zijn nog niet gezien in een bankbestand, de oudste van 31-01-2027.")
+        #expect(summary.message == "3 overboekingen met spaar (samen € 155,00) zijn nog niet gezien in een bankbestand, de oudste van 31-01-2027.")
     }
 
     @Test func recentOnesDoNotCount() throws {

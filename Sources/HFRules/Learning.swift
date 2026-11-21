@@ -125,7 +125,7 @@ extension RuleEngine {
             target = "pot '\(name ?? String(potId))'"
         }
         let amountText = rule.amount.map { " (bedrag \($0.formatted()))" } ?? ""
-        let reimburseText = rule.reimburse ? ", verrekenen met spaar bij \(rule.reimburseDirection.title)" : ""
+        let reimburseText = rule.reimburse ? ", nog overboeken met spaar bij \(rule.reimburseDirection.title)" : ""
         let verb = existing == nil ? "Regel geleerd" : "Regel bijgewerkt"
         return LearnResult(outcome: existing == nil ? .created : .updated, rule: rule, previousRule: existing,
                            usedRuleId: nil,

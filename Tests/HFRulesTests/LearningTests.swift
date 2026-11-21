@@ -44,7 +44,7 @@ import HFCore
             #expect(rule.reimburse)
             #expect(rule.amount == nil)
             #expect(rule.reimburseDirection == .outgoing)
-            #expect(result.message == "Regel geleerd: 'Bakkerij de Korenaar' → divers, verrekenen met spaar bij geld eruit")
+            #expect(result.message == "Regel geleerd: 'Bakkerij de Korenaar' → divers, nog overboeken met spaar bij geld eruit")
         }
     }
 
@@ -197,7 +197,7 @@ import HFCore
             let t = try f.tx(d, name: "Reisbureau Voorbeeld", cents: -40000)
             let result = try RuleEngine.learn(from: Correction(bankTransaction: t, potId: f.potId, reimburse: true), d)
             #expect(result.rule?.targetPotId == f.potId)
-            #expect(result.message == "Regel geleerd: 'Reisbureau Voorbeeld' → pot 'Vakantie', verrekenen met spaar bij geld eruit")
+            #expect(result.message == "Regel geleerd: 'Reisbureau Voorbeeld' → pot 'Vakantie', nog overboeken met spaar bij geld eruit")
         }
     }
 }

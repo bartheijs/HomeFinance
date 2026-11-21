@@ -146,14 +146,14 @@ private struct TransactionsFeedRow: View {
         })
         if row.settlementDirection != nil {
             if let id = row.savingsTransferId, store.lookups.doneTransferIds.contains(id) {
-                parts.append("verrekend")
+                parts.append("overgeboekt")
             } else {
                 parts += Insight.linkLabels(amount: row.amount, reimburse: true, potName: row.potName, settlingTagNames: [])
             }
         }
         parts += Insight.linkLabels(amount: row.amount, reimburse: false, potName: nil, settlingTagNames: advanced.map(\.name))
         if let month = TransactionsFormat.month(of: row.period) { parts.append("telt in \(Day.monthNamesShort[month - 1])") }
-        if row.temporaryLoan { parts.append(row.amount.isNegative ? "terug naar spaar" : "tijdelijk geleend") }
+        if row.temporaryLoan { parts.append(row.amount.isNegative ? "terug naar spaar" : "tijdelijk geleend van spaar") }
         if let bank = row.bank, bank.amount != row.amount { parts.append("gesplitst") }
         if row.bankTransactionId == nil { parts.append("handinvoer") }
         if !row.reviewed { parts.append("nog nakijken") }
@@ -190,8 +190,8 @@ private struct TransactionsFeedRow: View {
                     store.showDetail = true
                 }
             } label: {
-                Text(transferMatch.isAmbiguous ? "Kies welke verrekening…"
-                     : (transferMatch.needsMarkDone ? "Afvinken en aanhangen" : "Aanhangen aan verrekening"))
+                Text(transferMatch.isAmbiguous ? "Kies welke overboeking…"
+                     : (transferMatch.needsMarkDone ? "Afvinken en koppelen" : "Koppelen aan de overboeking"))
                     .font(.caption.weight(.medium))
                     .foregroundStyle(Theme.accent)
                     .padding(.horizontal, 9).padding(.vertical, 3)
@@ -199,7 +199,7 @@ private struct TransactionsFeedRow: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .help("Dit is de overboeking van een verrekening met spaar. Hij wordt niet opnieuw geboekt, maar aan de verrekening gehangen.")
+            .help("Dit is een overboeking met spaar die je bij Nog overboeken hebt vastgelegd. Hij wordt niet opnieuw geboekt, maar eraan gekoppeld.")
         } else if let match = p.match, p.bookableMatch == nil {
             // Vaste storting herkend, maar er valt nog iets te kiezen: het detail laat de verdeling zien.
             Button {
@@ -294,7 +294,7 @@ private struct TransactionsFeedRow: View {
                         TransactionsIconLabel(icon: "arrow.triangle.swap", active: row.reimburse)
                     }
                     .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-                    .help("Verrekenen met spaar… " + TransactionsFormat.settleHelp)
+                    .help("Nog overboeken met spaar… " + TransactionsFormat.settleHelp)
                 }
                 iconMenu("ellipsis", help: "Meer acties") {
                     if row.bankTransactionId != nil {
@@ -420,7 +420,7 @@ struct TransactionsContextMenu: View {
         let expenses = rows.filter { $0.accountKind == .betaal && !$0.amount.isZero }
         let locked = chosen.contains { store.isLocked($0) }
         if chosen.contains(where: { $0.entry?.isSettlementBooking == true || $0.pending?.transferMatch != nil }) {
-            Button("Naar Verrekenen met spaar", systemImage: "arrow.triangle.swap") { model.selection = .reimbursements }
+            Button("Naar Nog overboeken", systemImage: "arrow.triangle.swap") { model.selection = .reimbursements }
         } else {
         Group {
             if news.contains(where: \.hasSuggestion) {
@@ -438,7 +438,7 @@ struct TransactionsContextMenu: View {
                 }
             }
             if !expenses.isEmpty {
-                Menu("Verrekenen met spaar…", systemImage: "arrow.triangle.swap") {
+                Menu("Nog overboeken met spaar…", systemImage: "arrow.triangle.swap") {
                     TransactionsSettleMenuItems(store: store, ids: ids)
                 }
             }
@@ -451,10 +451,10 @@ struct TransactionsContextMenu: View {
             }
             if chosen.count == 1, let row = rows.first, row.accountKind == .betaal, !row.amount.isNegative {
                 ForEach(store.lookups.tags.filter(\.settles)) { tag in
-                    Button("Verrekening \(tag.name)…", systemImage: "arrow.left.arrow.right") {
+                    Button("Terugbetaling \(tag.name)…", systemImage: "arrow.left.arrow.right") {
                         store.startSettle(tagId: tag.id ?? 0, deposit: row)
                     }
-                    .help("Deze bijschrijving is de terugstorting voor \(tag.name)")
+                    .help("Deze bijschrijving is de terugbetaling van wat je voor \(tag.name) hebt voorgeschoten")
                 }
             }
             if chosen.count == 1, let item = chosen.first {
@@ -495,7 +495,7 @@ struct TransactionsSettleMenuItems: View {
             .filter { $0.accountKind == .betaal && !$0.amount.isZero }
         let allOut = rows.allSatisfy { $0.amount.isNegative }, allIn = rows.allSatisfy { !$0.amount.isNegative }
         let current = rows.count == 1 && rows[0].reimburse ? rows[0].potId : nil
-        Section(allOut ? "Komt uit pot" : (allIn ? "Gaat naar pot" : "Verrekenen met pot")) {
+        Section(allOut ? "Komt uit pot" : (allIn ? "Gaat naar pot" : "Overboeken met pot")) {
             ForEach(store.lookups.pots(accountId: nil, keeping: current)) { pot in
                 Button {
                     store.setReimbursePot(model, ids: ids, potId: pot.id)
@@ -507,7 +507,7 @@ struct TransactionsSettleMenuItems: View {
         Section {
             Button("Pot later kiezen") { store.setReimbursePot(model, ids: ids, potId: nil) }
             if rows.contains(where: \.reimburse) {
-                Button("Niet meer verrekenen met spaar") {
+                Button("Niet meer bij Nog overboeken") {
                     // Staat het overal aan, dan zet de schakelaar het uit.
                     if rows.allSatisfy(\.reimburse) { store.toggleReimburse(model, ids: ids) }
                     else { store.toggleReimburse(model, ids: rows.filter(\.reimburse).map { .entry($0.id) }) }

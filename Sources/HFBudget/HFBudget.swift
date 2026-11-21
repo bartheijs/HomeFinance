@@ -99,20 +99,20 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
         case .budgetItemOnSavings:
             return "Een boeking op een spaarrekening kan geen vaste post hebben, alleen een pot."
         case .potRequiresReimburse:
-            return "Op een betaalrekening kan een pot alleen gekozen worden bij 'verrekenen met spaar'."
+            return "Op een betaalrekening kan een pot alleen gekozen worden bij ‘Nog overboeken met spaar’."
         case let .potWrongAccount(pot):
             return "De pot \(pot) hoort niet bij deze spaarrekening."
         case .reimburseOnSavings:
-            return "'Verrekenen met spaar' kan alleen bij een boeking op een betaalrekening."
+            return "‘Nog overboeken met spaar’ kan alleen bij een boeking op een betaalrekening."
         case .reimburseNotExpense:
-            return "'Verrekenen met spaar' kan niet bij een bedrag van nul."
+            return "‘Nog overboeken met spaar’ kan niet bij een bedrag van nul."
         case .temporaryLoanOnSavings:
             return "'Tijdelijk geleend van spaar' kan alleen bij een boeking op een betaalrekening."
         case .tagOnSavings:
             return "Tags kunnen alleen op boekingen van de betaalrekening, niet op een spaarrekening. "
                 + "Haal de tag weg; een tag die er al stond mag blijven."
         case .inSavingsTransfer:
-            return "Deze boeking zit in een verrekening met spaar. Maak die eerst ongedaan bij Verrekenen met spaar."
+            return "Deze boeking zit in een overboeking met spaar. Maak die eerst ongedaan bij Nog overboeken."
         case .bankEntryImmutable:
             return "Bedrag, datum en rekening van een boeking uit een banktransactie liggen vast. "
                 + "Boek de transactie opnieuw om bedragen te wijzigen."
@@ -133,7 +133,7 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
         case let .potHasEntries(pot):
             return "De pot \(pot) heeft boekingen en kan niet verwijderd worden. Archiveer de pot."
         case let .notReimbursable(entry):
-            return "De boeking '\(entry)' staat niet (meer) open voor verrekening met spaar."
+            return "De boeking '\(entry)' staat niet (meer) open bij Nog overboeken."
         case let .signMismatch(direction):
             switch direction {
             case .IN: return "Het planbedrag van een IN-post moet positief of nul zijn."
@@ -149,23 +149,23 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
         case let .duplicateName(name):
             return "De naam '\(name)' is al in gebruik."
         case .inSettlement:
-            return "Deze boeking is verrekend. Bedrag, rekening en de tag van de verrekening liggen vast; "
-                + "verwijder eerst de verrekening."
+            return "Deze voorgeschoten boeking is terugbetaald. Bedrag, rekening en de tag liggen vast; "
+                + "verwijder eerst de terugbetaling."
         case .depositLinked:
-            return "Deze bijschrijving is als terugstorting aan een verrekening gekoppeld. Ontkoppel haar eerst."
+            return "Deze bijschrijving is gekoppeld als terugbetaling van voorgeschoten geld. Ontkoppel haar eerst."
         case let .tagHasSettlements(tag, count):
-            return "De tag \(tag) heeft \(count) verrekening(en) en kan niet verwijderd worden; de historie zou "
-                + "verloren gaan. Zet verrekenen voor deze tag uit als je hem niet meer gebruikt."
+            return "De tag \(tag) heeft \(count) terugbetaling(en) en kan niet verwijderd worden; de historie zou "
+                + "verloren gaan. Zet ‘Voorgeschoten’ voor deze tag uit als je hem niet meer gebruikt."
         case let .tagNotSettling(tag):
-            return "Voor de tag \(tag) staat verrekenen niet aan."
+            return "Voor de tag \(tag) staat ‘Voorgeschoten’ niet aan."
         case let .notSettleable(entry, tag):
-            return "De boeking '\(entry)' staat niet open voor verrekening van \(tag): ze heeft de tag niet, "
-                + "staat niet op een betaalrekening of is al verrekend."
+            return "De boeking '\(entry)' staat niet open als voorgeschoten voor \(tag): ze heeft de tag niet, "
+                + "staat niet op een betaalrekening of is al terugbetaald."
         case let .depositInvalid(message):
             return message
         case .savingsTransferBooking:
-            return "Dit is een boeking van een verrekening met spaar. Maak die ongedaan bij Verrekenen met spaar "
-                + "(bankregel loskoppelen, heropenen of verwijderen)."
+            return "Dit is een boeking van een overboeking met spaar. Maak die ongedaan bij Nog overboeken "
+                + "(banktransactie loskoppelen, heropenen of verwijderen)."
         case let .periodInvalid(period):
             return "'\(period)' is geen geldige maand. Gebruik de vorm jjjj-mm, bv. 2027-12."
         case let .periodTooFar(period, day):

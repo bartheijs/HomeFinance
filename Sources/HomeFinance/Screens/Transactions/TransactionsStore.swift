@@ -68,7 +68,7 @@ struct TransactionsFeedItem: Identifiable, Equatable {
     var day: Day { entry?.day ?? pending?.transaction.day ?? Day.today() }
     var amount: Money { entry?.amount ?? pending?.transaction.amount ?? .zero }
     var title: String {
-        if entry?.isSettlementBooking == true || pending?.transferMatch != nil { return "Verrekening spaar" }
+        if entry?.isSettlementBooking == true || pending?.transferMatch != nil { return "Overboeking met spaar" }
         let text = entry?.label ?? pending?.match?.distribution?.name ?? pending?.suggestion.label ?? ""
         return text.isEmpty ? "Zonder omschrijving" : text
     }
@@ -483,8 +483,8 @@ final class TransactionsStore {
         var count = 0
         let ok = model.perform { try model.db.write { count = try SavingsTransferService.attachAll($0, accountId: accountId) } }
         if ok, count > 0 {
-            model.toast = count == 1 ? "1 bankregel aan een verrekening met spaar gehangen"
-                                     : "\(count) bankregels aan verrekeningen met spaar gehangen"
+            model.toast = count == 1 ? "1 banktransactie aan een overboeking met spaar gekoppeld"
+                                     : "\(count) banktransacties aan overboekingen met spaar gekoppeld"
         }
     }
 
@@ -692,7 +692,7 @@ final class TransactionsStore {
         let name = targetName(draft)
         let loan = allocation.temporaryLoan
         run(model, {
-            if loan { return "Geboekt en gemarkeerd als tijdelijk geleend. Uitstaand: \(self.loanOutstanding.formatted())" }
+            if loan { return "Geboekt en gemarkeerd als tijdelijk geleend van spaar. Uitstaand: \(self.loanOutstanding.formatted())" }
             return "Geboekt op ‘\(name)’"
         }) { db in
             try BookingService.book(db, bankTransactionId: p.id, allocations: [allocation])
@@ -812,7 +812,7 @@ final class TransactionsStore {
         let ok = run(model, {
             var text = "Tag ‘\(name)’ aangemaakt"
             if !rows.isEmpty { text += rows.count == 1 ? " en gezet" : " en gezet op \(TransactionsFormat.entries(rows.count))" }
-            if settles { text += "; verrekenen staat aan" }
+            if settles { text += "; voorgeschoten staat aan" }
             return text
         }) { db in
             let tag = try TagService.create(db, name: name, color: color)
@@ -860,12 +860,12 @@ final class TransactionsStore {
     func toggleReimburse(_ model: AppModel, ids: [TransactionsItemID]) {
         let rows = entries(in: ids).filter { $0.accountKind == .betaal && !$0.amount.isZero && !$0.isSettlementBooking }
         guard !rows.isEmpty else {
-            model.toast = pendings(in: ids).isEmpty ? "Verrekenen met spaar kan alleen bij een boeking op de betaalrekening"
-                                                    : "Open de transactie en zet ‘Verrekenen met spaar’ aan; het gaat mee bij het boeken"
+            model.toast = pendings(in: ids).isEmpty ? "Nog overboeken met spaar kan alleen bij een boeking op de betaalrekening"
+                                                    : "Open de transactie en zet ‘Nog overboeken met spaar’ aan; het gaat mee bij het boeken"
             return
         }
         let on = !rows.allSatisfy(\.reimburse)
-        run(model, { on ? "Verrekenen met spaar aangezet. Kies nog de pot." : "Verrekenen met spaar uitgezet" }) { db in
+        run(model, { on ? "Nog overboeken met spaar aangezet. Kies nog de pot." : "Nog overboeken met spaar uitgezet" }) { db in
             for row in rows { try EntryService.setReimburse(db, entryId: row.id, on, potId: on ? row.potId : nil) }
         }
     }
@@ -877,10 +877,10 @@ final class TransactionsStore {
         let name = lookups.pot(potId)?.name
         let allOut = rows.allSatisfy { $0.amount.isNegative }, allIn = rows.allSatisfy { !$0.amount.isNegative }
         run(model, {
-            guard let name else { return "Verrekenen met spaar aangezet; pot nog niet gekozen" }
+            guard let name else { return "Nog overboeken met spaar aangezet; pot nog niet gekozen" }
             if allOut { return "Komt uit pot ‘\(name)’" }
             if allIn { return "Gaat naar pot ‘\(name)’" }
-            return "Verrekenen met pot ‘\(name)’"
+            return "Nog overboeken met pot ‘\(name)’"
         }) { db in
             for row in rows { try EntryService.setReimburse(db, entryId: row.id, true, potId: potId) }
         }
@@ -890,7 +890,7 @@ final class TransactionsStore {
     /// afgevinkt op de dag van de bankregel.
     func attachTransfer(_ model: AppModel, _ p: TransactionsPending, transfer: SavingsTransfer) {
         guard let transferId = transfer.id else { return }
-        run(model, { transfer.done ? "Bankregel aan de verrekening gehangen" : "Verrekening afgevinkt en bankregel aangehangen" }) { db in
+        run(model, { transfer.done ? "Banktransactie aan de overboeking gekoppeld" : "Overboeking afgevinkt en banktransactie gekoppeld" }) { db in
             if !transfer.done { try SavingsTransferService.markDone(db, savingsTransferId: transferId, on: p.transaction.day) }
             try SavingsTransferService.attach(db, savingsTransferId: transferId, bankTransactionId: p.id)
         }
@@ -900,13 +900,13 @@ final class TransactionsStore {
     func toggleTemporaryLoan(_ model: AppModel, ids: [TransactionsItemID]) {
         let rows = entries(in: ids).filter { $0.accountKind == .betaal }
         guard !rows.isEmpty else {
-            model.toast = pendings(in: ids).isEmpty ? "Tijdelijk geleend kan alleen bij een boeking op de betaalrekening"
+            model.toast = pendings(in: ids).isEmpty ? "Tijdelijk geleend van spaar kan alleen bij een boeking op de betaalrekening"
                                                     : "Open de transactie en zet ‘Tijdelijk geleend van spaar’ aan onder Meer; het gaat mee bij het boeken"
             return
         }
         let on = !rows.allSatisfy(\.temporaryLoan)
         run(model, {
-            (on ? "Gemarkeerd als tijdelijk geleend." : "Markering tijdelijk geleend weggehaald.")
+            (on ? "Gemarkeerd als tijdelijk geleend van spaar." : "Markering tijdelijk geleend van spaar weggehaald.")
                 + " Uitstaand: \(self.loanOutstanding.formatted())"
         }) { db in
             for row in rows { try EntryService.setTemporaryLoan(db, entryId: row.id, on) }
@@ -1073,12 +1073,12 @@ final class TransactionsStore {
                 depositEntryId: Int64?) -> Bool {
         var result: SettlementResult?
         return run(model, {
-            guard let result else { return "Verrekend" }
-            var text = "\(result.settlement.amount.formatted()) verrekend"
+            guard let result else { return "Terugbetaald" }
+            var text = "\(result.settlement.amount.formatted()) terugbetaald"
             if let difference = result.difference, !difference.isZero {
-                text += difference > .zero ? "; \(difference.formatted()) te veel teruggestort" : "; \(difference.magnitude.formatted()) te weinig teruggestort"
+                text += difference > .zero ? "; \(difference.formatted()) te veel terugbetaald" : "; \(difference.magnitude.formatted()) te weinig terugbetaald"
             } else if result.deposit == nil {
-                text += "; de terugstorting koppel je later"
+                text += "; de terugbetaling koppel je later"
             }
             return text
         }) { db in
@@ -1088,7 +1088,7 @@ final class TransactionsStore {
     }
 
     func linkDeposit(_ model: AppModel, settlementId: Int64, depositEntryId: Int64) {
-        run(model, { "Terugstorting gekoppeld aan de verrekening" }) {
+        run(model, { "Terugbetaling gekoppeld" }) {
             try SettlementService.linkDeposit($0, settlementId: settlementId, depositEntryId: depositEntryId)
         }
     }
@@ -1100,7 +1100,7 @@ final class TransactionsStore {
     }
 
     func deleteSettlement(_ model: AppModel, settlementId: Int64) {
-        run(model, { "Verrekening ongedaan gemaakt; de boekingen staan weer open" }) {
+        run(model, { "Terugbetaling ongedaan gemaakt; de boekingen staan weer open" }) {
             try SettlementService.delete($0, settlementId: settlementId)
         }
     }
@@ -1168,7 +1168,7 @@ enum TransactionsFormat {
 
     static let loanHelp = "Geld dat je even van spaar haalt en later terugboekt. Het telt niet mee als besteedbaar zolang het uitstaat. Markeer ook de terugboeking."
 
-    static let settleHelp = "Bij een uitgave komt het bedrag uit de pot op de spaarrekening, bij een bijschrijving gaat het naar de pot. Het saldo maak je later in één keer over bij Verrekenen met spaar."
+    static let settleHelp = "Bij een uitgave komt het bedrag uit de pot op de spaarrekening, bij een bijschrijving gaat het naar de pot. Het saldo maak je later in één keer over bij Nog overboeken."
     static let periodHelp = "Voor iets dat eind van de maand is betaald maar bij de volgende maand hoort. Het saldo van je rekening verandert er niet door."
 
     /// "yyyy-MM" voor de maand vóór (−1), van (0) of na (+1) de datum; nil voor de maand van de datum zelf.

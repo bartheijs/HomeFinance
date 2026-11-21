@@ -39,7 +39,7 @@ public enum AttentionItem: Equatable, Sendable {
             switch direction {
             case .fromSavings: return "\(amount.formatted()) over te maken van spaar naar betaal (\(count))."
             case .toSavings: return "\(amount.formatted()) over te maken van betaal naar spaar (\(count))."
-            case .none: return "\(count) te verrekenen tussen potten."
+            case .none: return "\(count) over te boeken tussen potten."
             }
         case .reconciliationDiffers(_, let name, let difference, let day):
             return "\(name): afstemming van \(day.dutch) heeft een verschil van \(difference.formatted())."
@@ -47,15 +47,15 @@ public enum AttentionItem: Equatable, Sendable {
             if let lastDay { return "\(name): laatst afgestemd op \(lastDay.dutch) (\(days) dagen geleden)." }
             return "\(name): nog nooit afgestemd."
         case .unconfirmedSettlement(let amount, let day):
-            return "Verrekening van \(amount.formatted()) op \(day.dutch) is nog niet gezien in een bankbestand."
+            return "Overboeking met spaar van \(amount.formatted()) op \(day.dutch) is nog niet gezien in een bankbestand."
         case .unconfirmedSettlements(let count, let total, let oldest):
-            return "\(count) verrekeningen (samen \(total.formatted())) zijn nog niet gezien in een bankbestand, de oudste van \(oldest.dutch)."
+            return "\(count) overboekingen met spaar (samen \(total.formatted())) zijn nog niet gezien in een bankbestand, de oudste van \(oldest.dutch)."
         case .yearMissing(let year):
             return "Er is nog geen begroting voor \(year)."
         case .temporaryLoanOutstanding(let amount):
             return "\(amount.formatted()) tijdelijk geleend van spaar staat nog uit."
         case .openSettlement(_, let name, let amount, let n):
-            return "\(amount.formatted()) \(name) nog terug te storten (\(n) \(n == 1 ? "boeking" : "boekingen"))."
+            return "Voorgeschoten (\(name)): nog terug te krijgen: \(amount.formatted()) (\(n) \(n == 1 ? "boeking" : "boekingen"))."
         }
     }
 }

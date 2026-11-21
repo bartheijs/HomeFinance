@@ -156,7 +156,7 @@ extension RuleEngine {
             case .outgoing: " bij geld eruit"
             case .both: ""
             }
-            parts.append("verrekenen met " + (pot.map { "pot \($0)" } ?? "spaar") + direction)
+            parts.append("nog overboeken met " + (pot.map { "pot \($0)" } ?? "spaar") + direction)
         }
         if let label = RuleMatcher.filled(rule.entryLabel) { parts.append("omschrijving '\(label)'") }
         if !tagNames.isEmpty {

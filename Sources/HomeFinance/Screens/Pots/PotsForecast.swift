@@ -43,7 +43,7 @@ struct PotsRecoveryBlock: View {
                 .foregroundStyle(recovery.status == .herstelt ? Color.secondary : Theme.warning)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 6) {
-                row("Geleend uit andere potten", recovery.shortfall.formatted())
+                row("Gedekt door andere potten", recovery.shortfall.formatted())
                 row("Komt erbij per maand", recovery.perMonth.isZero ? "niets" : recovery.perMonth.formatted())
                 row("Weer op nul", recovery.recoveryDate.map { "rond \(PotsRecoveryText.month($0))" }
                     ?? (recovery.status == .wordtNietAangevuld ? "wordt niet aangevuld" : "niet binnen 10 jaar"))
@@ -53,7 +53,7 @@ struct PotsRecoveryBlock: View {
                     .buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout)
             }
         }
-        .help("Potten die in de min staan lenen van je andere potten. Het geld staat nog op de spaarrekening, maar met een ander doel.")
+        .help("Potten die in de min staan, worden zolang gedekt door je andere potten. Het geld staat nog op de spaarrekening, maar met een ander doel.")
     }
 
     private func row(_ title: String, _ value: String) -> some View {

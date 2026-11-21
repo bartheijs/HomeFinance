@@ -135,7 +135,7 @@ import HFCore
         var rule = Rule(name: "Stichting Voorbeeld", counterpartyContains: "Stichting Voorbeeld",
                         targetPotId: 9, entryLabel: "Gift", reimburse: true, reimburseDirection: .outgoing)
         #expect(RuleEngine.summary(of: rule, potName: "Vakantie", tagNames: [])
-                == "Voortaan bij Stichting Voorbeeld: post Divers, verrekenen met pot Vakantie bij geld eruit, omschrijving 'Gift'")
+                == "Voortaan bij Stichting Voorbeeld: post Divers, nog overboeken met pot Vakantie bij geld eruit, omschrijving 'Gift'")
 
         rule = Rule(name: "Stroomhuis", counterpartyIban: "NL00 TEST 0000 0000 50", amount: Money(cents: -15000),
                     targetItemLabel: "Energie")
@@ -154,7 +154,7 @@ import HFCore
             let rule = Rule(name: "X", counterpartyContains: "Winkel Voorbeeld", targetPotId: f.potId,
                             tagIds: String(tag.id!), reimburse: true, reimburseDirection: .both)
             #expect(try RuleEngine.summary(of: rule, d)
-                    == "Voortaan bij Winkel Voorbeeld: post Divers, verrekenen met pot Vakantie, tag Cadeau")
+                    == "Voortaan bij Winkel Voorbeeld: post Divers, nog overboeken met pot Vakantie, tag Cadeau")
         }
     }
 }

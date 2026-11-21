@@ -75,7 +75,7 @@ struct TransactionsNewEntrySheet: View {
                 if kind == .betaal {
                     Section {
                         Toggle(isOn: $draft.reimburse) {
-                            Text("Verrekenen met spaar")
+                            Text("Nog overboeken met spaar")
                             Text(draft.isIncome ? "Dit bedrag gaat later door naar de spaarrekening" : "Dit bedrag komt later terug van de spaarrekening")
                         }
                         .help(TransactionsFormat.settleHelp)

@@ -86,8 +86,8 @@ enum RulesText {
         else if let pot = data.potName(r.targetPotId), !r.reimburse { text = "pot \(pot)" }
         else { text = "Divers" }
         if r.reimburse {
-            text += r.reimburseDirection == .both ? ", verrekenen met spaar"
-                                                  : ", verrekenen met spaar bij \(r.reimburseDirection.title)"
+            text += r.reimburseDirection == .both ? ", nog overboeken met spaar"
+                                                  : ", nog overboeken met spaar bij \(r.reimburseDirection.title)"
         }
         return text
     }

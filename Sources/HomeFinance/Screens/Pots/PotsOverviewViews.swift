@@ -41,9 +41,9 @@ struct PotsAccountStrip: View {
                        help: "De som van alle potten op deze rekening.")
                 unallocated
                 if account.negativePotCount > 0 {
-                    figure("Geleend uit andere potten", amount: account.borrowedFromOtherPots,
+                    figure("In de min, gedekt door andere potten", amount: account.borrowedFromOtherPots,
                            caption: account.negativePotCount == 1 ? "1 pot in de min" : "\(account.negativePotCount) potten in de min",
-                           help: "Potten die in de min staan lenen van je andere potten. Het geld staat nog op de spaarrekening, maar met een ander doel.")
+                           help: "Potten die in de min staan, worden zolang gedekt door je andere potten. Het geld staat nog op de spaarrekening, maar met een ander doel.")
                 }
                 Spacer(minLength: 0)
             }
@@ -268,14 +268,14 @@ struct PotsRowView: View {
                     if !pot.pendingSettlement.isZero {
                         Text(PotsFormat.pending(pot.pendingSettlement))
                             .font(.callout).foregroundStyle(.secondary).lineLimit(1)
-                            .help("Er staan boekingen op de betaalrekening open die nog met deze pot verrekend moeten worden. Dat doe je bij Verrekenen met spaar.")
+                            .help("Er staan boekingen op de betaalrekening open die nog met deze pot rechtgezet moeten worden. Dat doe je bij Nog overboeken.")
                     }
                     if let recovery = pot.recovery {
                         Text(PotsRecoveryText.line(recovery))
                             .font(.callout)
                             .foregroundStyle(recovery.status == .herstelt ? Color.secondary : Theme.warning)
                             .lineLimit(1)
-                            .help("Deze pot staat in de min: het geld is geleend van je andere potten.")
+                            .help("Deze pot staat in de min: zolang dekken je andere potten het tekort.")
                     } else if let goal = pot.goal {
                         HStack(spacing: 10) {
                             PotsTargetBar(pot: pot, barOnly: true).frame(width: 140)

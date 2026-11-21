@@ -191,7 +191,7 @@ struct TransactionsScreen: View {
             if !store.criteria.loanOnly {
                 Button("Toon deze boekingen") { store.criteria.loanOnly = true }
                     .buttonStyle(.link)
-                    .help("Filtert de lijst op de boekingen die als tijdelijk geleend gemarkeerd zijn")
+                    .help("Filtert de lijst op de boekingen die als tijdelijk geleend van spaar gemarkeerd zijn")
             }
             Spacer(minLength: 0)
         }
@@ -201,7 +201,7 @@ struct TransactionsScreen: View {
         .help(TransactionsFormat.loanHelp)
     }
 
-    /// Eén rustige regel zolang er boekingen zijn die nog met spaar verrekend moeten worden.
+    /// Eén rustige regel zolang er boekingen zijn die nog met spaar overgeboekt moeten worden.
     private func reimbursementBanner(_ open: OpenReimbursements) -> some View {
         let direction: String = switch open.direction {
         case .fromSavings: "\(open.transferAmount.formatted()) van spaar naar betaal"
@@ -210,10 +210,10 @@ struct TransactionsScreen: View {
         }
         return HStack(spacing: 10) {
             Image(systemName: "arrow.triangle.swap").foregroundStyle(.secondary)
-            Text("Te verrekenen met spaar: \(direction) · \(TransactionsFormat.entries(open.entries.count))")
-            Button("Naar Verrekenen met spaar") { model.selection = .reimbursements }
+            Text("Nog over te boeken met spaar: \(direction) · \(TransactionsFormat.entries(open.entries.count))")
+            Button("Naar Nog overboeken") { model.selection = .reimbursements }
                 .buttonStyle(.link)
-                .help("Daar maak je het saldo in één keer over en vink je de verrekening af; dan wordt alles geboekt")
+                .help("Daar maak je het saldo in één keer over en vink je de overboeking af; dan wordt alles geboekt")
             Spacer(minLength: 0)
         }
         .font(.callout)
@@ -222,20 +222,20 @@ struct TransactionsScreen: View {
         .help(TransactionsFormat.settleHelp)
     }
 
-    /// Eén rustige regel per tag waarvan nog iets terug te storten is.
+    /// Eén rustige regel per tag waarvan je nog voorgeschoten geld terugkrijgt.
     private func settlementBanner(_ settlement: TagSettlementSummary) -> some View {
         HStack(spacing: 10) {
             Circle().fill(Color(hex: settlement.color)).frame(width: 7, height: 7)
-            Text("\(settlement.outstanding.formatted()) \(settlement.name) nog terug te storten · \(TransactionsFormat.entries(settlement.openCount))")
-            Button("Verrekenen…") { store.startSettle(tagId: settlement.id) }
+            Text("Voorgeschoten (\(settlement.name)): nog terug te krijgen: \(settlement.outstanding.formatted()) · \(TransactionsFormat.entries(settlement.openCount))")
+            Button("Het geld is terug…") { store.startSettle(tagId: settlement.id) }
                 .buttonStyle(.link)
-                .help("Verreken deze uitgaven met de terugstorting op de betaalrekening")
+                .help("Geef aan dat je het voorgeschoten geld hebt teruggekregen, en met welke bijschrijving")
             Spacer(minLength: 0)
         }
         .font(.callout)
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 9))
-        .help("Uitgaven met de tag \(settlement.name) die je nog terugstort op de betaalrekening")
+        .help("Uitgaven met de tag \(settlement.name) die je hebt voorgeschoten en nog terugkrijgt")
     }
 
     // MARK: Inhoud

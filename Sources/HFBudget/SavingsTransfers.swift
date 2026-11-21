@@ -118,7 +118,7 @@ public enum SavingsTransferService {
         return (bankTransaction.amount.isNegative
                 ? "Dit is een overboeking naar je eigen spaarrekening. "
                 : "Dit is een overboeking van je eigen spaarrekening. ")
-            + "Kies de pot aan de spaarkant; verrekenen met spaar is voor geld dat nog moet verhuizen."
+            + "Kies de pot aan de spaarkant; ‘Nog overboeken met spaar’ is voor geld dat nog moet verhuizen."
     }
 
     /// Openstaande boekingen zonder pot, zodat het scherm kan waarschuwen.
@@ -138,7 +138,7 @@ public enum SavingsTransferService {
         try atomic(db) {
             let ids = Array(Set(entryIds))
             guard !ids.isEmpty else {
-                throw BudgetError.validation("Kies minstens één boeking om met spaar te verrekenen.")
+                throw BudgetError.validation("Kies minstens één boeking om met spaar over te boeken.")
             }
             var chosen: [Entry] = []
             for id in ids {
@@ -178,7 +178,7 @@ public enum SavingsTransferService {
                 var created: [Entry] = []
                 if !moves.isEmpty {
                     guard let savingsId = accounts.savings else {
-                        throw BudgetError.validation("Het is niet duidelijk op welke spaarrekening deze verrekening hoort. "
+                        throw BudgetError.validation("Het is niet duidelijk op welke spaarrekening deze overboeking hoort. "
                             + "Kies bij de boekingen een pot.")
                     }
                     for move in moves {
@@ -190,7 +190,7 @@ public enum SavingsTransferService {
                 }
                 if !transfer.amount.isZero {
                     guard let checkingId = accounts.checking else {
-                        throw BudgetError.validation("Deze verrekening heeft geen boekingen meer op een betaalrekening.")
+                        throw BudgetError.validation("Deze overboeking heeft geen boekingen meer op een betaalrekening.")
                     }
                     let checking = try EntryService.create(db, EntryDraft(
                         accountId: checkingId, day: day, amount: transfer.amount, label: "Verrekening spaar", note: note))
@@ -313,20 +313,20 @@ public enum SavingsTransferService {
                                             arguments: [bankTransactionId]) ?? 0
             guard transaction.status == .nieuw, existing == 0 else { throw BudgetError.alreadyBooked }
             guard transfer.done else {
-                throw BudgetError.validation("Deze verrekening is nog niet afgevinkt. Vink haar eerst af; dan wordt ze "
-                    + "geboekt en kan de bankregel eraan gehangen worden.")
+                throw BudgetError.validation("Deze overboeking is nog niet afgevinkt. Vink hem eerst af; dan wordt hij "
+                    + "geboekt en kan de banktransactie eraan gekoppeld worden.")
             }
             let booked = try bookedEntries(db, savingsTransferId).filter { $0.accountId == transaction.accountId }
             guard !booked.isEmpty else {
-                throw BudgetError.validation("Deze verrekening heeft geen boeking op de rekening \(account.name).")
+                throw BudgetError.validation("Deze overboeking heeft geen boeking op de rekening \(account.name).")
             }
             guard booked.allSatisfy({ $0.bankTransactionId == nil }) else {
-                throw BudgetError.validation("Aan deze kant van de verrekening hangt al een bankregel.")
+                throw BudgetError.validation("Aan deze kant van de overboeking is al een banktransactie gekoppeld.")
             }
             let sum = booked.map(\.amount).sum()
             guard sum == transaction.amount else {
-                throw BudgetError.validation("Het bedrag van de bankregel (\(transaction.amount.formatted())) is niet gelijk aan "
-                    + "de verrekening op deze rekening (\(sum.formatted())).")
+                throw BudgetError.validation("Het bedrag van de banktransactie (\(transaction.amount.formatted())) is niet gelijk aan "
+                    + "de overboeking op deze rekening (\(sum.formatted())).")
             }
             guard transaction.day >= account.openingDate else {
                 throw BudgetError.beforeOpeningDate(account: account.name, openingDate: account.openingDate)
@@ -365,7 +365,7 @@ public enum SavingsTransferService {
         try atomic(db) {
             let transaction = try Check.bankTransaction(db, bankTransactionId)
             guard try ownsEntries(db, where: "bankTransactionId = ?", arguments: [bankTransactionId]) else {
-                throw BudgetError.validation("Deze banktransactie hangt niet aan een verrekening met spaar.")
+                throw BudgetError.validation("Deze banktransactie is niet gekoppeld aan een overboeking met spaar.")
             }
             try Check.yearOpen(db, day: transaction.day)
             try db.execute(sql: "UPDATE entry SET bankTransactionId = NULL WHERE bankTransactionId = ?",
@@ -408,8 +408,8 @@ public enum SavingsTransferService {
     private static func removeBookedEntries(_ db: Database, _ id: Int64) throws {
         let booked = try bookedEntries(db, id)
         guard booked.allSatisfy({ $0.bankTransactionId == nil }) else {
-            throw BudgetError.validation("Aan deze verrekening hangt al een bankregel. Koppel die eerst los; daarna kan "
-                + "de verrekening heropend of verwijderd worden.")
+            throw BudgetError.validation("Aan deze overboeking is al een banktransactie gekoppeld. Koppel die eerst los; daarna kan "
+                + "de overboeking heropend of verwijderd worden.")
         }
         for entry in booked { try Check.yearOpen(db, day: entry.day) }
         if !booked.isEmpty {
@@ -419,7 +419,7 @@ public enum SavingsTransferService {
     }
 
     private static func fetch(_ db: Database, _ id: Int64) throws -> SavingsTransfer {
-        try Check.fetch(db, SavingsTransfer.self, id, "Verrekening met spaar")
+        try Check.fetch(db, SavingsTransfer.self, id, "Overboeking met spaar")
     }
 
     private static func newTransactions(_ db: Database, accountId: Int64) throws -> [BankTransaction] {
@@ -456,11 +456,11 @@ public enum SavingsTransferService {
         for potId in Set(marked.compactMap(\.potId)) { savings.insert(try Check.pot(db, potId).accountId) }
         guard checking.count <= 1 else {
             throw BudgetError.validation("De gekozen boekingen staan op verschillende betaalrekeningen. "
-                + "Maak per betaalrekening een aparte verrekening.")
+                + "Maak per betaalrekening een aparte overboeking.")
         }
         guard savings.count <= 1 else {
             throw BudgetError.validation("De gekozen boekingen horen bij potten op verschillende spaarrekeningen. "
-                + "Maak per spaarrekening een aparte verrekening.")
+                + "Maak per spaarrekening een aparte overboeking.")
         }
         if savings.isEmpty {
             let all = try Int64.fetchAll(db, sql: "SELECT id FROM account WHERE kind = ? AND archived = 0",

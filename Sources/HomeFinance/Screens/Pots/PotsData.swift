@@ -152,7 +152,7 @@ enum PotsFormat {
 
     /// "nog te verrekenen: € 25,00 erbij" (positief = gaat de pot uit).
     static func pending(_ amount: Money) -> String {
-        "nog te verrekenen: \(amount.magnitude.formatted()) \(amount > .zero ? "eraf" : "erbij")"
+        "nog over te boeken: \(amount.magnitude.formatted()) \(amount > .zero ? "eraf" : "erbij")"
     }
 
     static func percent(_ share: Double) -> String {

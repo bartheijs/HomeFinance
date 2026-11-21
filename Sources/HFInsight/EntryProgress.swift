@@ -26,7 +26,7 @@ public struct EntryProgress: Equatable, Sendable {
             switch direction {
             case .fromSavings: return "Nog over te boeken: \(amount.formatted()) van spaar naar betaal"
             case .toSavings: return "Nog over te boeken: \(amount.formatted()) van betaal naar spaar"
-            case .none: return "Nog over te boeken: niets, alleen tussen potjes verrekenen"
+            case .none: return "Nog over te boeken: niets, alleen tussen potjes"
             }
         case .toReceive(_, let name):
             return "Nog terug te krijgen: \(amount.formatted()) (\(name))"
@@ -39,10 +39,10 @@ public struct EntryProgress: Equatable, Sendable {
         case .toTransfer(let pot, _, let pending):
             let from = pot.map { "Hoort bij potje \($0). " } ?? "Er is nog geen potje gekozen. "
             return from + (pending
-                ? "Zit in een vastgelegde verrekening die nog niet is afgevinkt. Maak het bedrag over en vink hem af."
+                ? "Zit in een vastgelegde overboeking die nog niet is afgevinkt. Maak het bedrag over en vink hem af."
                 : "Dit is het totaal van alle open boekingen: zet het in één overboeking recht en vink hem af.")
         case .toReceive(_, let name):
-            return "Je hebt dit voorgeschoten. Het bedrag is het totaal dat nog openstaat voor \(name); verreken het als het geld terug is."
+            return "Je hebt dit voorgeschoten. Het bedrag is het totaal dat nog openstaat voor \(name); geef bij Transacties aan wanneer het geld terug is."
         }
     }
 }

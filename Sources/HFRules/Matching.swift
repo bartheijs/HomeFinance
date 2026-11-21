@@ -203,8 +203,8 @@ public struct RuleMatcher: Sendable {
             s.confidence = .laag
             let chosen = rule.reimburseDirection == .incoming ? "bij geld erin" : "bij geld eruit"
             let now = tx.amount.cents > 0 ? "binnenkomt" : "eruit gaat"
-            s.warnings.append("Regel '\(rule.name)' verrekent met spaar alleen \(chosen); hier gaat het om geld dat "
-                              + "\(now), dus zonder verrekenen en zonder pot voorgesteld. Kijk na of dat klopt.")
+            s.warnings.append("Regel '\(rule.name)' zet ‘Nog overboeken met spaar’ alleen aan \(chosen); hier gaat het om geld dat "
+                              + "\(now), dus zonder overboeken en zonder pot voorgesteld. Kijk na of dat klopt.")
         }
 
         if let label = s.targetItemLabel {

@@ -258,7 +258,11 @@ uitgave). Het telt nergens in mee behalve in de vooruitblik. Terugkerende storti
 
 Geweigerd in een afgesloten jaar (ook het weghalen) en voor RES-regels; de regel RESERVERINGEN kan wel.
 
-## SavingsTransferService — verrekenen met spaar
+## SavingsTransferService — verrekenen met spaar (in de app: "Nog overboeken")
+
+*Sinds UX-stap C2 heet dit in de interface **Nog overboeken**; een `SavingsTransfer` heet daar "overboeking met
+spaar". Verrekenen per tag (`SettlementService`) heet in de interface **Voorgeschoten** ("nog terug te krijgen").
+De namen in de code blijven.*
 
 Twee richtingen, gesaldeerd. Een boeking op de betaalrekening met `reimburse`:
 
@@ -267,7 +271,7 @@ Twee richtingen, gesaldeerd. Een boeking op de betaalrekening met `reimburse`:
 
 De openstaande boekingen worden gesaldeerd tot één verrekening. **Netto positief = van spaar naar betaal,
 negatief = van betaal naar spaar.** Bij het **afvinken** wordt de verrekening meteen volledig geboekt. De
-bankregels van de echte overboeking worden bij een latere import alleen nog herkend en aan die boekingen
+banktransacties van de echte overboeking worden bij een latere import alleen nog herkend en aan die boekingen
 gehangen; er komen dan geen boekingen bij.
 
 | Functie | Doet |
@@ -279,12 +283,12 @@ gehangen; er komen dan geen boekingen bij.
 | `markDone(db, savingsTransferId:, on:, at:) -> SavingsTransfer` | Vinkt af en boekt de verrekening op `on` (standaard vandaag). |
 | `reopen(db, savingsTransferId:)` | Terug naar 'nog te doen'; verwijdert de boekingen van het afvinken. |
 | `delete(db, savingsTransferId:)` | Verwijdert de verrekening en haar boekingen; de gemarkeerde boekingen staan weer open. |
-| `summary(db, savingsTransferId:) -> SavingsTransferSummary` | Saldo, per pot, de boekingen van het afvinken en de aangehangen bankregels. |
-| `recognize(db, bankTransaction:) -> SavingsTransferMatch?` / `recognizeAll(db, accountId:)` | Herkent de bankregel van een verrekening; boekt niets. `recognizeAll` voor alle `nieuw`e van een rekening, per transactie-id. |
-| `attach(db, savingsTransferId:, bankTransactionId:) -> SavingsTransferSummary` | Hangt een bankregel aan de boeking(en) van een afgevinkte verrekening. |
-| `attachAll(db, accountId:) -> Int` | Hangt alle eenduidige bankregels van een rekening aan; geeft het aantal. |
-| `detach(db, bankTransactionId:)` | Koppelt een aangehangen bankregel los; de banktransactie wordt weer `nieuw`. |
-| `unconfirmed(db, today:) -> [SavingsTransfer]` | Afgevinkte verrekeningen waar na 5 dagen nog niet aan beide kanten een bankregel hangt. |
+| `summary(db, savingsTransferId:) -> SavingsTransferSummary` | Saldo, per pot, de boekingen van het afvinken en de aangehangen banktransacties. |
+| `recognize(db, bankTransaction:) -> SavingsTransferMatch?` / `recognizeAll(db, accountId:)` | Herkent de banktransactie van een verrekening; boekt niets. `recognizeAll` voor alle `nieuw`e van een rekening, per transactie-id. |
+| `attach(db, savingsTransferId:, bankTransactionId:) -> SavingsTransferSummary` | Hangt een banktransactie aan de boeking(en) van een afgevinkte verrekening. |
+| `attachAll(db, accountId:) -> Int` | Hangt alle eenduidige banktransacties van een rekening aan; geeft het aantal. |
+| `detach(db, bankTransactionId:)` | Koppelt een aangehangen banktransactie los; de banktransactie wordt weer `nieuw`. |
+| `unconfirmed(db, today:) -> [SavingsTransfer]` | Afgevinkte verrekeningen waar na 5 dagen nog niet aan beide kanten een banktransactie hangt. |
 | `entries(db, savingsTransferId:) -> [Entry]` | De gemarkeerde boekingen in de verrekening. |
 
 **`OpenReimbursements`**: `entries`, `fromSavings` (som van de uitgaven, positief), `toSavings` (som van de
@@ -294,11 +298,11 @@ oude veld `total` bestaat nog en is nu gelijk aan `net` (kan dus negatief of nul
 
 **`SavingsTransfer.amount`** is het netto bedrag met teken, niet meer altijd positief.
 
-**Verrekenen op de overboeking zelf (`ownSavingsWarning`).** Een bankregel tussen de betaalrekening en een
+**Verrekenen op de overboeking zelf (`ownSavingsWarning`).** Een banktransactie tussen de betaalrekening en een
 eigen spaarrekening (tegenrekening = IBAN van een spaarrekening, vergeleken zonder spaties en hoofdletters) is
 de overboeking zelf. Kiest de gebruiker daar "verrekenen met spaar" of een pot, dan gaat hetzelfde geld nog een
 keer heen en weer. De functie geeft dan: "Dit is een overboeking naar (of: van) je eigen spaarrekening. Kies de
-pot aan de spaarkant; verrekenen met spaar is voor geld dat nog moet verhuizen." Alleen een waarschuwing:
+pot aan de spaarkant; ‘Nog overboeken met spaar’ is voor geld dat nog moet verhuizen." Alleen een waarschuwing:
 `BookingService.book` weigert het niet. `nil` als `reimburse` uit staat, de transactie niet op een
 betaalrekening staat, of de tegenrekening ontbreekt of geen eigen spaarrekening is. Het nakijkscherm roept het
 aan met `reimburse: true` en toont de zin zodra verrekenen in het concept staat (ook in een regel van een
@@ -328,9 +332,9 @@ Nog eens afvinken boekt niet opnieuw. Welke boekingen bij de verrekening horen s
 **Herkennen (`recognize`)**, voor verrekeningen met netto ≠ 0:
 
 - bedrag: op de betaalrekening +netto, op de spaarrekening −netto;
-- afgevinkte verrekening: haar boeking op deze rekening heeft nog geen bankregel;
+- afgevinkte verrekening: haar boeking op deze rekening heeft nog geen banktransactie;
 - nog niet afgevinkte verrekening: de rekening past bij haar boekingen en potten; `needsMarkDone` is dan
-  `true`. Het scherm biedt "Afvinken en aanhangen" aan: `markDone(on: <dag van de bankregel>)` en dan `attach`;
+  `true`. Het scherm biedt "Afvinken en aanhangen" aan: `markDone(on: <dag van de banktransactie>)` en dan `attach`;
 - heeft de transactie een tegenrekening, dan moet dat de andere rekening van de verrekening zijn (als daarvan
   het IBAN bekend is; anders een eigen rekening van de andere soort). Zonder tegenrekening telt het bedrag.
   IBAN's worden vergeleken zonder spaties en hoofdletters;
@@ -343,19 +347,19 @@ Nog eens afvinken boekt niet opnieuw. Welke boekingen bij de verrekening horen s
 
 **Aanhangen (`attach`)** zet op de bestaande boeking(en) van die rekening de banktransactie en neemt haar DAG
 over; de banktransactie wordt `verwerkt`. Er komen geen boekingen bij en het eindsaldo verandert niet; alleen
-het saldo op de dagen tussen het afvinken en de bankregel kan verschuiven. Geweigerd als de verrekening niet
-is afgevinkt, de banktransactie niet `nieuw` is, die kant al een bankregel heeft of de som niet gelijk is aan
+het saldo op de dagen tussen het afvinken en de banktransactie kan verschuiven. Geweigerd als de verrekening niet
+is afgevinkt, de banktransactie niet `nieuw` is, die kant al een banktransactie heeft of de som niet gelijk is aan
 het bankbedrag. `attachAll` slaat twijfelgevallen en niet afgevinkte verrekeningen over.
 
 **Bescherming.** Boekingen van het afvinken worden bij Verrekenen met spaar beheerd:
 
-- `BookingService.book` / `unbook` op een aangehangen bankregel, `EntryService.delete`, en een wijziging van
+- `BookingService.book` / `unbook` op een aangehangen banktransactie, `EntryService.delete`, en een wijziging van
   bedrag, rekening, dag of pot via `EntryService.update` worden geweigerd met
   `BudgetError.savingsTransferBooking`. Label, notitie en tags wijzigen mag.
-- `reopen` en `delete` weigeren zolang er een bankregel aan hangt; eerst `detach`.
-- `BalanceService.importCheck` klopt: een aangehangen bankregel is `verwerkt` en telt één keer.
+- `reopen` en `delete` weigeren zolang er een banktransactie aan hangt; eerst `detach`.
+- `BalanceService.importCheck` klopt: een aangehangen banktransactie is `verwerkt` en telt één keer.
 
-**Let op:** boek de bankregel van een afgevinkte verrekening niet op een andere manier (regels, of
+**Let op:** boek de banktransactie van een afgevinkte verrekening niet op een andere manier (regels, of
 `TransferService.linkTransfer`); dan staat het bedrag er twee keer. Draai daarom altijd eerst `attachAll`.
 
 **Volgorde in het nakijkscherm:** eerst `SavingsTransferService.attachAll` en `recognizeAll` (per rekening),

@@ -209,8 +209,8 @@ struct TransactionsSettleSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Verrekenen: \(target.tagName)").font(.title2.weight(.semibold))
-                Text("Uitgaven met deze tag die je terugstort op de betaalrekening. Na het verrekenen staan ze niet meer open.")
+                Text("Voorgeschoten: \(target.tagName)").font(.title2.weight(.semibold))
+                Text("Uitgaven met deze tag die je hebt voorgeschoten. Kies welke je hebt teruggekregen; daarna staan ze niet meer open.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -272,7 +272,7 @@ struct TransactionsSettleSheet: View {
 
             if !history.isEmpty {
                 Divider()
-                DisclosureGroup("Eerdere verrekeningen (\(history.count))", isExpanded: $showHistory) {
+                DisclosureGroup("Eerder terugbetaald (\(history.count))", isExpanded: $showHistory) {
                     VStack(spacing: 6) {
                         ForEach(history) { detail in historyRow(detail) }
                     }
@@ -286,7 +286,7 @@ struct TransactionsSettleSheet: View {
                 Spacer()
                 Button(nothingOpen ? "Sluit" : "Annuleer") { dismiss() }.keyboardShortcut(.cancelAction)
                 if !nothingOpen {
-                    Button("Verreken") {
+                    Button("Het geld is terug") {
                         let ids = chosen.map(\.id)
                         let depositEntryId = target.deposit?.id ?? depositId
                         if store.settle(model, tagId: target.tagId, entryIds: ids, includeStart: includeStart,
@@ -306,26 +306,26 @@ struct TransactionsSettleSheet: View {
     @ViewBuilder private var depositSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let d = target.deposit {
-                Text("Terugstorting: \(d.amount.formatted()) op \(d.day.short()) · \(d.label)")
+                Text("Terugbetaling: \(d.amount.formatted()) op \(d.day.short()) · \(d.label)")
             } else if candidates.isEmpty {
-                Text("Nog niet teruggestort: alleen vastleggen")
-                Text("Er is in de laatste \(SettlementService.suggestionDays) dagen geen bijschrijving van dit bedrag gevonden. Koppelen kan later: rechtsklik op de bijschrijving en kies ‘Verrekening \(target.tagName)…’.")
+                Text("Nog niet terugbetaald: alleen vastleggen")
+                Text("Er is in de laatste \(SettlementService.suggestionDays) dagen geen bijschrijving van dit bedrag gevonden. Koppelen kan later: rechtsklik op de bijschrijving en kies ‘Terugbetaling \(target.tagName)…’.")
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                Picker("Terugstorting", selection: $depositId) {
+                Picker("Terugbetaling", selection: $depositId) {
                     ForEach(candidates) { entry in
-                        Text("Is dit je terugstorting? \(entry.amount.formatted()) op \(entry.day.short()) · \(entry.label)")
+                        Text("Is dit je terugbetaling? \(entry.amount.formatted()) op \(entry.day.short()) · \(entry.label)")
                             .tag(entry.id)
                     }
-                    Text("Nog niet teruggestort: alleen vastleggen").tag(Int64?.none)
+                    Text("Nog niet terugbetaald: alleen vastleggen").tag(Int64?.none)
                 }
                 .pickerStyle(.radioGroup)
                 .labelsHidden()
             }
             if let deposit, chosenCount > 0, deposit.amount != total {
                 let difference = deposit.amount - total
-                Label("De storting is \(difference.magnitude.formatted()) \(difference > .zero ? "hoger" : "lager") dan het te verrekenen bedrag. Verrekenen kan gewoon; het verschil wordt vastgelegd.",
+                Label("De storting is \(difference.magnitude.formatted()) \(difference > .zero ? "hoger" : "lager") dan het voorgeschoten bedrag. Dat kan gewoon; het verschil wordt vastgelegd.",
                       systemImage: "exclamationmark.triangle")
                     .font(.callout).foregroundStyle(Theme.warning)
                     .fixedSize(horizontal: false, vertical: true)
@@ -347,11 +347,11 @@ struct TransactionsSettleSheet: View {
             Spacer()
             if let d = target.deposit, detail.deposit == nil, !s.isOpening, let id = s.id {
                 Button("Koppel deze storting") { store.linkDeposit(model, settlementId: id, depositEntryId: d.id) }
-                    .help("Koppelt de bijschrijving van \(d.amount.formatted()) als terugstorting aan deze verrekening")
+                    .help("Koppelt de bijschrijving van \(d.amount.formatted()) als terugbetaling")
             }
             if !s.isOpening, let id = s.id {
                 Button("Maak ongedaan") { store.deleteSettlement(model, settlementId: id) }
-                    .help("Verwijdert deze verrekening; de boekingen staan daarna weer open")
+                    .help("Verwijdert deze terugbetaling; de boekingen staan daarna weer open")
             }
         }
         .controlSize(.small)

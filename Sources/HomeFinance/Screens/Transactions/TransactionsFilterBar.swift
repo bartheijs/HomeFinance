@@ -93,10 +93,10 @@ struct TransactionsFilterBar: View {
             TransactionsFilterChip(text: "Divers", icon: "square.dashed") { store.criteria.diversOnly = false }
         }
         if c.loanOnly {
-            TransactionsFilterChip(text: "Tijdelijk geleend", icon: "hourglass") { store.criteria.loanOnly = false }
+            TransactionsFilterChip(text: "Tijdelijk geleend van spaar", icon: "hourglass") { store.criteria.loanOnly = false }
         }
         if c.reimburseOnly {
-            TransactionsFilterChip(text: "Verrekenen met spaar", icon: "arrow.triangle.swap") { store.criteria.reimburseOnly = false }
+            TransactionsFilterChip(text: "Nog overboeken", icon: "arrow.triangle.swap") { store.criteria.reimburseOnly = false }
         }
     }
 }
@@ -146,8 +146,8 @@ private struct TransactionsFilterPopover: View {
             if store.kind == .betaal {
                 Toggle("Alleen divers", isOn: $store.criteria.diversOnly)
                     .help("Losse uitgaven en ontvangsten zonder vaste post")
-                Toggle("Alleen verrekenen met spaar", isOn: $store.criteria.reimburseOnly)
-                    .help("Boekingen die je met een pot op de spaarrekening verrekent")
+                Toggle("Alleen nog overboeken met spaar", isOn: $store.criteria.reimburseOnly)
+                    .help("Boekingen die je met een pot op de spaarrekening rechtzet (Nog overboeken)")
                 Toggle("Alleen tijdelijk geleend van spaar", isOn: $store.criteria.loanOnly)
                     .help(TransactionsFormat.loanHelp)
             }

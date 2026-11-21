@@ -26,7 +26,7 @@ administratie beginnen**. Je kunt later altijd wisselen via Instellingen › Ove
 ## Zo werk je ermee
 
 De zijbalk is ingedeeld naar wat je komt doen: **Vandaag** (Dashboard), **Bijwerken** (Importeren en nakijken,
-Transacties), **Begroting** (Maandgrid, Posten), **Sparen** (Potten, Vaste stortingen, Verrekenen met spaar) en
+Transacties), **Begroting** (Maandgrid, Posten), **Sparen** (Potten, Vaste stortingen, Nog overboeken) en
 **Inzicht** (Rapporten), met Instellingen onderaan. Jaar aanmaken en afsluiten doe je bij Posten; regels beheer je
 bij Instellingen › Regels.
 
@@ -49,12 +49,12 @@ geopend of veranderd.
 2. **Importeren en nakijken › Voorbeeldbestand importeren.** Een zip zoals de bank hem levert, met de betaal- en
    de spaarrekening van de laatste tien dagen. De import is foutloos en sluit op het saldo.
 3. **Nakijken** laat zien:
-   - zakgeld naar een kind, verrekend met zijn zakgeldpot (regel "Kind 1 Voorbeeld");
-   - geld dat van datzelfde kind terugkomt: twijfel, zonder verrekenen (de regel geldt alleen bij geld eruit);
+   - zakgeld naar een kind, met "Nog overboeken" uit zijn zakgeldpot (regel "Kind 1 Voorbeeld");
+   - geld dat van datzelfde kind terugkomt: twijfel, zonder "Nog overboeken" (de regel geldt alleen bij geld eruit);
    - "Oppas zaterdag": de eigen tekst van een overboeking als omschrijving;
    - "Frietkraam Demo": een nette naam bij een rommelige pinbetaling;
    - "Extra voor de vakantie" aan de spaarkant: een losse overboeking, niet de vaste storting;
-   - de verrekening met spaar, herkend aan beide kanten: "Afvinken en aanhangen";
+   - de overboeking met spaar uit Nog overboeken, herkend aan beide kanten: "Afvinken en koppelen";
    - "Onthoud als regel" bij een betaling zonder regel.
 4. **Potten:** per kind spaargeld, kleedgeld en zakgeld; de groep Kids met het spaardoel "Studie en rijbewijs"
    uit onderdelen; "Buffer gezin" met een vooruitblik. Bij **Vaste stortingen** de maandelijkse reserveringen.
@@ -77,7 +77,9 @@ Wat je in de voorbeelddata verandert, blijft staan tot de app een nieuwere versi
 | Anti-rood | Buffer die altijd op de betaalrekening moet blijven staan. |
 | Besteedbaar | Saldo betaalrekening − anti-rood − wat je tijdelijk van spaar hebt geleend. Geld met een bestemming staat in potten op de spaarrekening. |
 | Tijdelijk geleend van spaar | Geld dat je even naar de betaalrekening haalt en later terugboekt. Je markeert beide overboekingen; de app houdt bij wat er uitstaat. |
-| Verrekenen met spaar | Een uitgave die uit een pot hoort te komen, of geld dat binnenkomt en naar een pot moet. Je maakt het saldo in één keer over en vinkt het af. |
+| Nog overboeken | Een uitgave die uit een pot hoort te komen, of geld dat binnenkomt en naar een pot moet. Je maakt het saldo in één keer over en vinkt het af. (Vroeger: verrekenen met spaar.) |
+| Voorgeschoten | Uitgaven met een tag (zoals Tanken) die je voorschiet en terugkrijgt; de app toont wat je nog terug te krijgen hebt. (Vroeger: verrekenen bij een tag.) |
+| Banktransactie | Een regel uit het bankbestand. (Vroeger ook: bankregel.) |
 | Vaste storting | Een bedrag dat regelmatig naar de spaarrekening gaat, met de verdeling over potten. |
 | Spaardoel | Doelbedrag en doeldatum bij een pot; de app rekent uit wat er per maand bij moet. |
 | Vooruitblik | Wat het saldo van een pot naar verwachting doet, met de bedragen die je nog verwacht. Telt nergens in mee. |

@@ -21,7 +21,7 @@ import HFCore
             #expect(rule.reimburse)
             #expect(rule.targetPotId == f.potId)
             #expect(rule.reimburseDirection == .incoming)
-            #expect(learned.message.hasSuffix("verrekenen met spaar bij geld erin"))
+            #expect(learned.message.hasSuffix("nog overboeken met spaar bij geld erin"))
 
             // Weer geld erin: verrekenen en pot worden voorgesteld, zonder melding.
             let again = try f.tx(d, name: "Kind Test", iban: childIban, cents: 1000, day: "2027-03-01")

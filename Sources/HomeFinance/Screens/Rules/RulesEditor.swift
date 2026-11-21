@@ -216,16 +216,16 @@ struct RulesEditor: View {
                 }
             }
             Toggle(isOn: $draft.reimburse) {
-                Text("Verrekenen met spaar")
-                Text("Uitgave: komt uit de pot. Bijschrijving: gaat naar de pot. Staat daarna bij Verrekenen met spaar.")
+                Text("Nog overboeken met spaar")
+                Text("Uitgave: komt uit de pot. Bijschrijving: gaat naar de pot. Staat daarna bij Nog overboeken.")
             }
             if draft.reimburse {
-                Picker("Verrekenen bij", selection: $draft.reimburseDirection) {
+                Picker("Nog overboeken bij", selection: $draft.reimburseDirection) {
                     ForEach(ReimburseDirection.allCases, id: \.self) { direction in
                         Text(direction.title).tag(direction)
                     }
                 }
-                .help("Alleen in deze richting stelt de regel verrekenen met spaar en de pot voor. In de andere richting doet hij een voorstel zonder verrekenen en zonder pot, als twijfelgeval in Nakijken.")
+                .help("Alleen in deze richting stelt de regel ‘Nog overboeken met spaar’ en de pot voor. In de andere richting doet hij een voorstel zonder overboeken en zonder pot, als twijfelgeval in Nakijken.")
             }
         } header: {
             Text("Dan")

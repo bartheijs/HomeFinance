@@ -18,7 +18,7 @@ enum Screen: String, CaseIterable, Identifiable, Hashable {
         case .budget: "Posten"
         case .pots: "Potten"
         case .distributions: "Vaste stortingen"
-        case .reimbursements: "Verrekenen met spaar"
+        case .reimbursements: "Nog overboeken"
         case .reports: "Rapporten"
         case .settings: "Instellingen"
         }

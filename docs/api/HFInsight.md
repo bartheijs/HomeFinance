@@ -186,7 +186,7 @@ naar deze pot"). Alles wordt gesaldeerd tot één overboeking; `SavingsTransfer.
 ### Boeken bij afvinken
 
 Een verrekening wordt volledig geboekt zodra de gebruiker hem afvinkt (`markDone` in `HFBudget`): de potmutaties op
-de spaarrekening en de tegenboeking op de betaalrekening. Bankregels worden er bij een latere import aan gehangen.
+de spaarrekening en de tegenboeking op de betaalrekening. Banktransacties worden er bij een latere import aan gehangen.
 
 - `EntryRow.isSettlementBooking` (en `settlementTransferId`): de boeking is door een verrekening zelf gemaakt. Toon
   hem als "Verrekening". Op de betaalrekening is de tegenboeking in de begroting een **gewone diverse boeking**
@@ -197,7 +197,7 @@ de spaarrekening en de tegenboeking op de betaalrekening. Bankregels worden er b
 - `PotSummary.pendingSettlement` telt alleen gemarkeerde boekingen die nog niet in een afgevinkte verrekening
   zitten: open, of in een verrekening die nog niet is afgevinkt.
 - `AttentionItem.unconfirmedSettlement(amount:day:)`: een afgevinkte verrekening (netto niet nul) waar
-  `Insight.settlementConfirmationDays` (5) dagen na het boeken nog niet aan beide kanten een bankregel hangt. Tekst: "Verrekening van € 105,00 op 05-03-2027 is nog niet gezien in een bankbestand."
+  `Insight.settlementConfirmationDays` (5) dagen na het boeken nog niet aan beide kanten een banktransactie hangt. Tekst: "Overboeking met spaar van € 105,00 op 05-03-2027 is nog niet gezien in een bankbestand."
   **Nieuwe `case`: schermen met een uitputtende `switch` op `AttentionItem` moeten hem afhandelen.**
 
 **Hoe een verrekeningsboeking herkend wordt** (precies zoals `HFBudget` ze markeert, `SavingsTransferService.markDone`):
@@ -206,9 +206,9 @@ de spaarrekening en de tegenboeking op de betaalrekening. Bankregels worden er b
   potmutaties op de spaarrekening en de boeking op de betaalrekening. Alleen die lijst telt; de notitie
   "Verrekening #<id>" is voor de gebruiker en wordt niet gelezen;
 - een kant (betaal of spaar) is door de bank bevestigd als een verrekeningsboeking op die rekeningsoort een
-  `bankTransactionId` heeft (`attach` hangt de bankregel aan de boekingen van die kant);
-- `SavingsTransferDetail.unconfirmedSince` is de oudste dag van een verrekeningsboeking zonder bankregel (een
-  bankregel verschuift de boeking naar de bankdag). De melding komt als die dag + `Insight.settlementConfirmationDays`
+  `bankTransactionId` heeft (`attach` hangt de banktransactie aan de boekingen van die kant);
+- `SavingsTransferDetail.unconfirmedSince` is de oudste dag van een verrekeningsboeking zonder banktransactie (een
+  banktransactie verschuift de boeking naar de bankdag). De melding komt als die dag + `Insight.settlementConfirmationDays`
   (5) op of voor vandaag ligt: dezelfde regel als `SavingsTransferService.unconfirmed`. Een afgevinkte verrekening
   zonder verrekeningsboekingen (oude gegevens) geeft dus geen melding.
 
