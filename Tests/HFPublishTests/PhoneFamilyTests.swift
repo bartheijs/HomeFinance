@@ -228,10 +228,106 @@ private struct Family {
         #expect(loaded.options == settings.options)
     }
 
-    @Test func pageStaysNarrowAndScriptFree() throws {
+    @Test func pageStaysNarrowWithOnlyTheDateScript() throws {
         let html = try Family().page()
-        #expect(!html.lowercased().contains("<script"))
+        let lower = html.lowercased()
+        // Precies één script: dat van het datumveld. Geen externe bronnen of gebeurtenissen in de opmaak.
+        #expect(lower.components(separatedBy: "<script").count == 2)
+        #expect(!lower.contains("src=") && !lower.contains("http") && !lower.contains("fetch("))
+        #expect(lower.range(of: #"\son[a-z]+\s*="#, options: .regularExpression) == nil)
         #expect(html.contains(".name{min-width:0;overflow-wrap:anywhere}"))
         #expect(html.contains("white-space:nowrap"))
+    }
+
+    // MARK: Eigen datum (6o)
+
+    @Test func monthlyBalancesGo36MonthsAheadByDefault() throws {
+        let family = try Family()
+        let pot = try #require(try family.snapshot().sharedPot)
+        #expect(pot.until == d("2030-03-15"))
+        #expect(pot.monthly.count == 36)
+        #expect(pot.monthly.map(\.months) == Array(1...36))
+        #expect(pot.monthly[0] == PhoneSnapshot.AheadPoint(months: 1, day: d("2027-04-15"), balance: eur(1000)))
+        #expect(pot.monthly[1] == PhoneSnapshot.AheadPoint(months: 2, day: d("2027-05-15"), balance: eur(1300)))
+        #expect(pot.monthly[11].balance == eur(1700))
+        #expect(pot.monthly[12] == PhoneSnapshot.AheadPoint(months: 13, day: d("2028-04-15"), balance: eur(2699)))
+        #expect(pot.monthly.last?.balance == eur(2699))
+        // De 3, 6 en 12 maanden blijven hetzelfde en komen overeen met de stand per maand.
+        for point in pot.ahead { #expect(pot.monthly[point.months - 1] == point) }
+    }
+
+    @Test func stepsAreTheForecastAtTheEndOfEachDay() throws {
+        let family = try Family()
+        // Twee verwachtingen op één dag: alleen de stand aan het eind van die dag.
+        try family.fixture.db.write { db in
+            var item = ForecastItem(potId: family.sharedPotId, day: d("2027-05-01"), amount: eur(-50), label: "Ook verwacht")
+            try item.insert(db)
+        }
+        let pot = try #require(try family.snapshot().sharedPot)
+        #expect(pot.steps == [
+            PhoneSnapshot.ForecastStep(day: d("2027-05-01"), balance: eur(1250)),
+            PhoneSnapshot.ForecastStep(day: d("2027-08-01"), balance: eur(1150)),
+            PhoneSnapshot.ForecastStep(day: d("2028-01-10"), balance: eur(1650)),
+            PhoneSnapshot.ForecastStep(day: d("2028-04-01"), balance: eur(2649)),
+        ])
+        // Elke dag geeft hetzelfde als de vooruitblik bij de pot op de Mac ("Stand op …").
+        try family.fixture.db.read { db in
+            let forecast = try Insight.potForecast(db, potId: family.sharedPotId, today: Fixture.today, until: pot.until)
+            for day in ["2027-03-15", "2027-04-30", "2027-05-01", "2027-07-31", "2028-01-10", "2029-12-31", "2030-03-15"] {
+                #expect(pot.balance(on: d(day), today: Fixture.today) == forecast.balance(on: d(day)))
+            }
+        }
+        #expect(pot.balance(on: d("2027-03-14"), today: Fixture.today) == nil)
+        #expect(pot.balance(on: d("2030-03-16"), today: Fixture.today) == nil)
+    }
+
+    @Test func monthsAheadCanBeSetAndAreClamped() throws {
+        let family = try Family()
+        var options = family.options
+        options.sharedPotMonths = 24
+        var pot = try #require(try family.snapshot(options).sharedPot)
+        #expect(pot.until == d("2029-03-15") && pot.monthly.count == 24)
+        options.sharedPotMonths = 3          // minder dan 12 kan niet: de 12 maanden staan er altijd op
+        pot = try #require(try family.snapshot(options).sharedPot)
+        #expect(pot.monthly.count == 12 && pot.ahead.last?.balance == eur(1700))
+        options.sharedPotMonths = 500
+        #expect(try family.snapshot(options).sharedPot?.monthly.count == 120)
+        // Een andere horizon is een ander getal op de pagina.
+        #expect(!(try family.snapshot()).hasSameNumbers(as: try family.snapshot(options)))
+    }
+
+    @Test func monthsAheadIsSavedAndDefaultsTo36() throws {
+        let json = #"{"showSharedPot":true,"sharedPotId":3}"#
+        #expect(try JSONDecoder().decode(PublishOptions.self, from: Data(json.utf8)).sharedPotMonths == 36)
+        let db = try AppDatabase.inMemory()
+        var settings = PublishSettings()
+        settings.options.sharedPotMonths = 48
+        try db.write { try settings.save($0) }
+        #expect(try db.read { try PublishSettings.load($0) }.options.sharedPotMonths == 48)
+    }
+
+    @Test func datePickerAndMonthListOnThePage() throws {
+        let html = try Family().page()
+        // Het datumveld: verborgen tot het script het toont, begrensd op vandaag … de horizon.
+        #expect(html.contains("<div class=\"pick\" id=\"pot-pick\" hidden>"))
+        #expect(html.contains("<input type=\"date\" id=\"pot-pick-day\" min=\"2027-03-15\" max=\"2030-03-15\">"))
+        // De gegevens voor het script: dag en opgemaakt bedrag per stap.
+        #expect(html.contains("var d={from:\"2027-03-15\",until:\"2030-03-15\",start:\"€\u{00A0}1.000,00\","
+                              + "steps:[[\"2027-05-01\",\"€\u{00A0}1.300,00\"],[\"2027-08-01\",\"€\u{00A0}1.200,00\"],"
+                              + "[\"2028-01-10\",\"€\u{00A0}1.700,00\"],[\"2028-04-01\",\"€\u{00A0}2.699,00\"]]};"))
+        #expect(html.contains("Die datum is al voorbij."))
+        #expect(html.contains("Zo ver kijkt deze pagina niet vooruit."))
+        // Zonder script: de stand per maand, ingeklapt.
+        #expect(html.contains("<details class=\"months\"><summary>Stand per maand</summary>"))
+        #expect(html.contains("<span class=\"name\">15 mei 2027</span><span class=\"amt\">€&nbsp;1.300,00</span>"))
+        #expect(html.contains("<span class=\"name\">15 mrt 2030</span><span class=\"amt\">€&nbsp;2.699,00</span>"))
+        // Dezelfde invoer geeft dezelfde tekst.
+        #expect(html == (try Family().page()))
+    }
+
+    @Test func scriptStringsCannotCloseTheScript() {
+        #expect(PhoneDashboard.jsString("a</script>\"\\") == #""a\u003c/script>\"\\""#)
+        #expect(PhoneDashboard.plainAmount(eur(-1234)) == "\u{2212}€\u{00A0}1.234,00"
+                || PhoneDashboard.plainAmount(eur(-1234)) == "€\u{00A0}\u{2212}1.234,00")
     }
 }

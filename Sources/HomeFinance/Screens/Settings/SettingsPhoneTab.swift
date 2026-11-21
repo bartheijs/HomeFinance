@@ -154,7 +154,15 @@ struct SettingsPhoneTab: View {
                             }
                         }
                         .frame(maxWidth: 360)
-                        Text("Met het saldo nu en de verwachte stand over 3, 6 en 12 maanden, berekend zoals de vooruitblik bij de pot.")
+                        Stepper(value: Binding(
+                            get: { settings.options.sharedPotMonthsClamped },
+                            set: { settings.options.sharedPotMonths = $0; save() }),
+                                in: PublishOptions.sharedPotMonthRange, step: 6) {
+                            Text("Eigen datum kiezen tot \(settings.options.sharedPotMonthsClamped) maanden vooruit")
+                                .monospacedDigit()
+                        }
+                        .help("Hoe ver je op de telefoon een eigen datum kunt kiezen; de stand per maand gaat even ver")
+                        Text("Met het saldo nu, de verwachte stand over 3, 6 en 12 maanden en de stand op een datum die je op de telefoon zelf kiest, berekend zoals de vooruitblik bij de pot. Het datumveld werkt als je de pagina in een browser opent; in de voorvertoning van Bestanden staat de stand per maand.")
                             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.leading, 20)

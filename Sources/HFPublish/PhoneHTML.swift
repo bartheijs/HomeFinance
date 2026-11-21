@@ -2,8 +2,9 @@ import Foundation
 import HFCore
 
 extension PhoneDashboard {
-    /// Eén pagina voor de telefoon: alle opmaak in het bestand zelf, geen JavaScript, geen externe bronnen.
-    /// Zo werkt hij ook in de voorvertoning van de app Bestanden op de iPhone, die geen scripts uitvoert.
+    /// Eén pagina voor de telefoon: alle opmaak in het bestand zelf, geen externe bronnen. Het enige script is
+    /// het kleine script voor een eigen datum bij de gezamenlijke spaarpot; zonder scripts (de voorvertoning van
+    /// de app Bestanden) blijft dat datumveld verborgen en werkt de rest van de pagina gewoon.
     /// Dezelfde invoer (en tijdzone) geeft exact dezelfde tekst.
     public static func html(_ snapshot: PhoneSnapshot, options: PublishOptions = PublishOptions(),
                             timeZone: TimeZone = .current) -> String {
@@ -13,7 +14,7 @@ extension PhoneDashboard {
         body.append(snapshot.budget.map { hero($0, snapshot: snapshot) } ?? yearMissingCard(snapshot))
         // De potjes en de spaarpot staan in de momentopname alleen als ze aan staan en gekozen zijn.
         body.append(contentsOf: snapshot.childPots.map(childPotsCard))
-        if let shared = snapshot.sharedPot { body.append(sharedPotCard(shared)) }
+        if let shared = snapshot.sharedPot { body.append(sharedPotCard(shared, today: snapshot.today)) }
         if let budget = snapshot.budget {
             body.append(monthCard(budget.month))
             if options.showFixedItems { body.append(fixedItemsCard(budget.fixedItems, month: budget.month.month)) }
@@ -141,8 +142,9 @@ extension PhoneDashboard {
         return lines.joined(separator: "\n")
     }
 
-    /// De gezamenlijke spaarpot: saldo nu en de verwachte stand over 3, 6 en 12 maanden.
-    static func sharedPotCard(_ pot: PhoneSnapshot.SharedPot) -> String {
+    /// De gezamenlijke spaarpot: saldo nu, de verwachte stand over 3, 6 en 12 maanden, een eigen datum (met
+    /// script) en de stand per maand (zonder script, inklapbaar).
+    static func sharedPotCard(_ pot: PhoneSnapshot.SharedPot, today: Day) -> String {
         var lines = ["<section class=\"card\">",
                      "<h2>\(escape(pot.name))</h2>",
                      "<div class=\"mid\">\(amount(pot.balance))</div>",
@@ -154,9 +156,87 @@ extension PhoneDashboard {
                          + " <span class=\"when\">\(when)</span></span><span class=\"amt\">\(amount(point.balance))</span></div>")
         }
         lines.append("</div>")
+        lines.append(datePicker(pot, today: today))
+        lines.append("<details class=\"months\"><summary>Stand per maand</summary>")
+        lines.append("<div class=\"rows\">")
+        for point in pot.monthly {
+            lines.append(row(shortDate(point.day), amount(point.balance), classes: "small"))
+        }
+        lines.append("</div>")
+        lines.append("</details>")
         lines.append("<div class=\"sub fine\">Verwacht met de vaste stortingen en de verwachte bedragen van deze pot.</div>")
         lines.append("</section>")
         return lines.joined(separator: "\n")
+    }
+
+    /// "15 jun 2027".
+    static func shortDate(_ day: Day) -> String {
+        "\(day.day) \(Day.monthNamesShort[day.month - 1]) \(day.year)"
+    }
+
+    /// Het datumveld voor een eigen datum. Staat verborgen tot het script het toont, zodat er zonder scripts
+    /// geen veld staat dat niets doet. Het script zoekt de laatste stap op of vóór de gekozen dag op
+    /// (zie `PhoneSnapshot.SharedPot.balance(on:today:)`); de bedragen staan al opgemaakt in de gegevens.
+    static func datePicker(_ pot: PhoneSnapshot.SharedPot, today: Day) -> String {
+        let steps = pot.steps.map { "[\(jsString($0.day.iso)),\(jsString(plainAmount($0.balance)))]" }
+        let months = Day.monthNamesShort.map(jsString).joined(separator: ",")
+        let data = "{from:\(jsString(today.iso)),until:\(jsString(pot.until.iso)),"
+            + "start:\(jsString(plainAmount(pot.balance))),steps:[\(steps.joined(separator: ","))]}"
+        return """
+        <div class="pick" id="pot-pick" hidden>
+        <label for="pot-pick-day">Stand op een eigen datum</label>
+        <input type="date" id="pot-pick-day" min="\(today.iso)" max="\(pot.until.iso)">
+        <div class="pick-result" id="pot-pick-result" hidden><span class="when" id="pot-pick-when"></span><span class="mid" id="pot-pick-amt"></span></div>
+        <div class="sub" id="pot-pick-msg"></div>
+        </div>
+        <script>
+        (function(){
+        var d=\(data);
+        var M=[\(months)];
+        function el(id){return document.getElementById(id);}
+        function nice(s){var p=s.split("-");return (+p[2])+" "+M[+p[1]-1]+" "+p[0];}
+        var input=el("pot-pick-day"),result=el("pot-pick-result"),msg=el("pot-pick-msg");
+        function show(){
+        var v=input.value,text="";
+        if(!v){text="Kies een datum tot en met "+nice(d.until)+".";}
+        else if(v<d.from){text="Die datum is al voorbij. Kies een datum vanaf "+nice(d.from)+".";}
+        else if(v>d.until){text="Zo ver kijkt deze pagina niet vooruit. Kies een datum tot en met "+nice(d.until)+".";}
+        if(text){result.hidden=true;msg.textContent=text;msg.hidden=false;return;}
+        var a=d.start;
+        for(var i=0;i<d.steps.length&&d.steps[i][0]<=v;i++){a=d.steps[i][1];}
+        el("pot-pick-when").textContent="Verwacht op "+nice(v);
+        el("pot-pick-amt").textContent=a;
+        result.hidden=false;msg.hidden=true;
+        }
+        input.addEventListener("input",show);
+        input.addEventListener("change",show);
+        el("pot-pick").hidden=false;
+        show();
+        })();
+        </script>
+        """
+    }
+
+    /// Bedrag als gewone tekst (voor het script): echt minteken en een vaste spatie na het euroteken.
+    static func plainAmount(_ money: Money) -> String {
+        money.formatted().replacingOccurrences(of: "-", with: "\u{2212}").replacingOccurrences(of: "€ ", with: "€\u{00A0}")
+    }
+
+    /// Tekst als JavaScript-string tussen dubbele aanhalingstekens; `<` wordt `\u003c`, zodat de tekst nooit een
+    /// `</script>` kan vormen.
+    static func jsString(_ text: String) -> String {
+        var out = "\""
+        for ch in text {
+            switch ch {
+            case "\\": out += "\\\\"
+            case "\"": out += "\\\""
+            case "<": out += "\\u003c"
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            default: out.append(ch)
+            }
+        }
+        return out + "\""
     }
 
     static func monthCard(_ month: PhoneSnapshot.MonthSpending) -> String {
@@ -353,6 +433,17 @@ extension PhoneDashboard {
     .dot{fill:var(--accent)}
     .trend text{fill:var(--muted);font-size:12px}
     .cap{margin-top:10px}
+    [hidden]{display:none!important}
+    .pick{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+    .pick label{display:block;font-size:15px;font-weight:600;color:var(--muted)}
+    .pick input{display:block;width:100%;min-height:44px;margin:8px 0 10px;padding:10px 12px;font:inherit;\
+    color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:12px;\
+    -webkit-appearance:none;appearance:none}
+    .pick input::-webkit-date-and-time-value{text-align:left}
+    .pick-result .when{margin-bottom:2px}
+    .months{margin-top:16px}
+    .months summary{cursor:pointer;font-size:15px;font-weight:600;color:var(--accent)}
+    .months .rows{margin-top:8px}
     footer{margin-top:28px;text-align:center;font-size:13px;color:var(--muted)}
     """
 }

@@ -39,7 +39,7 @@ app geeft de opties uit de instellingen mee.
 | `unallocated` | saldo op spaar zonder pot | `potOverview` |
 | `openReimbursement` | nog over te boeken van spaar (positief) | `openReimbursements` |
 | `childPots` | per gekozen eigenaar het totaal en de potten (leeg als het uit staat of niemand gekozen is) | `potOverview.byOwner` |
-| `sharedPot` | de gekozen spaarpot: naam, saldo nu en `ahead` (over 3, 6 en 12 maanden: dag en verwachte stand) | `potForecast` |
+| `sharedPot` | de gekozen spaarpot: naam, saldo nu, `ahead` (over 3, 6 en 12 maanden: dag en verwachte stand), `until`, `monthly` en `steps` (zie hieronder) | `potForecast` |
 
 - `childPots`: alleen eigenaren uit `options.childOwners`, op alfabet zoals in `potOverview`. Gearchiveerde potten
   met saldo nul staan er niet in; een eigenaar zonder potten valt weg. Potten zonder eigenaar of van een andere
@@ -47,6 +47,13 @@ app geeft de opties uit de instellingen mee.
 - `sharedPot`: de dag is dezelfde dag zoveel maanden later; bestaat die niet (31 januari + 1 maand), dan de
   laatste dag van die maand. De stand is `PotForecast.balance(on:)`, dus precies de vooruitblik bij de pot op de
   Mac (vaste stortingen, losse verwachtingen). Bestaat de pot niet meer, dan is `sharedPot` nil.
+- `sharedPot.until`: vandaag plus `options.sharedPotMonths` maanden (standaard 36, begrensd op 12 … 120), op
+  dezelfde manier als hierboven. Tot die dag rekent de vooruitblik.
+- `sharedPot.monthly`: de verwachte stand over 1, 2, … maanden t/m `until` (dag en stand, zoals `ahead`).
+- `sharedPot.steps`: elke dag van morgen t/m `until` waarop de verwachte stand verandert, met de stand aan het
+  eind van die dag (meer mutaties op één dag worden één stap). `sharedPot.balance(on:today:)` geeft daarmee
+  voor elke dag van `today` t/m `until` precies `PotForecast.balance(on:)`, dus hetzelfde als "Stand op …" bij
+  de pot op de Mac; buiten die dagen nil.
 
 - Gearchiveerde potten met saldo nul staan niet in de lijst; het totaal van de groep is dat van `Insight`.
 - `percent` is afgerond op hele procenten en kan boven de 100 komen.
@@ -60,8 +67,9 @@ app geeft de opties uit de instellingen mee.
 Eén volledig HTML-document voor een telefoon:
 
 - UTF-8, `<meta name="viewport">`, alle opmaak in één `<style>`-blok.
-- **Geen JavaScript en geen externe bronnen** (geen lettertypen, afbeeldingen, links of CDN's). De voorvertoning
-  van de app Bestanden op de iPhone voert geen scripts uit; de pagina moet daar gewoon werken.
+- **Geen externe bronnen** (geen lettertypen, afbeeldingen, links of CDN's) en geen JavaScript, op één klein
+  ingebouwd script na: het datumveld bij de gezamenlijke spaarpot (zie hieronder). De voorvertoning van de app
+  Bestanden op de iPhone voert geen scripts uit; de pagina moet daar gewoon werken, en dat doet hij.
 - Grafieken zijn inline SVG, in Swift gemaakt: een vlakgrafiek voor het verloop en een dunne balk voor de maand.
 - Licht en donker via `prefers-color-scheme`; systeemlettertype.
 - Bovenaan "HomeFinance" en "Bijgewerkt op 15 mrt 2027 om 14:03". Zonder scripts kan de pagina niet zelf melden
@@ -69,7 +77,7 @@ Eén volledig HTML-document voor een telefoon:
 - Volgorde: "Nog te besteden deze maand" (groot, zoals op het Dashboard van de Mac), daaronder "Besteedbaar nu",
   eventueel "Komt nog terug: <tag>" (met de zin "Voorgeschoten geld dat nog terugkomt, telt al mee."),
   "tijdelijk geleend van spaar" en "nog over te boeken van spaar"; dan per kind een kaart met de potjes; de
-  gezamenlijke spaarpot met "Over 3/6/12 maanden" en de maand eronder; uitgaven van de maand tegen plan, vaste
+  gezamenlijke spaarpot met "Over 3/6/12 maanden" en de maand eronder, een eigen datum en de stand per maand; uitgaven van de maand tegen plan, vaste
   posten, verloop, rekeningen, potten.
 - Eén accentkleur. Rood alleen voor posten die te laat zijn en voor een negatief bedrag bij nog te besteden of
   besteedbaar nu.
@@ -79,13 +87,29 @@ Eén volledig HTML-document voor een telefoon:
   rekeningen en potten staan er dan nog wel.
 - Dezelfde momentopname, opties en tijdzone geven exact dezelfde tekst.
 
+### Eigen datum bij de gezamenlijke spaarpot
+
+- "Stand op een eigen datum": een native datumveld (`<input type="date">`) met `min` = vandaag en `max` =
+  `until`. Het staat in de HTML met `hidden`; het script haalt dat weg. Zonder scripts is er dus geen veld dat
+  niets doet.
+- Het script (een paar regels, direct onder het veld) krijgt de gegevens als letterlijke waarden: `from`
+  (vandaag), `until`, `start` (saldo nu) en `steps` (dag en al opgemaakt bedrag per stap). Het neemt de laatste
+  stap op of vóór de gekozen dag, net als `balance(on:today:)`; het rekent niet zelf met bedragen.
+- Geen datum: "Kies een datum tot en met 15 mrt 2030." Een datum vóór vandaag: "Die datum is al voorbij. Kies
+  een datum vanaf …". Na `until`: "Zo ver kijkt deze pagina niet vooruit. Kies een datum tot en met …".
+- "Stand per maand": een ingeklapte lijst (`<details>`) met `monthly`. Werkt zonder script, dus ook in de
+  voorvertoning van Bestanden en in de PDF (daar ingeklapt).
+- Tekst in het script gaat door `PhoneDashboard.jsString` (`<` wordt `\u003c`, zodat er nooit `</script>`
+  in kan staan).
+
 ## Opties en instellingen
 
 `PublishOptions` (Codable, standaard alles aan): `showFixedItems`, `showTrend`, `showAccounts`, `showPots`,
 `showChildPots` met `childOwners` (eigenaren zoals bij de pot ingevuld; standaard leeg) en `showSharedPot` met
-`sharedPotId` (standaard nil). De potjes en de spaarpot staan er pas op als er eigenaren of een pot gekozen zijn
+`sharedPotId` (standaard nil) en `sharedPotMonths` (hoeveel maanden vooruit, standaard 36; `sharedPotMonthsClamped`
+begrenst op `sharedPotMonthRange` = 12 … 120). De potjes en de spaarpot staan er pas op als er eigenaren of een pot gekozen zijn
 (`includesChildPots`, `includesSharedPot`). Nog te besteden, besteedbaar nu en de uitgaven van de maand staan er
-altijd op. Ontbrekende sleutels bij het lezen betekenen "aan", geen eigenaren en geen pot.
+altijd op. Ontbrekende sleutels bij het lezen betekenen "aan", geen eigenaren, geen pot en 36 maanden.
 
 `PublishSettings` staat in de tabel `setting` onder `publish.*`:
 
@@ -107,7 +131,8 @@ altijd op. Ontbrekende sleutels bij het lezen betekenen "aan", geen eigenaren en
 Kaart "Voor het gezin": schakelaar "Potjes van de kinderen" met een vinkje per eigenaar (alle eigenaren die bij
 een pot zijn ingevuld, plus eerder gekozen eigenaren die niet meer bestaan, zodat je ze kunt uitzetten), en
 schakelaar "Gezamenlijke spaarpot met vooruitblik" met een keuzelijst van de potten (niet gearchiveerd, op
-alfabet; met de eigenaar tussen haakjes omdat potten van verschillende kinderen vaak hetzelfde heten).
+alfabet; met de eigenaar tussen haakjes omdat potten van verschillende kinderen vaak hetzelfde heten), en een
+teller "Eigen datum kiezen tot 36 maanden vooruit" (12 … 120, per 6).
 
 ## Voorbeeld met voorbeelddata
 
@@ -135,6 +160,8 @@ eerste spaarpot zonder eigenaar. De voorbeelddata heeft geen vaste stortingen, d
 
 ## Niet getest op een echte telefoon
 
-De pagina is bekeken in WebKit op de Mac op 390 punten breed (en met de gezinsonderdelen op 375), licht en
-donker, en de PDF is nagekeken. Hoe de
+De pagina is bekeken in WebKit op de Mac op 390 punten breed (en met de gezinsonderdelen en het datumveld op
+375), licht en donker, en de PDF is nagekeken. Of het datumveld op de iPhone werkt, hangt af van hoe de pagina
+geopend wordt: de voorvertoning van Bestanden voert (voor zover bekend) geen scripts uit, en dan staat alleen
+de stand per maand er. Hoe de
 app Bestanden en de app Google Drive op een iPhone de bestanden tonen, is niet gecontroleerd.

@@ -21,21 +21,29 @@ public struct PublishOptions: Codable, Equatable, Sendable {
     public var showSharedPot: Bool
     /// Id van die spaarpot, of nil als er nog geen gekozen is.
     public var sharedPotId: Int64?
+    /// Hoeveel maanden vooruit de pagina de verwachte stand van die spaarpot meegeeft, voor de eigen datum en
+    /// de stand per maand (standaard 36). Wordt bij gebruik begrensd op 12 … 120 (`sharedPotMonthRange`).
+    public var sharedPotMonths: Int
+
+    /// De toegestane waarden voor `sharedPotMonths`.
+    public static let sharedPotMonthRange = 12...120
+    public static let defaultSharedPotMonths = 36
 
     public init(showAccounts: Bool = true, showFixedItems: Bool = true, showTrend: Bool = true, showPots: Bool = true,
                 showChildPots: Bool = true, childOwners: [String] = [], showSharedPot: Bool = true,
-                sharedPotId: Int64? = nil) {
+                sharedPotId: Int64? = nil, sharedPotMonths: Int = PublishOptions.defaultSharedPotMonths) {
         self.showAccounts = showAccounts; self.showFixedItems = showFixedItems
         self.showTrend = showTrend; self.showPots = showPots
         self.showChildPots = showChildPots; self.childOwners = childOwners
         self.showSharedPot = showSharedPot; self.sharedPotId = sharedPotId
+        self.sharedPotMonths = sharedPotMonths
     }
 
     enum CodingKeys: String, CodingKey {
-        case showAccounts, showFixedItems, showTrend, showPots, showChildPots, childOwners, showSharedPot, sharedPotId
+        case showAccounts, showFixedItems, showTrend, showPots, showChildPots, childOwners, showSharedPot, sharedPotId, sharedPotMonths
     }
 
-    /// Ontbrekende sleutels (oudere versie) betekenen "aan", geen eigenaren en geen pot.
+    /// Ontbrekende sleutels (oudere versie) betekenen "aan", geen eigenaren, geen pot en 36 maanden vooruit.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         showAccounts = try c.decodeIfPresent(Bool.self, forKey: .showAccounts) ?? true
@@ -46,12 +54,17 @@ public struct PublishOptions: Codable, Equatable, Sendable {
         childOwners = try c.decodeIfPresent([String].self, forKey: .childOwners) ?? []
         showSharedPot = try c.decodeIfPresent(Bool.self, forKey: .showSharedPot) ?? true
         sharedPotId = try c.decodeIfPresent(Int64.self, forKey: .sharedPotId)
+        sharedPotMonths = try c.decodeIfPresent(Int.self, forKey: .sharedPotMonths) ?? Self.defaultSharedPotMonths
     }
 
     /// Of de potjes van de kinderen op de pagina komen: aan en er is minstens één eigenaar gekozen.
     public var includesChildPots: Bool { showChildPots && !childOwners.isEmpty }
     /// Of de gezamenlijke spaarpot op de pagina komt: aan en er is een pot gekozen.
     public var includesSharedPot: Bool { showSharedPot && sharedPotId != nil }
+    /// `sharedPotMonths` binnen 12 … 120.
+    public var sharedPotMonthsClamped: Int {
+        min(max(sharedPotMonths, Self.sharedPotMonthRange.lowerBound), Self.sharedPotMonthRange.upperBound)
+    }
 }
 
 /// Instellingen voor het dashboard op de telefoon, opgeslagen in de tabel `setting` onder `publish.*`.

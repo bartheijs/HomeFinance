@@ -89,6 +89,12 @@ public struct PhoneSnapshot: Equatable, Sendable {
         public let balance: Money
     }
 
+    /// Verwachte stand vanaf een dag: de stand na de laatste verwachte mutatie van die dag.
+    public struct ForecastStep: Equatable, Sendable {
+        public let day: Day
+        public let balance: Money
+    }
+
     /// De gekozen gezamenlijke spaarpot met vooruitblik.
     public struct SharedPot: Equatable, Sendable {
         public let name: String
@@ -96,6 +102,20 @@ public struct PhoneSnapshot: Equatable, Sendable {
         public let balance: Money
         /// Verwachte stand over 3, 6 en 12 maanden.
         public let ahead: [AheadPoint]
+        /// Tot en met deze dag kijkt de pagina vooruit (vandaag plus `PublishOptions.sharedPotMonths` maanden).
+        public let until: Day
+        /// Verwachte stand per maand: over 1, 2, … maanden t/m `until`.
+        public let monthly: [AheadPoint]
+        /// Elke dag van morgen t/m `until` waarop de verwachte stand verandert, met de stand aan het eind van die
+        /// dag. Voor een eigen datum: de stand van de laatste stap op of vóór die dag, of `balance` als er geen is.
+        public let steps: [ForecastStep]
+
+        /// De verwachte stand aan het eind van een dag, of nil vóór `today` of na `until`. Zelfde uitkomst als
+        /// `PotForecast.balance(on:)`; het script in de pagina rekent zo.
+        public func balance(on day: Day, today: Day) -> Money? {
+            guard day >= today, day <= until else { return nil }
+            return steps.last { $0.day <= day }?.balance ?? balance
+        }
     }
 
     public let today: Day
@@ -173,14 +193,24 @@ public enum PhoneDashboard {
 
         var sharedPot: PhoneSnapshot.SharedPot?
         if options.showSharedPot, let potId = options.sharedPotId, try Pot.fetchOne(db, key: potId) != nil {
-            let days = aheadMonths.map { adding(months: $0, to: today) }
-            let forecast = try Insight.potForecast(db, potId: potId, today: today, until: days.max() ?? today)
+            let months = options.sharedPotMonthsClamped
+            let until = adding(months: months, to: today)
+            let forecast = try Insight.potForecast(db, potId: potId, today: today, until: until)
+            func point(_ months: Int) -> PhoneSnapshot.AheadPoint {
+                let day = adding(months: months, to: today)
+                return PhoneSnapshot.AheadPoint(months: months, day: day,
+                                                balance: forecast.balance(on: day) ?? forecast.endBalance)
+            }
+            // Op één dag kan er meer dan één mutatie zijn; alleen de stand aan het eind van de dag telt.
+            var steps: [PhoneSnapshot.ForecastStep] = []
+            for event in forecast.events {
+                if steps.last?.day == event.day { steps.removeLast() }
+                steps.append(PhoneSnapshot.ForecastStep(day: event.day, balance: event.balanceAfter))
+            }
             sharedPot = PhoneSnapshot.SharedPot(
                 name: forecast.potName, balance: forecast.startBalance,
-                ahead: zip(aheadMonths, days).map { months, day in
-                    PhoneSnapshot.AheadPoint(months: months, day: day,
-                                             balance: forecast.balance(on: day) ?? forecast.endBalance)
-                })
+                ahead: aheadMonths.map(point), until: until,
+                monthly: (1...months).map(point), steps: steps)
         }
 
         return PhoneSnapshot(

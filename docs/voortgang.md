@@ -391,11 +391,19 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
      `compareNames`. Toegepast waar de schermen hun posten laden (`TransactionsLookups`, `ReviewStore`,
      `PotsDistData`, `RulesData`). Het maandgrid en het jaarplan (Instellingen › Jaar) houden hun eigen volgorde.
    - Tests: 5 in `ItemPickerOrderTests`. De zelftest controleert de volgorde van de post-kiezers niet.
-6o. **Eigen peildatum voor de gezamenlijke spaarpot op het telefoondashboard** (wens van 21 november; na
-   6k). Naast 3, 6 en 12 maanden een eigen datum kunnen kiezen. Voorstel: op de telefoonpagina een datumveld;
-   de Mac zet de verwachte stand per maand (bijv. 36 maanden vooruit, dezelfde berekening als de vooruitblik)
-   als gegevens in de pagina, en een klein script toont de stand voor de gekozen datum. Werkt zonder
-   internet. Op de Mac bestaat dit al bij de pot ("Stand op …").
+6o. **Eigen peildatum voor de gezamenlijke spaarpot op het telefoondashboard** — klaar (21 november, ronde
+   19), nog niet geïnstalleerd. Op de telefoonpagina staat bij de gezamenlijke spaarpot onder 3, 6 en 12
+   maanden een datumveld "Stand op een eigen datum" en daaronder een inklapbare lijst "Stand per maand".
+   - De Mac zet de verwachte stand in de pagina tot 36 maanden vooruit (in te stellen bij Instellingen ›
+     Telefoon, 12 … 120): per maand voor de lijst en per dag waarop de stand verandert voor het datumveld. Zelfde
+     berekening als de vooruitblik bij de pot (`Insight.potForecast`), dus dezelfde uitkomst als "Stand op …".
+   - Een klein ingebouwd script toont de stand op de gekozen dag; geen internet of externe bestanden. Vóór
+     vandaag of na het einde: een korte melding.
+   - Zonder scripts (voorvertoning van Bestanden, PDF) is het datumveld verborgen en staat alleen de stand per
+     maand er. Op een echte iPhone niet gecontroleerd.
+   - Tests: 7 in `PhoneFamilyTests` (maandgegevens, stappen gelijk aan de vooruitblik, horizon instellen en
+     begrenzen, opslaan, pagina, veilige scripttekst). Bekeken op 375 px, licht en donker, met geldige, te vroege
+     en te late datums.
 6d. **Versie zichtbaar in Instellingen › Over** — klaar (21 november). `scripts/run.sh` zet bij elke build de
    korte commit-hash (met een `+` als er niet-gecommitte wijzigingen waren) en de bouwdatum in `Info.plist`
    (`HFBuildCommit`, `HFBuildDate`; `CFBundleVersion` is het aantal commits). Over toont bv. "Versie 1.0 ·
