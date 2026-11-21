@@ -345,7 +345,7 @@ private struct PotsDistributionEditor: View {
             HStack {
                 Menu {
                     ForEach(PotKind.allCases, id: \.self) { kind in
-                        let group = addable.filter { $0.kind == kind }
+                        let group = Insight.pickerOrder(addable.filter { $0.kind == kind })
                         if !group.isEmpty {
                             Section(kind == .reservering ? "Reserveringen" : "Sparen") {
                                 ForEach(group) { pot in

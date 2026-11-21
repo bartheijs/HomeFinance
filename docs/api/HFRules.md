@@ -93,6 +93,22 @@ rekenwerk (handig voor lijsten). `RuleMatcher.match(rule, transaction, ignoreEna
   Tekst met gemengde hoofdletters blijft zoals hij is.
 - `LabelCleaner.cleanLabel(counterparty:description:)`: de tegenpartij, of bij een lege naam een naam uit de
   omschrijving (pinbetaling, `/NAME/…/`, `Naam: …`; anders de omschrijving zelf, hoogstens 40 tekens).
+- `LabelCleaner.suggestedLabel(counterparty:description:transactionCode:)`: de voorgestelde omschrijving van een
+  nieuwe boeking. Bij een overboeking met een korte, eigen tekst ("Zakgeld", "Cadeau verjaardag") is dat die tekst;
+  anders hetzelfde als `cleanLabel(counterparty:description:)`. Geen eigen tekst bij:
+  - een transactiecode van pin, geldautomaat, incasso, iDEAL, acceptgiro, kosten of rente (`BEA`, `GEA`, `INC`,
+    `IDB`, `ACC`, `KST`, `RNT` … en de korte codes van andere banken). Overboekingscodes (`OVB`, `IOB`, `POV`) en
+    onbekende codes laten de keuze aan de tekst;
+  - gestructureerde tekst (`/`, `:`, `*`, links), vijf of meer cijfers achter elkaar of meer cijfers dan letters;
+  - tekst die begint met iDEAL, SEPA, incasso, betaalautomaat en dergelijke, of een zakelijk woord bevat
+    (factuur, termijn, kenmerk, contributie, polis …);
+  - meer dan 30 tekens of meer dan 4 woorden;
+  - tekst die gelijk is aan (een deel van) de tegenpartij;
+  - geen tegenpartij: dan het oude gedrag (naam uit de omschrijving).
+
+  `RuleMatcher.suggest` gebruikt dit als label wanneer geen regel een omschrijving (`entryLabel`) heeft; een
+  omschrijving uit een regel gaat altijd voor. `cleanLabel(counterparty:description:)` blijft de naam van een
+  regel bepalen (ook in `HistoryRuleSeeder`). Het matchen zelf (IBAN, naam, trefwoord) verandert niet.
 - `TextNormalizer.normalize(_:)` en `normalizeIban(_:)`: dezelfde vergelijking als de regels gebruiken.
 
 ## Leren (`learn`)
@@ -113,6 +129,11 @@ rekenwerk (handig voor lijsten). `RuleMatcher.match(rule, transaction, ignoreEna
    Een regel met alleen een bedrag wordt nooit geleerd.
 5. Won er tot nu toe een **andere** regel, dan krijgt de geleerde regel een priority net vóór die regel, zodat
    de correctie de volgende keer effect heeft.
+
+**Omschrijving vastleggen:** de geleerde regel krijgt alleen een `entryLabel` als de gekozen omschrijving afwijkt
+van wat de app zonder regel voorstelt (`suggestedLabel`). Neemt de gebruiker bij een overboeking de eigen tekst
+over ("Zakgeld"), dan blijft `entryLabel` leeg en krijgt de volgende overboeking weer haar eigen tekst. Kiest de
+gebruiker bewust iets anders, ook de naam van de tegenpartij, dan wordt dat vastgelegd.
 
 `learn` telt het gebruik alleen in geval 2. Roep `recordUse` niet nog eens aan voor dezelfde boeking.
 

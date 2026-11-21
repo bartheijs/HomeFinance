@@ -107,8 +107,14 @@ extension RuleEngine {
         var rule = existing ?? party.newRule(name: defaultLabel.isEmpty ? "Geleerde regel" : defaultLabel)
         rule.targetItemLabel = itemLabel
         rule.targetPotId = correction.potId
+        // Gelijk aan wat de app zonder regel zelf voorstelt (de tegenpartij, of de eigen tekst van deze
+        // overboeking): niet vastleggen, zodat een volgende overboeking weer haar eigen tekst krijgt.
+        // Koos de gebruiker bewust iets anders (ook de naam van de tegenpartij), dan wel.
+        let suggestedLabel = LabelCleaner.suggestedLabel(counterparty: tx.counterpartyName,
+                                                         description: tx.descriptionText,
+                                                         transactionCode: tx.transactionCode)
         rule.entryLabel = chosenLabel.flatMap {
-            TextNormalizer.normalize($0) == TextNormalizer.normalize(defaultLabel) ? nil : $0
+            TextNormalizer.normalize($0) == TextNormalizer.normalize(suggestedLabel) ? nil : $0
         }
         rule.tagIdList = correction.tagIds
         rule.reimburse = correction.reimburse

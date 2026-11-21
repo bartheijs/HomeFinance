@@ -162,7 +162,8 @@ public struct RuleMatcher: Sendable {
 
     /// Voorstel voor deze transactie. Zonder passende regel: zekerheid `geen` met alleen een opgeschoond label.
     public func suggest(for tx: BankTransaction) -> Suggestion {
-        let cleaned = LabelCleaner.cleanLabel(counterparty: tx.counterpartyName, description: tx.descriptionText)
+        let cleaned = LabelCleaner.suggestedLabel(counterparty: tx.counterpartyName, description: tx.descriptionText,
+                                                  transactionCode: tx.transactionCode)
         let fallbackLabel = cleaned.isEmpty ? "Onbekend" : cleaned
         guard let (rule, match) = bestRule(for: tx) else {
             return Suggestion(bankTransactionId: tx.id, label: fallbackLabel, reason: "Geen regel gevonden")

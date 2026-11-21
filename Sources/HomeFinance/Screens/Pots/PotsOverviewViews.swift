@@ -392,7 +392,7 @@ struct PotsUnallocatedCard: View {
             Menu {
                 let own = pots.filter { $0.accountId == entry.accountId && !$0.archived }
                 ForEach(PotKind.allCases, id: \.self) { kind in
-                    let group = own.filter { $0.kind == kind }
+                    let group = Insight.pickerOrder(own.filter { $0.kind == kind })
                     if !group.isEmpty {
                         Section(kind == .reservering ? "Reserveringen" : "Sparen") {
                             ForEach(group) { pot in

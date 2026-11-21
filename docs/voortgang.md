@@ -1,6 +1,6 @@
 # Voortgang en openstaand werk
 
-*Bijgewerkt op 20 november 2026. Dit bestand is het overdrachtspunt voor de volgende werksessie.*
+*Bijgewerkt op 21 november 2026. Dit bestand is het overdrachtspunt voor de volgende werksessie.*
 
 ## Stand op 20 november 2026
 
@@ -35,6 +35,23 @@
   "Back-up maken bij afsluiten" aan staat) en bij "Maak nu back-up".
 - Hulpje voor het nalopen: `HomeFinance --snapshot <map>` schrijft ook `telefoon.html`. Met `--size 1100x700` teken
   je op een andere venstergrootte.
+
+**21 november (nog niet gecommit)**
+
+- **6a, downloadinstructie op Transacties.** Onder de rekeningen staat een rustig blok: download de CSV-export
+  (zip, één bestand per rekening) van welke rekeningen, en van welke dag tot en met vandaag. De begindag is de
+  vroegste laatste banktransactie over alle rekeningen; die dag zit er bewust nog in, overlap kan geen kwaad.
+  Zonder eerdere import: vanaf de startdatum van het beginsaldo. Aanwijzen toont per rekening de laatste
+  banktransactie. Berekening: `Insight.downloadAdvice` (5 tests).
+- **6b, voorgestelde omschrijving slim kiezen.** Bij een overboeking met een korte eigen tekst ("Zakgeld") stelt
+  de app die tekst voor; bij pin, incasso, iDEAL, gestructureerde, zakelijke of lange teksten de tegenpartij.
+  Een omschrijving uit een regel gaat altijd voor. Regels matchen precies als eerst; een geleerde regel legt de
+  eigen tekst niet vast, zodat elke overboeking haar eigen tekst houdt. `LabelCleaner.suggestedLabel` (26 testgevallen).
+- **6c, potten op alfabet in alle pot-kiezers** (Nakijken, Transacties, verrekenen, Regels, Vaste stortingen,
+  Instellingen › Jaar, Potten, Verrekenen met spaar): per groep op alfabet, Nederlandse sortering. Eén functie:
+  `Insight.pickerOrder`.
+- 477 tests in 84 suites, allemaal groen. Schermen nagekeken met `--snapshot` (voorbeelddata). De open
+  keuzelijsten zelf zijn op schermafbeeldingen niet te zien; de volgorde is met een test gedekt.
 
 **Openstaand:** zie "Nog te doen, in volgorde" en "Grotere schermpunten" hieronder.
 
@@ -72,10 +89,10 @@
    de popover en het dubbelklikken in het maandgrid, het detailpaneel van een pot met de vooruitblik, de vensters
    Vaste stortingen, Nieuwe pot en Splitsen.
 6. **Grotere schermpunten** hieronder oppakken, als de gebruiker dat wil.
+6a, 6b en 6c (wensen van 21 november) zijn gebouwd op 21 november; zie "21 november" hierboven.
 7. **Excel-historie** (in de wacht): `HFHistory` aanpassen volgens de oplossing hieronder, proefdraaien, pas
    importeren als de jaren kloppen. Daarna de knop "Leer regels uit bankhistorie" in het scherm Regels.
 8. **Code-review** door een developer voordat de app de enige administratie wordt (zie de spec).
-9. Het werk van 20 november committen (de gebruiker beslist).
 
 ## Grotere schermpunten (nalopen van 20 november)
 
