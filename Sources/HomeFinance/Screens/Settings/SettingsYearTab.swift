@@ -4,7 +4,7 @@ import HFCore
 import HFBudget
 import HFInsight
 
-/// Gegevens voor het tabblad "Jaar en posten". De plantotalen komen uit `Insight.monthGrid`.
+/// Gegevens voor het scherm Posten (tot UX-stap C1 Instellingen › Jaar en posten). De plantotalen komen uit `Insight.monthGrid`.
 struct SettingsYearData: Equatable {
     var year: BudgetYear?
     var items: [BudgetItem] = []
@@ -235,7 +235,7 @@ struct SettingsYearTab: View {
                             Text(data.buildup?.reserveLinesNote ?? "De verdeling over potten stel je voortaan in bij Vaste stortingen.")
                                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                             Spacer()
-                            Button("Naar Vaste stortingen") { model.selection = .pots }.controlSize(.small)
+                            Button("Naar Vaste stortingen") { model.selection = .distributions }.controlSize(.small)
                         }
                         if let warning = data.buildup?.warning {
                             Label(warning, systemImage: "exclamationmark.triangle.fill")
@@ -295,7 +295,7 @@ struct SettingsYearTab: View {
             reserveLineCount: data.items(.RES).count, entryCount: data.entryCounts[item.id ?? -1] ?? 0,
             isExpanded: expandedId == item.id, isFirst: index == 0, isLast: index == rows.count - 1,
             onToggle: { expandedId = expandedId == item.id ? nil : item.id },
-            onSave: { save($0) }, onLink: { link(item, to: $0) }, onGoToPots: { model.selection = .pots },
+            onSave: { save($0) }, onLink: { link(item, to: $0) }, onGoToPots: { model.selection = .distributions },
             onMove: { move(item, by: $0, in: rows) }, onDelete: { deleteTarget = item })
         row.showScenario = showScenario
         row.balanceRow = data.balance?.rows.first { $0.id == item.id }
@@ -468,7 +468,7 @@ struct SettingsYearTab: View {
         if !result.skipped.isEmpty {
             applyNote = "Deze posten zijn overgeslagen, omdat hun plan een vaste storting volgt of berekend wordt: "
                 + result.skipped.map(\.label).joined(separator: ", ")
-                + ". Pas het bedrag aan bij Potten en sparen › Vaste stortingen."
+                + ". Pas het bedrag aan bij Vaste stortingen."
         }
     }
 

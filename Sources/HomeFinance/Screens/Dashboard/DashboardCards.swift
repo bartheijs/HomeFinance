@@ -92,9 +92,8 @@ private struct DashboardAttentionLook {
             icon = "arrow.uturn.backward.circle"; tint = Theme.warning; action = "Bekijk"; target = .transactions
             help = "Dit bedrag heb je tijdelijk van spaar naar de betaalrekening gehaald. Het telt niet mee als besteedbaar tot je het terugboekt en die boeking ook markeert als tijdelijk geleend."
         case .yearMissing:
-            icon = "calendar.badge.plus"; tint = .secondary; action = "Aanmaken"; target = .settings
-            settingsTab = "jaar"
-            help = "Maak het begrotingsjaar aan in Instellingen."
+            icon = "calendar.badge.plus"; tint = .secondary; action = "Aanmaken"; target = .budget
+            help = "Maak het begrotingsjaar aan bij Posten."
         }
     }
 }
@@ -126,7 +125,7 @@ struct DashboardFixedItemsCard: View {
         } content: {
             if total == 0 {
                 DashboardQuietState(icon: "calendar", title: "Geen vaste posten deze maand",
-                                    message: "Voeg vaste posten toe bij Instellingen › Jaar en posten.")
+                                    message: "Voeg vaste posten toe bij Posten.")
             } else {
                 progress
                 if pending.isEmpty {

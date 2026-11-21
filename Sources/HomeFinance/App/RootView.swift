@@ -51,12 +51,13 @@ struct RootView: View {
         switch model.selection {
         case .dashboard: DashboardScreen().onAppear { SelfTest.screenAppeared(.dashboard) }
         case .review: ReviewScreen().onAppear { SelfTest.screenAppeared(.review) }
-        case .grid: GridScreen().onAppear { SelfTest.screenAppeared(.grid) }
         case .transactions: TransactionsScreen().onAppear { SelfTest.screenAppeared(.transactions) }
+        case .grid: GridScreen().onAppear { SelfTest.screenAppeared(.grid) }
+        case .budget: BudgetScreen().onAppear { SelfTest.screenAppeared(.budget) }
         case .pots: PotsScreen().onAppear { SelfTest.screenAppeared(.pots) }
+        case .distributions: DistributionsScreen().onAppear { SelfTest.screenAppeared(.distributions) }
         case .reimbursements: ReimbursementsScreen().onAppear { SelfTest.screenAppeared(.reimbursements) }
         case .reports: ReportsScreen().onAppear { SelfTest.screenAppeared(.reports) }
-        case .rules: RulesScreen().onAppear { SelfTest.screenAppeared(.rules) }
         case .settings: SettingsScreen().onAppear { SelfTest.screenAppeared(.settings) }
         }
     }
@@ -68,10 +69,18 @@ private struct Sidebar: View {
     var body: some View {
         @Bindable var model = model
         List(selection: Binding(get: { Optional(model.selection) }, set: { if let s = $0 { model.selection = s } })) {
-            Section("Overzicht") { rows(Screen.overview) }
-            Section("Spaarrekening") { rows(Screen.savings) }
-            Section("Inzicht") { rows(Screen.insight) }
-            Section { rows([.settings]) }
+            // Ingedeeld naar wat je komt doen (UX-stap C1). Houd `SnapshotSidebar` gelijk.
+            ForEach(SidebarGroup.all) { group in
+                if group.title.isEmpty {
+                    Section { rows(group.screens, group: group.title) }
+                } else {
+                    Section {
+                        rows(group.screens, group: group.title)
+                    } header: {
+                        Text(group.title).selfTestProbe("zijbalk-kop-\(group.title)", removeOnDisappear: true)
+                    }
+                }
+            }
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
@@ -81,12 +90,13 @@ private struct Sidebar: View {
         .navigationTitle("HomeFinance")
     }
 
-    @ViewBuilder private func rows(_ screens: [Screen]) -> some View {
+    @ViewBuilder private func rows(_ screens: [Screen], group: String) -> some View {
         ForEach(screens) { s in
             Label(s.title, systemImage: s.icon)
                 .badge(SidebarBadges.count(for: s, model: model))
                 .tag(s)
-                .onAppear { SelfTest.sidebarRowAppeared(s) }
+                .selfTestProbe("zijbalk-rij-\(s.rawValue)", removeOnDisappear: true)
+                .onAppear { SelfTest.sidebarRowAppeared(s, group: group) }
         }
     }
 }
@@ -97,10 +107,7 @@ private struct SnapshotSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("HomeFinance").font(.headline).padding(.horizontal, 10).padding(.bottom, 8)
-            group("Overzicht", Screen.overview)
-            group("Spaarrekening", Screen.savings)
-            group("Inzicht", Screen.insight)
-            group("", [.settings])
+            ForEach(SidebarGroup.all) { g in group(g.title, g.screens) }
             Spacer()
             YearPicker()
         }

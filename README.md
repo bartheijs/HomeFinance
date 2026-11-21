@@ -25,6 +25,11 @@ administratie beginnen**. Je kunt later altijd wisselen via Instellingen › Ove
 
 ## Zo werk je ermee
 
+De zijbalk is ingedeeld naar wat je komt doen: **Vandaag** (Dashboard), **Bijwerken** (Importeren en nakijken,
+Transacties), **Begroting** (Maandgrid, Posten), **Sparen** (Potten, Vaste stortingen, Verrekenen met spaar) en
+**Inzicht** (Rapporten), met Instellingen onderaan. Jaar aanmaken en afsluiten doe je bij Posten; regels beheer je
+bij Instellingen › Regels.
+
 1. **Download bij je bank** de transacties als CSV. Je krijgt een zip-bestand met één CSV per rekening.
 2. **Sleep het zip-bestand** op het scherm *Importeren en nakijken*. De app controleert of het saldo klopt en
    slaat regels over die er al in staan.
@@ -124,6 +129,9 @@ Dat doet vier dingen en schrijft alles naar de map achter `--uit` (nooit in deze
 3. **Zelftest**: de echte app start met voorbeelddata in een tijdelijk bestand, opent het gewone venster en
    klikt zelf alle schermen in de zijbalk langs. Per controle staat er OK of FOUT in `zelftest-voorbeeld.log`:
    verscheen de zijbalk met alle regels, verscheen elk scherm binnen 5 seconden, kwam er geen foutmelding.
+   Per groep van de zijbalk (Vandaag, Bijwerken, Begroting, Sparen, Inzicht, onderaan) kijkt hij of de juiste
+   schermen eronder staan, in de goede volgorde, zoals ze echt getekend zijn, in de gewone en de kleinste
+   venstermaat.
    Op Transacties kijkt hij ook, op de gewone en de kleinste venstermaat, of de kop zichtbaar blijft en het
    downloadblok eronder staat. Daarna loopt hij elk scherm (en elk tabblad van Rapporten en Instellingen)
    nog eens langs op de gewone en de kleinste venstermaat: is de kop zichtbaar, schuift het scherm niet

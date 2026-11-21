@@ -4,7 +4,7 @@ import HFCore
 import HFInsight
 import HFBudget
 
-/// Alles wat het scherm "Potten en sparen" toont, in één keer gelezen.
+/// Alles wat het scherm Potten toont, in één keer gelezen.
 struct PotsData: Equatable {
     var overview: PotOverview?
     /// Boekingen op de spaarrekening zonder pot.

@@ -183,12 +183,11 @@ struct DashboardYearMissingCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Nog geen begroting voor \(String(year))")
                     .font(.system(.title2, design: .rounded).weight(.bold))
-                Text("Besteedbaar en de vaste posten kunnen pas getoond worden als het jaar \(String(year)) bestaat. Maak het jaar aan in Instellingen; je kunt de posten van vorig jaar overnemen.")
+                Text("Besteedbaar en de vaste posten kunnen pas getoond worden als het jaar \(String(year)) bestaat. Maak het jaar aan bij Posten; je kunt de posten van vorig jaar overnemen.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Button {
-                    model.settingsTab = "jaar"
-                    model.selection = .settings
+                    model.selection = .budget
                 } label: {
                     Label("Jaar \(String(year)) aanmaken", systemImage: "plus")
                 }

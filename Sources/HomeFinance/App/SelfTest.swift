@@ -8,6 +8,8 @@ import HFInsight
 /// Opent het gewone venster (de echte `NavigationSplitView`, niet de nagetekende zijbalk van de snapshots), loopt
 /// alle schermen uit `Screen.allCases` langs via `model.selection` en controleert:
 /// - de zijbalk verscheen, met een regel voor elk scherm (SwiftUI) en evenveel zichtbare rijen in AppKit;
+/// - per groep van de zijbalk (`SidebarGroup.all`) de verwachte rijen, in SwiftUI en zoals getekend in AppKit,
+///   in de gewone en de kleinste venstermaat (UX-stap C1);
 /// - elk scherm verscheen binnen `screenTimeout`;
 /// - `model.errorMessage` bleef leeg;
 /// - er waren geen fouten in `model.read` of `model.perform` (`AppModel.failures`).
@@ -27,15 +29,18 @@ enum SelfTest {
 
     private static var screenAppearances: [Screen: Int] = [:]
     private static var sidebarRows: Set<Screen> = []
+    /// Per scherm de groep waarin de rij van de zijbalk verscheen.
+    private static var sidebarRowGroups: [Screen: String] = [:]
 
     static func screenAppeared(_ screen: Screen) {
         guard isOn else { return }
         screenAppearances[screen, default: 0] += 1
     }
 
-    static func sidebarRowAppeared(_ screen: Screen) {
+    static func sidebarRowAppeared(_ screen: Screen, group: String) {
         guard isOn else { return }
         sidebarRows.insert(screen)
+        sidebarRowGroups[screen] = group
     }
 
     /// Laatst geladen pot-kiezer per scherm: aantal potten en of ze in kiezervolgorde staan (6c). Geen namen.
@@ -62,6 +67,12 @@ enum SelfTest {
     static func probe(_ name: String, frame: CGRect) {
         guard isOn else { return }
         probeFrames[name] = frame
+    }
+
+    /// Een gemeten view verdween (zie `selfTestProbe(_:removeOnDisappear:)`).
+    static func probeGone(_ name: String) {
+        guard isOn else { return }
+        probeFrames[name] = nil
     }
 
     // MARK: Logbestand
@@ -121,6 +132,12 @@ enum SelfTest {
         let appKitRows = await waitValue(.seconds(3)) { visibleSidebarRowCount() } until: { $0 >= expected.count }
         check(appKitRows >= expected.count,
               "zijbalk toont in het venster minstens \(expected.count) rijen met inhoud (gevonden: \(appKitRows))")
+        for group in SidebarGroup.all {
+            let seen = group.screens.filter { sidebarRowGroups[$0] == group.title }
+            check(seen == group.screens, "zijbalk, groep \(groupName(group)): \(group.screens.map(\.title).joined(separator: ", "))"
+                  + (seen == group.screens ? "" : " (gezien: \(seen.map(\.title).joined(separator: ", ")))"))
+        }
+        await checkSidebarGroups(label: "huidige venstermaat")
 
         // 3. Elk scherm.
         for screen in Screen.allCases {
@@ -170,7 +187,8 @@ enum SelfTest {
         // Gewone maat, daarna de kleinste maat die het venster toelaat (1100 × 700 inhoud).
         let sizes: [(String, NSSize?)] = [("huidige venstermaat", nil), ("kleinste venstermaat", NSSize(width: 1100, height: 700))]
         for (label, size) in sizes {
-            probeFrames = [:]  // alleen metingen na deze maatwijziging tellen
+            // Alleen metingen na deze maatwijziging tellen; de zijbalk meldt zich alleen bij een verschuiving opnieuw.
+            probeFrames = probeFrames.filter { $0.key.hasPrefix("zijbalk-") }
             if let size { window.setContentSize(size) }
             try? await Task.sleep(for: .milliseconds(600))
             let height = window.contentView?.bounds.height ?? 0
@@ -224,8 +242,9 @@ enum SelfTest {
                 let width = window.contentView?.bounds.width ?? 0
                 check(abs(width - size.width) <= 1, "venster blijft op de \(label) (\(Int(width)) breed, gevraagd \(Int(size.width)))")
             }
-            // Begin elke maat op een ander scherm, zodat het eerste scherm vers verschijnt.
-            model.selection = .dashboard
+            await checkSidebarGroups(label: label)
+            // Begin elke maat op een ander scherm dan het eerste, zodat het eerste scherm vers verschijnt.
+            model.selection = stops.first?.screen == .dashboard ? .reports : .dashboard
             try? await Task.sleep(for: .milliseconds(300))
             var current: Screen? = nil
             for stop in stops {
@@ -288,6 +307,79 @@ enum SelfTest {
         let sidebarOK = (sidebar.map { $0.minX >= -0.5 && $0.width >= 150 } ?? false) && rows >= expectedRows
         check(sidebarOK, "zijbalk zichtbaar: \(where_)"
               + (sidebarOK ? "" : " (\(sidebar.map { "x \(Int($0.minX))–\(Int($0.maxX))" } ?? "niet gevonden"), \(rows) rijen)"))
+    }
+
+    private static func groupName(_ group: SidebarGroup) -> String {
+        group.title.isEmpty ? "onderaan" : group.title
+    }
+
+    /// De zijbalk zoals AppKit hem tekent, als reeks: "#Groep" voor een groepskop, anders de titel van het scherm.
+    /// Een groep zonder kop (Instellingen) staat er zonder "#"-regel.
+    private static var expectedSidebarSequence: [String] {
+        SidebarGroup.all.flatMap { ($0.title.isEmpty ? [] : ["#\($0.title)"]) + $0.screens.map(\.title) }
+    }
+
+    /// Controleert per groep de getekende rijen van de zijbalk: welke schermen onder welke kop staan, in volgorde.
+    private static func checkSidebarGroups(label: String) async {
+        let expected = expectedSidebarSequence
+        let seen = await waitValue(.seconds(3)) { sidebarSequence() } until: { $0 == expected }
+        let groupTitles = Set(SidebarGroup.all.map(\.title).filter { !$0.isEmpty })
+        for group in SidebarGroup.all {
+            // De schermen die AppKit onder de kop van deze groep tekent (tot de volgende kop).
+            var rows: [String] = []
+            if group.title.isEmpty {
+                rows = seen.filter { title in group.screens.contains { $0.title == title } }
+            } else if let start = seen.firstIndex(of: "#\(group.title)") {
+                for item in seen[(start + 1)...] {
+                    if item.hasPrefix("#") { break }
+                    rows.append(item)
+                }
+                // Instellingen staat zonder kop onder de laatste groep; die hoort er niet bij.
+                rows.removeAll { title in SidebarGroup.all.contains { $0.title.isEmpty && $0.screens.contains { $0.title == title } } }
+            }
+            let want = group.screens.map(\.title)
+            check(rows == want, "zijbalk getekend, groep \(groupName(group)) (\(label)): \(want.joined(separator: ", "))"
+                  + (rows == want ? "" : " (gezien: \(rows.isEmpty ? "niets" : rows.joined(separator: ", ")))"))
+        }
+        let unknown = seen.filter { $0.hasPrefix("#") && !groupTitles.contains(String($0.dropFirst())) }
+        check(unknown.isEmpty && seen == expected, "zijbalk getekend in de juiste volgorde, zonder andere groepen (\(label))"
+              + (seen == expected ? "" : " (gezien: \(seen.joined(separator: " | ")))"))
+    }
+
+    /// De zijbalk zoals hij getekend is, als reeks zoals `expectedSidebarSequence`. Elke rij en elke groepskop
+    /// meldt in SwiftUI zijn plek (`zijbalk-rij-…`, `zijbalk-kop-…`); alleen een plek die in de zijbalk valt en waar
+    /// AppKit een zichtbare rij met inhoud tekent, telt mee. Volgorde: van boven naar beneden.
+    private static func sidebarSequence() -> [String] {
+        guard let window = mainWindow(), let content = window.contentView else { return [] }
+        let tables = allSubviews(of: content).compactMap { $0 as? NSTableView }
+        guard let table = tables.min(by: { $0.convert($0.bounds, to: nil).minX < $1.convert($1.bounds, to: nil).minX }),
+              let sidebar = sidebarFrame()
+        else { return [] }
+        let height = content.bounds.height
+        // Getekende rijen in de coördinaten van de metingen (oorsprong linksboven).
+        var drawn: [CGRect] = []
+        for row in 0..<table.numberOfRows {
+            guard let view = table.rowView(atRow: row, makeIfNecessary: false), !view.isHidden,
+                  view.frame.height > 0, view.frame.width > 0, !table.visibleRect.intersection(view.frame).isEmpty,
+                  allSubviews(of: view).contains(where: { !$0.isHidden && $0.frame.width > 0 && $0.frame.height > 0 })
+            else { continue }
+            let r = view.convert(view.bounds, to: nil)
+            drawn.append(CGRect(x: r.minX, y: height - r.maxY, width: r.width, height: r.height))
+        }
+        var items: [(y: CGFloat, text: String)] = []
+        for (name, frame) in probeFrames where frame.width > 0 && frame.height > 0 {
+            let text: String
+            if name.hasPrefix("zijbalk-rij-"), let screen = Screen(rawValue: String(name.dropFirst("zijbalk-rij-".count))) {
+                text = screen.title
+            } else if name.hasPrefix("zijbalk-kop-") {
+                text = "#" + name.dropFirst("zijbalk-kop-".count)
+            } else { continue }
+            let mid = CGPoint(x: frame.midX, y: frame.midY)
+            guard frame.minX >= sidebar.minX - 1, frame.maxX <= sidebar.maxX + 1,
+                  drawn.contains(where: { $0.contains(mid) }) else { continue }
+            items.append((frame.midY, text))
+        }
+        return items.sorted { $0.y < $1.y }.map(\.text)
     }
 
     /// Plek van de zijbalk (de scrollweergave om de meest linkse tabel) in venstercoördinaten.
@@ -376,9 +468,10 @@ extension View {
     }
 
     /// Meldt in de zelftest waar deze view in het venster staat. Buiten de zelftest verandert er niets.
-    @ViewBuilder func selfTestProbe(_ name: String) -> some View {
+    @ViewBuilder func selfTestProbe(_ name: String, removeOnDisappear: Bool = false) -> some View {
         if SelfTest.isOn {
             onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { SelfTest.probe(name, frame: $0) }
+                .onDisappear { if removeOnDisappear { SelfTest.probeGone(name) } }
         } else {
             self
         }

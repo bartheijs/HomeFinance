@@ -18,7 +18,7 @@ struct SettingsScreen: View {
     }
 
     var body: some View {
-        let tab = snapshotTab ?? SettingsTab(rawValue: model.settingsTab) ?? .jaar
+        let tab = snapshotTab ?? SettingsTab(rawValue: model.settingsTab) ?? .rekeningen
         VStack(spacing: 0) {
             if width >= Self.tabsBesideTitleMinWidth {
                 ScreenHeader("Instellingen", subtitle: tab.subtitle) { tabPicker(tab) }
@@ -32,8 +32,8 @@ struct SettingsScreen: View {
             Divider()
             Group {
                 switch tab {
-                case .jaar: SettingsYearTab()
                 case .rekeningen: SettingsAccountsTab()
+                case .regels: RulesScreen(embedded: true)
                 case .tags: SettingsTagsTab()
                 case .backup: SettingsBackupTab()
                 case .telefoon: SettingsPhoneTab()

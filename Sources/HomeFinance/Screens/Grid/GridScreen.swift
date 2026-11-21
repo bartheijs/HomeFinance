@@ -36,8 +36,8 @@ struct GridScreen: View {
                            message: "Het maandgrid zet je vaste inkomsten en uitgaven per maand naast het plan, zoals het jaarblad in Excel. "
                                + "Maak eerst het begrotingsjaar en de vaste posten aan.",
                            icon: "tablecells",
-                           actionTitle: "Naar Instellingen",
-                           action: { model.settingsTab = "jaar"; model.selection = .settings })
+                           actionTitle: "Naar Posten",
+                           action: { model.selection = .budget })
             } else {
                 Spacer()
             }
@@ -113,7 +113,7 @@ struct GridScreen: View {
             HStack(spacing: 10) {
                 if grid.closed {
                     Pill("Afgesloten", color: .secondary, icon: "lock.fill")
-                        .help("\(String(model.year)) is afgesloten. Je kunt alles bekijken, maar geen boekingen toevoegen. Heropenen kan bij Instellingen.")
+                        .help("\(String(model.year)) is afgesloten. Je kunt alles bekijken, maar geen boekingen toevoegen. Heropenen kan bij Posten.")
                 }
                 Button { showLegend.toggle() } label: {
                     Image(systemName: "info.circle").font(.system(size: 14))

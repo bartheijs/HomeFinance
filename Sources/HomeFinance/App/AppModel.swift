@@ -4,21 +4,22 @@ import HFCore
 import HFBudget
 import os
 
-/// De schermen in de zijbalk.
+/// De schermen in de zijbalk, in de volgorde van de zijbalk (zie `SidebarGroup.all`).
 enum Screen: String, CaseIterable, Identifiable, Hashable {
-    case transactions, review, dashboard, grid, pots, reimbursements, reports, rules, settings
+    case dashboard, review, transactions, grid, budget, pots, distributions, reimbursements, reports, settings
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: "Dashboard"
         case .review: "Importeren en nakijken"
-        case .grid: "Maandgrid"
         case .transactions: "Transacties"
-        case .pots: "Potten en sparen"
+        case .grid: "Maandgrid"
+        case .budget: "Posten"
+        case .pots: "Potten"
+        case .distributions: "Vaste stortingen"
         case .reimbursements: "Verrekenen met spaar"
         case .reports: "Rapporten"
-        case .rules: "Regels"
         case .settings: "Instellingen"
         }
     }
@@ -27,19 +28,32 @@ enum Screen: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .dashboard: "gauge.with.dots.needle.50percent"
         case .review: "tray.and.arrow.down"
-        case .grid: "tablecells"
         case .transactions: "list.bullet.rectangle"
+        case .grid: "tablecells"
+        case .budget: "list.bullet.clipboard"
         case .pots: "square.grid.3x3.topleft.filled"
+        case .distributions: "arrow.triangle.branch"
         case .reimbursements: "arrow.left.arrow.right.circle"
         case .reports: "chart.bar.xaxis"
-        case .rules: "wand.and.stars"
         case .settings: "gearshape"
         }
     }
+}
 
-    static let overview: [Screen] = [.transactions, .review, .dashboard, .grid]
-    static let savings: [Screen] = [.pots, .reimbursements]
-    static let insight: [Screen] = [.reports, .rules]
+/// Een groep in de zijbalk: ingedeeld naar wat je komt doen (UX-stap C1). De laatste groep heeft geen kop.
+struct SidebarGroup: Identifiable {
+    let title: String
+    let screens: [Screen]
+    var id: String { title }
+
+    static let all: [SidebarGroup] = [
+        SidebarGroup(title: "Vandaag", screens: [.dashboard]),
+        SidebarGroup(title: "Bijwerken", screens: [.review, .transactions]),
+        SidebarGroup(title: "Begroting", screens: [.grid, .budget]),
+        SidebarGroup(title: "Sparen", screens: [.pots, .distributions, .reimbursements]),
+        SidebarGroup(title: "Inzicht", screens: [.reports]),
+        SidebarGroup(title: "", screens: [.settings]),
+    ]
 }
 
 /// Transacties openen op een rekening met het filter op een tag.
@@ -52,9 +66,9 @@ struct ReviewJump: Equatable {
 /// Sprong in de keten post ↔ vaste storting ↔ potje (UX-stap B2). Het doelscherm neemt hem over en zet hem
 /// terug op nil.
 enum ChainJump: Equatable {
-    /// Potten en sparen › Vaste stortingen, met deze storting geselecteerd.
+    /// Vaste stortingen, met deze storting geselecteerd.
     case distribution(Int64)
-    /// Instellingen › Jaar en posten, met deze post van dit jaar opengeklapt.
+    /// Posten, met deze post van dit jaar opengeklapt.
     case item(Int64, year: Int)
 }
 
@@ -75,7 +89,7 @@ final class AppModel {
     /// De app opent op de transacties, net als een bank-app; met voorbeelddata op het Dashboard, waar je meteen
     /// ziet wat er te besteden is.
     var selection: Screen = .transactions
-    var settingsTab: String = "jaar"
+    var settingsTab: String = "rekeningen"
     /// Vraag aan Transacties om te openen op deze rekening met dit filter (bv. vanuit Instellingen › Tags).
     /// Transacties neemt het over en zet het terug op nil.
     var transactionsJump: TransactionsJump?
@@ -100,15 +114,14 @@ final class AppModel {
 
     var today: Day { fixedToday ?? Day.today() }
 
-    /// Gaat naar de andere kant van de keten: de vaste storting (bij Potten) of de post (bij Instellingen).
+    /// Gaat naar de andere kant van de keten: de vaste storting (Vaste stortingen) of de post (Posten).
     func jump(_ target: ChainJump) {
         chainJump = target
         switch target {
-        case .distribution: selection = .pots
+        case .distribution: selection = .distributions
         case .item(_, let year):
             self.year = year
-            settingsTab = "jaar"
-            selection = .settings
+            selection = .budget
         }
     }
 

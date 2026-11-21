@@ -279,7 +279,7 @@ elk met `lastBankDay` = datum van de laatste banktransactie en `fromDay`), `from
 `Sources/HFInsight/PickerOrder.swift`) zet potten in de volgorde van een keuzelijst: eerst reserveringspotten, dan
 spaarpotten, binnen elke groep op alfabet (hoofdletter- en accentongevoelig, Nederlandse sortering, "Pot 2" vóór
 "Pot 10"; gelijke namen houden hun oude volgorde). Alle pot-kiezers in de app gebruiken deze ene functie; "Nee",
-"Geen pot" en dergelijke zet de kiezer zelf bovenaan. Het overzicht Potten en sparen (per persoon) gebruikt hem
+"Geen pot" en dergelijke zet de kiezer zelf bovenaan. Het overzicht Potten (per persoon) gebruikt hem
 niet. `Insight.compareNames(_:_:)` is de vergelijking die erachter zit. Tests in `PickerOrderTests`.
 
 `Insight.itemPickerOrder(_:)` (voor `[BudgetItem]`, of generiek met `direction:` en `label:`) doet hetzelfde voor

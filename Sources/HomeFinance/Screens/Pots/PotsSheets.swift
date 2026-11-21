@@ -8,7 +8,6 @@ enum PotsSheet: Identifiable {
     case new
     case edit(PotSummary)
     case move(PotSummary)
-    case distributions
     case openings(Int64)
     /// Hulpje "Nieuw jaarbedrag" (UX-stap B3).
     case annual
@@ -18,7 +17,6 @@ enum PotsSheet: Identifiable {
         case .new: "new"
         case .edit(let pot): "edit-\(pot.id)"
         case .move(let pot): "move-\(pot.id)"
-        case .distributions: "distributions"
         case .openings(let id): "openings-\(id)"
         case .annual: "annual"
         }

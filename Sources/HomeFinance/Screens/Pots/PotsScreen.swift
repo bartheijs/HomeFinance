@@ -3,7 +3,7 @@ import HFCore
 import HFInsight
 import HFBudget
 
-/// Potten en sparen: vervangt de Excel-werkmap van de spaarrekening.
+/// Potten: vervangt de Excel-werkmap van de spaarrekening.
 /// Eerste aanblik: drie getallen en de potten met hun saldo. Een klik op een pot opent rechts de details.
 struct PotsScreen: View {
     @Environment(AppModel.self) private var model
@@ -18,8 +18,6 @@ struct PotsScreen: View {
     @State private var showArchived = false
     @State private var sheet: PotsSheet?
     @State private var potToDelete: PotSummary?
-    /// De vaste storting die bij het openen van Vaste stortingen geselecteerd moet zijn (sprong uit de keten).
-    @State private var distributionFocus: Int64?
     @FocusState private var listFocused: Bool
 
     private struct ReloadKey: Hashable {
@@ -28,7 +26,7 @@ struct PotsScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScreenHeader("Potten en sparen", subtitle: subtitle) { headerControls }
+            ScreenHeader("Potten", subtitle: subtitle) { headerControls }
             content
         }
         .task(id: ReloadKey(revision: model.revision, year: model.year, accountId: accountId, potId: selectedPotId)) {
@@ -38,12 +36,10 @@ struct PotsScreen: View {
             switch sheet {
             case .new:
                 PotsEditSheet(pot: nil, accounts: activeAccounts, defaultAccountId: accountId, owners: owners,
-                              today: model.today, onSaved: { _ in }, onDistributions: { self.sheet = .distributions })
+                              today: model.today, onSaved: { _ in }, onDistributions: { openDistributions() })
             case .edit(let pot):
                 PotsEditSheet(pot: pot, accounts: data?.savingsAccounts ?? [], defaultAccountId: pot.accountId, owners: owners,
-                              today: model.today, onSaved: { _ in }, onDistributions: { self.sheet = .distributions })
-            case .distributions:
-                PotsDistributionsSheet(focus: distributionFocus)
+                              today: model.today, onSaved: { _ in }, onDistributions: { openDistributions() })
             case .annual:
                 PotsAnnualSheet()
             case .openings(let id):
@@ -54,14 +50,6 @@ struct PotsScreen: View {
                               today: model.today)
             }
         }
-        .onChange(of: sheet == nil) { _, closed in if closed { distributionFocus = nil } }
-        .task(id: model.chainJump) {
-            // Sprong uit de keten (potje, post of maandgrid): open Vaste stortingen op deze storting.
-            guard case .distribution(let id) = model.chainJump else { return }
-            model.chainJump = nil
-            distributionFocus = id
-            sheet = .distributions
-        }
         .confirmationDialog("Pot \(potToDelete?.name ?? "") verwijderen?",
                             isPresented: Binding(get: { potToDelete != nil }, set: { if !$0 { potToDelete = nil } }),
                             presenting: potToDelete) { pot in
@@ -70,6 +58,12 @@ struct PotsScreen: View {
         } message: { _ in
             Text("De pot heeft geen boekingen en verdwijnt helemaal. Dit kun je niet terugdraaien.")
         }
+    }
+
+    /// Naar het scherm Vaste stortingen (een eigen regel in de zijbalk sinds UX-stap C1).
+    private func openDistributions() {
+        sheet = nil
+        model.selection = .distributions
     }
 
     // MARK: Kop
@@ -103,8 +97,6 @@ struct PotsScreen: View {
                     .help("Laat ook de potten zien die je gearchiveerd hebt.")
             }
             if !data.savingsAccounts.isEmpty {
-                Button("Vaste stortingen") { sheet = .distributions }
-                    .help("Wat je regelmatig van betaal naar spaar overmaakt, en hoe dat over de potten verdeeld wordt.")
                 Button("Nieuw jaarbedrag…") { sheet = .annual }
                     .help("Voor een rekening die één keer per jaar komt: maakt in één keer het potje, de regel in de vaste storting en de post in je begroting.")
                 Button { sheet = .new } label: { Label("Nieuwe pot…", systemImage: "plus") }
@@ -264,7 +256,7 @@ struct PotsScreen: View {
                             onUnarchive: { unarchive(pot) },
                             onDelete: { potToDelete = pot },
                             onClose: { withAnimation(.easeInOut(duration: 0.2)) { selectedPotId = nil } },
-                            onDistributions: { sheet = .distributions },
+                            onDistributions: { openDistributions() },
                             chain: data.chain?.pot(pot.id))
                 .id(pot.id)
         }

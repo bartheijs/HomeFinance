@@ -82,11 +82,11 @@ private enum PotsDistSelection: Hashable {
 // MARK: - Sheet
 
 /// Vaste stortingen: wat er regelmatig van betaal naar spaar gaat en hoe dat over de potten verdeeld wordt.
-struct PotsDistributionsSheet: View {
+/// Een eigen scherm in de zijbalk (UX-stap C1); tot dan een venster vanaf Potten.
+struct DistributionsScreen: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    /// De storting die bij het openen geselecteerd wordt (sprong uit de keten), of nil.
-    var focus: Int64? = nil
+    /// De storting die geselecteerd moet worden (sprong uit de keten), of nil.
+    @State private var focus: Int64?
 
     @State private var data: PotsDistData?
     @State private var selection: PotsDistSelection?
@@ -96,17 +96,8 @@ struct PotsDistributionsSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Vaste stortingen").font(.title2.weight(.semibold))
-                    Text("Een vaste storting is het bedrag dat je regelmatig van de betaalrekening naar de spaarrekening overmaakt, met de verdeling over je potten.")
-                        .font(.callout).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 16)
-                Button("Klaar") { dismiss() }.keyboardShortcut(.cancelAction)
-            }
-            .padding(20)
+            ScreenHeader("Vaste stortingen",
+                         subtitle: "Het bedrag dat je regelmatig van de betaalrekening naar de spaarrekening overmaakt, met de verdeling over je potten.")
             Divider()
             if let data {
                 HStack(spacing: 0) {
@@ -118,8 +109,15 @@ struct PotsDistributionsSheet: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(width: 880, height: 640)
         .task(id: model.revision) { reload() }
+        .task(id: model.chainJump) {
+            // Sprong uit de keten (potje, post of maandgrid): selecteer deze storting.
+            guard case .distribution(let id) = model.chainJump else { return }
+            model.chainJump = nil
+            focus = id
+            selection = nil
+            reload()
+        }
     }
 
     private func reload() {
@@ -394,7 +392,7 @@ private struct PotsDistributionEditor: View {
                 ChainBox {
                     Text(chain.sentence).font(.callout).fixedSize(horizontal: false, vertical: true)
                     ForEach(chain.distribution.items) { item in
-                        ChainLinkButton(title: "Open post \(item.label)", help: "Open de post \(item.label) in je begroting (Instellingen › Jaar en posten).") {
+                        ChainLinkButton(title: "Open post \(item.label)", help: "Open de post \(item.label) in je begroting (Posten).") {
                             dismiss()
                             model.jump(.item(item.id, year: chain.year))
                         }
@@ -422,7 +420,7 @@ private struct PotsDistributionEditor: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if data.items.isEmpty {
-                Text("Er zijn nog geen UIT-posten voor \(String(model.today.year)). Maak ze bij Instellingen.")
+                Text("Er zijn nog geen UIT-posten voor \(String(model.today.year)). Maak ze bij Posten.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }

@@ -3,9 +3,11 @@ import GRDB
 import HFCore
 import HFRules
 
-/// Regels beheren: de lijst links, de regel met een live voorbeeld rechts.
+/// Regels beheren: de lijst links, de regel met een live voorbeeld rechts. Sinds UX-stap C1 een tabblad van
+/// Instellingen (`embedded`): dan zonder eigen kop, want die heeft Instellingen al.
 struct RulesScreen: View {
     @Environment(AppModel.self) private var model
+    var embedded = false
 
     @State private var data = RulesData()
     @State private var loaded = false
@@ -27,14 +29,26 @@ struct RulesScreen: View {
     @State private var confirmDelete = false
     @State private var pendingAction: RulesPendingAction?
 
+    private var newRuleButton: some View {
+        Button { request(.new) } label: { Label("Nieuwe regel", systemImage: "plus") }
+            .keyboardShortcut("n", modifiers: .command)
+            .help("Maak zelf een regel (⌘N)")
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                ScreenHeader("Regels",
-                             subtitle: "Een regel ontstaat als je in Nakijken ‘Onthoud als regel’ aanvinkt, of als je hem hier maakt.") {
-                    Button { request(.new) } label: { Label("Nieuwe regel", systemImage: "plus") }
-                        .keyboardShortcut("n", modifiers: .command)
-                        .help("Maak zelf een regel (⌘N)")
+                if embedded {
+                    HStack {
+                        Spacer()
+                        newRuleButton
+                    }
+                    .padding(.horizontal, 24).padding(.vertical, 10)
+                } else {
+                    ScreenHeader("Regels",
+                                 subtitle: "Een regel ontstaat als je in Nakijken ‘Onthoud als regel’ aanvinkt, of als je hem hier maakt.") {
+                        newRuleButton
+                    }
                 }
                 if loaded && data.rules.isEmpty && !isNew {
                     EmptyState(title: "Nog geen regels",

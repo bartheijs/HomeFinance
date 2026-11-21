@@ -7,7 +7,7 @@ extension Insight {
     /// Volgorde van potten in een keuzelijst: eerst de reserveringspotten, dan de spaarpotten, binnen elke groep
     /// alfabetisch (hoofdletterongevoelig, Nederlandse sortering, "Pot 2" vóór "Pot 10", "Één" bij de E).
     /// Eén plek voor alle pot-kiezers; "Nee", "Geen pot" en dergelijke zet de kiezer zelf bovenaan.
-    /// Het overzicht Potten en sparen (per persoon) gebruikt dit niet.
+    /// Het overzicht Potten (per persoon) gebruikt dit niet.
     public static func pickerOrder<T>(_ items: [T], kind: (T) -> PotKind, name: (T) -> String) -> [T] {
         items.enumerated().sorted { a, b in
             let ka = kindRank(kind(a.element)), kb = kindRank(kind(b.element))

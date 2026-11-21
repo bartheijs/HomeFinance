@@ -243,7 +243,7 @@ private struct TransactionsFeedRow: View {
             .buttonStyle(.bordered)
             .controlSize(.mini)
             .fixedSize()
-            .help(p.suggestion.warnings.isEmpty ? "Geen regel herkent deze transactie. Kies waar hij bij hoort. Een regel maak je in Nakijken (‘Onthoud als regel’) of bij Regels."
+            .help(p.suggestion.warnings.isEmpty ? "Geen regel herkent deze transactie. Kies waar hij bij hoort. Een regel maak je in Nakijken (‘Onthoud als regel’) of bij Instellingen › Regels."
                                                 : p.suggestion.warnings.joined(separator: "\n"))
         }
     }

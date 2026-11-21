@@ -4,13 +4,13 @@ import HFCore
 
 /// De tabbladen van Instellingen. De id's zijn de waarden van `AppModel.settingsTab`.
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case jaar, rekeningen, tags, backup, telefoon, over
+    case rekeningen, regels, tags, backup, telefoon, over
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .jaar: "Jaar en posten"
         case .rekeningen: "Rekeningen"
+        case .regels: "Regels"
         case .tags: "Tags"
         case .backup: "Back-up"
         case .telefoon: "Telefoon"
@@ -20,8 +20,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     var subtitle: String {
         switch self {
-        case .jaar: "Buffers en vaste posten van het begrotingsjaar."
         case .rekeningen: "Je betaal- en spaarrekeningen, en de controle met het banksaldo."
+        case .regels: "Een regel ontstaat als je in Nakijken ‘Onthoud als regel’ aanvinkt, of als je hem hier maakt."
         case .tags: "Kenmerken om uitgaven te volgen, zoals tanken of uit eten."
         case .backup: "Reservekopieën van je administratie."
         case .telefoon: "Je belangrijkste cijfers als pagina op je telefoon."

@@ -129,7 +129,7 @@ struct SettingsPhoneTab: View {
                 optionToggle("Potjes van de kinderen", \.showChildPots)
                 if settings.options.showChildPots {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Kies wiens potjes erop komen. Dit is de eigenaar die je bij een pot invult (Potten en sparen › pot bewerken).")
+                        Text("Kies wiens potjes erop komen. Dit is de eigenaar die je bij een pot invult (Potten › pot bewerken).")
                             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         if ownerChoices.isEmpty {
                             Text("Er zijn nog geen potten met een eigenaar.").font(.callout).foregroundStyle(.secondary)

@@ -364,7 +364,7 @@ extension PhoneDashboard {
         <section class="hero">
         <div class="label">Nog te besteden deze maand</div>
         <div class="missing">Er is nog geen begroting voor \(snapshot.today.year).</div>
-        <div class="sub">Maak het jaar aan in HomeFinance op je Mac, bij Instellingen › Jaar en posten. Daarna staan hier weer je cijfers.</div>
+        <div class="sub">Maak het jaar aan in HomeFinance op je Mac, bij Posten. Daarna staan hier weer je cijfers.</div>
         </section>
         """
     }
