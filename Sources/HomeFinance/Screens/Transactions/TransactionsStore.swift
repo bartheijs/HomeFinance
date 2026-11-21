@@ -1165,7 +1165,7 @@ enum TransactionsFormat {
 
     static let loanHelp = "Geld dat je even van spaar haalt en later terugboekt. Het telt niet mee als besteedbaar zolang het uitstaat. Markeer ook de terugboeking."
 
-    static let settleHelp = "Bij een uitgave komt het bedrag uit de pot op de spaarrekening, bij een bijschrijving gaat het naar de pot. Het saldo maak je later in één keer over bij Spaaroverboekingen."
+    static let settleHelp = "Bij een uitgave komt het bedrag uit de pot op de spaarrekening, bij een bijschrijving gaat het naar de pot. Het saldo maak je later in één keer over bij Verrekenen met spaar."
     static let periodHelp = "Voor iets dat eind van de maand is betaald maar bij de volgende maand hoort. Het saldo van je rekening verandert er niet door."
 
     /// "yyyy-MM" voor de maand vóór (−1), van (0) of na (+1) de datum; nil voor de maand van de datum zelf.

@@ -211,7 +211,7 @@ struct TransactionsScreen: View {
         return HStack(spacing: 10) {
             Image(systemName: "arrow.triangle.swap").foregroundStyle(.secondary)
             Text("Te verrekenen met spaar: \(direction) · \(TransactionsFormat.entries(open.entries.count))")
-            Button("Naar Spaaroverboekingen") { model.selection = .reimbursements }
+            Button("Naar Verrekenen met spaar") { model.selection = .reimbursements }
                 .buttonStyle(.link)
                 .help("Daar maak je het saldo in één keer over en vink je de verrekening af; dan wordt alles geboekt")
             Spacer(minLength: 0)

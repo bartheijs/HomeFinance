@@ -88,7 +88,7 @@ de maand van `day`. Intern is dat één SQL-expressie (`Q.period`).
 De peildag (`asOf`) is vandaag in het lopende jaar en 31-12 voor een voorbij jaar. De simulatie is alleen gevuld
 als vandaag in het gevraagde jaar valt.
 
-## Potten en spaaroverboekingen
+## Potten en verrekenen met spaar
 
 | Functie | Geeft |
 |---|---|

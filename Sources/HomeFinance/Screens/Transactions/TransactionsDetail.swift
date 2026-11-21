@@ -272,13 +272,13 @@ private struct TransactionsSingleDetail: View {
     /// Een boeking die een verrekening zelf heeft gemaakt: niets te bewerken hier.
     private var settlementBookingBox: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Hoort bij een verrekening; ongedaan maken doe je bij Spaaroverboekingen", systemImage: "arrow.triangle.swap")
+            Label("Hoort bij een verrekening met spaar; ongedaan maken doe je bij Verrekenen met spaar", systemImage: "arrow.triangle.swap")
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
             if let pot = row?.potName {
                 Text("Pot \(pot)").font(.callout).foregroundStyle(.secondary)
             }
-            Button("Naar Spaaroverboekingen") { model.selection = .reimbursements }
+            Button("Naar Verrekenen met spaar") { model.selection = .reimbursements }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -304,7 +304,7 @@ private struct TransactionsSingleDetail: View {
                 .help(transfer.done ? "Hangt deze bankregel aan de boekingen van de afgevinkte verrekening"
                                     : "Vinkt de verrekening af op de dag van deze bankregel (dan wordt hij geboekt) en hangt de bankregel eraan")
             }
-            Button("Naar Spaaroverboekingen") { model.selection = .reimbursements }
+            Button("Naar Verrekenen met spaar") { model.selection = .reimbursements }
                 .buttonStyle(.link).font(.caption)
         }
         .disabled(locked)
@@ -432,7 +432,7 @@ private struct TransactionsSingleDetail: View {
                     } else {
                         Button("Boeking ongedaan maken…") { confirmUnbook = true }
                             .disabled(inTransfer)
-                            .help(inTransfer ? "Kan niet zolang de boeking in een spaaroverboeking zit"
+                            .help(inTransfer ? "Kan niet zolang de boeking in een verrekening met spaar zit"
                                              : "Haalt de boeking weg; de transactie staat daarna weer als nieuw in de lijst")
                     }
                 }
@@ -451,9 +451,9 @@ private struct TransactionsSingleDetail: View {
     }
 
     private var transferText: String {
-        guard let transfer = store.extra.savingsTransfer else { return "Zit in een spaaroverboeking; uitzetten kan daar." }
-        return "Zit in de spaaroverboeking van \(transfer.day.short(withYear: true))" + (transfer.done ? " (gedaan)." : " (nog niet gedaan).")
-            + " Uitzetten kan bij Spaaroverboekingen."
+        guard let transfer = store.extra.savingsTransfer else { return "Zit in een verrekening met spaar; uitzetten kan bij Verrekenen met spaar." }
+        return "Zit in de verrekening van \(transfer.day.short(withYear: true))" + (transfer.done ? " (gedaan)." : " (nog niet gedaan).")
+            + " Uitzetten kan bij Verrekenen met spaar."
     }
 
     private func field<Content: View>(_ title: String, help: String? = nil, @ViewBuilder content: () -> Content) -> some View {
@@ -545,7 +545,7 @@ private struct TransactionsSingleDetail: View {
     private var footer: some View {
         HStack(spacing: 8) {
             if isSettlementBooking || pending?.transferMatch != nil {
-                Text("Verrekeningen beheer je bij Spaaroverboekingen").font(.caption).foregroundStyle(.secondary)
+                Text("Verrekeningen beheer je bij Verrekenen met spaar").font(.caption).foregroundStyle(.secondary)
                 Spacer()
             } else if let p = pending {
                 Button("Sla over") { store.skip(model, ids: ids) }

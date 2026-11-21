@@ -295,7 +295,10 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
 6k. **Schermfixes van 20 november opnieuw, in vier aparte stappen** (afspraak 21 november; na 6g). Elk met
    een eigen testronde en test door de gebruiker; bij problemen alleen die stap terugdraaien. Uit `70cab3b`
    als voorbeeld (`git show 70cab3b`), niet blind overnemen. Die commit lag onder de misgelopen release.
-   1. Alleen teksten: overal "Verrekenen met spaar"; de Engelse tekst bij Tags in het Nederlands.
+   1. Alleen teksten: overal "Verrekenen met spaar"; de Engelse tekst bij Tags in het Nederlands. — **klaar**
+      (21 november, ronde 15). Knoppen "Naar Verrekenen met spaar", de uitleg en foutmeldingen (ook in HFBudget)
+      zeggen nu "Verrekenen met spaar" of "verrekening met spaar"; Instellingen › Tags: "Kenmerken om uitgaven te
+      volgen, zoals tanken of uit eten." Codecommentaar niet aangepast. Eén test volgt de nieuwe foutmelding.
    2. Leesbaarheid: te lichte grijze bijschriften iets donkerder.
    3. Rapporten in een smal venster. Eerst de zelftest uitbreiden: elk scherm in gewone én kleinste
       venstermaat, zijbalk na elke stap zichtbaar.

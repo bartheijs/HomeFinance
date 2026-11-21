@@ -62,7 +62,7 @@ Regels bij boeken (ook voor handmatige boekingen):
 - **Tags alleen op een betaalrekening.** Een tag op een boeking van een spaarrekening wordt geweigerd met
   `BudgetError.tagOnSavings`. Uitzondering voor oudere administraties: tags die de boekingen van de transactie
   al hadden mogen bij opnieuw boeken mee (niets nieuws erbij). Zie EntryService.
-- Opnieuw boeken of ongedaan maken wordt geweigerd zolang een boeking in een spaaroverboeking zit.
+- Opnieuw boeken of ongedaan maken wordt geweigerd zolang een boeking in een verrekening met spaar zit.
   Een koppeling als overboeking vervalt bij opnieuw boeken.
 - Hetzelfde geldt zolang een boeking verrekend is (`BudgetError.inSettlement`) of als terugstorting aan een
   verrekening gekoppeld is (`BudgetError.depositLinked`); zie SettlementService.
@@ -74,7 +74,7 @@ Regels bij boeken (ook voor handmatige boekingen):
 | `create(db, EntryDraft) -> Entry` | Handmatige boeking (zonder banktransactie), standaard nagekeken. |
 | `draft(db, entryId:) -> EntryDraft` | Huidige waarden, om te bewerken. |
 | `update(db, entryId:, EntryDraft) -> Entry` | Alles wijzigen; bij een boeking uit de bank liggen bedrag, dag en rekening vast. |
-| `setReimburse(db, entryId:, Bool, potId:)` | Verrekenen met spaar aan/uit, met optioneel de pot. Uitzetten wordt geweigerd als de boeking in een spaaroverboeking zit. |
+| `setReimburse(db, entryId:, Bool, potId:)` | Verrekenen met spaar aan/uit, met optioneel de pot. Uitzetten wordt geweigerd als de boeking in een verrekening met spaar zit. |
 | `setTemporaryLoan(db, entryId:, Bool)` | Markeert een boeking op een betaalrekening als tijdelijk geleend van spaar (bij het lenen én bij het terugboeken). `Allocation` en `EntryDraft` hebben hetzelfde veld `temporaryLoan`. |
 | `setPeriod(db, entryId:, year:, month:)` | Laat de boeking in een andere maand meetellen; `nil`/`nil` = terug naar de maand van de datum. `Allocation` en `EntryDraft` hebben hetzelfde veld `period` ("yyyy-MM"). |
 | `delete(db, entryId:)` | Alleen handmatige boekingen. |
@@ -347,7 +347,7 @@ het saldo op de dagen tussen het afvinken en de bankregel kan verschuiven. Gewei
 is afgevinkt, de banktransactie niet `nieuw` is, die kant al een bankregel heeft of de som niet gelijk is aan
 het bankbedrag. `attachAll` slaat twijfelgevallen en niet afgevinkte verrekeningen over.
 
-**Bescherming.** Boekingen van het afvinken worden bij Spaaroverboekingen beheerd:
+**Bescherming.** Boekingen van het afvinken worden bij Verrekenen met spaar beheerd:
 
 - `BookingService.book` / `unbook` op een aangehangen bankregel, `EntryService.delete`, en een wijziging van
   bedrag, rekening, dag of pot via `EntryService.update` worden geweigerd met
@@ -481,7 +481,7 @@ handmatige boeking tegenover staat.
 
 - `reimburse` kan alleen op een betaalrekening, bij een uitgave of een bijschrijving (niet bij nul).
 - Het afgesloten jaar wordt bepaald door het kalenderjaar van de dag van de boeking, voor alle rekeningen.
-  Een boeking in een spaaroverboeking opnemen of eruit halen valt daar niet onder.
+  Een boeking in een verrekening met spaar opnemen of eruit halen valt daar niet onder.
 - Verplaatsen tussen potten koppelt de twee boekingen niet via `counterEntryId`; dat veld is voor
   overboekingen tussen twee eigen rekeningen.
 - Een developer reviewt deze module vóór gebruik met echte gegevens.
