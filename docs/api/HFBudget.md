@@ -170,7 +170,8 @@ potten wordt verdeeld. Er kunnen er meer zijn.
 | `match(db, accountId:, amount:) -> [Distribution]` | Eenvoudige variant: niet-gearchiveerde stortingen van die spaarrekening met precies dit totaal. Voor het nakijkscherm is `recognize` de betere weg. |
 | `recognize(db, bankTransaction:) -> DistributionMatch?` | Herkent beide kanten van de overboeking bij een banktransactie; zie hieronder. |
 | `recognizeAll(db, accountId:) -> [Int64: DistributionMatch]` | `recognize` voor alle transacties met status `nieuw` van een rekening, per transactie-id. |
-| `proposal(db, distributionId:, for:) -> DistributionMatch` | Het voorstel voor één gekozen storting, nadat `recognize` meer kandidaten gaf. |
+| `proposal(db, distributionId:, for:) -> DistributionMatch` | Het voorstel voor één gekozen storting, nadat `recognize` meer kandidaten gaf of een losse overboeking vermoedde (de gebruiker kiest "toch de vaste storting"). Geeft altijd de verdeling. |
+| `isFarFromTotal(_ amount:, total:) -> Bool` | De grens voor "lijkt een losse overboeking": het bedrag is minder dan de helft of meer dan anderhalf keer het totaal (precies de helft of anderhalf keer valt er nog binnen). Bij een totaal van nul of minder: `false`. |
 | `createFromPots(db, accountId:, name:, year:) -> Distribution` | Eenmalige hulp: storting uit de reserveringspotten met `monthlyAmount > 0`; koppelt de regel RESERVERINGEN van `year` (standaard het lopende jaar) als die bestaat en het jaar open is. |
 
 - Validatie: naam niet leeg; de rekening is een spaarrekening; elke pot hoort bij die rekening
@@ -197,10 +198,16 @@ en hoofdletters.
   spaarrekening is. Zonder herkomstrekening wordt deze kant niet herkend.
 - Passen er meer stortingen, dan wint de ene waarvan het totaal gelijk is aan het bedrag. Is die er niet
   precies één keer, dan komen alle kandidaten terug.
+- **Losse overboeking** (doelkant, één storting): wijkt het bedrag sterk af van het totaal (`isFarFromTotal`:
+  minder dan de helft of meer dan anderhalf keer), dan komt er géén verdeling. De match is een twijfelgeval:
+  `looksSeparate` is `true`, `allocations` is leeg, `exactAmount` is `false`, `difference` is het verschil en
+  `warning` zegt "Dit lijkt een losse overboeking …". Het scherm stelt dan één pot voor; kiest de gebruiker toch
+  de storting, dan geeft `proposal` de verdeling. Bij een kleiner verschil blijft het als hieronder (verdeling
+  plus verschil). De herkomstkant kent deze grens niet.
 
 `DistributionMatch`: `distributions` (kandidaten), `distribution` (de ene, of `nil`), `isAmbiguous`, `side`
-(`.source` / `.destination`), `exactAmount`, `difference` (overgeboekt − totaal), `allocations` en `warning`
-(Nederlandse tekst of `nil`).
+(`.source` / `.destination`), `exactAmount`, `difference` (overgeboekt − totaal), `allocations`, `warning`
+(Nederlandse tekst of `nil`) en `looksSeparate` (zie "Losse overboeking").
 
 - Doelkant: `allocations` is de verdeling over de potten. Bij een afwijkend bedrag tellen ze niet op tot het
   bankbedrag; de gebruiker kiest waar het verschil heen gaat.
@@ -256,6 +263,7 @@ gehangen; er komen dan geen boekingen bij.
 |---|---|
 | `openReimbursements(db) -> OpenReimbursements` | Openstaande boekingen, gesaldeerd en per pot. |
 | `openWithoutPot(db) -> [Entry]` | Openstaande boekingen zonder pot, om voor te waarschuwen. |
+| `ownSavingsWarning(db, bankTransaction:, reimburse:) -> String?` | Eén zin uitleg als verrekenen met spaar (met of zonder pot) gekozen wordt bij een banktransactie op een betaalrekening waarvan de tegenrekening een eigen spaarrekening is; anders `nil`. Zie hieronder. |
 | `createSavingsTransfer(db, entryIds:, day:, note:) -> SavingsTransfer` | Legt de verrekening vast; `amount` is het netto bedrag met teken (nul mag). Boekt nog niets. |
 | `markDone(db, savingsTransferId:, on:, at:) -> SavingsTransfer` | Vinkt af en boekt de verrekening op `on` (standaard vandaag). |
 | `reopen(db, savingsTransferId:)` | Terug naar 'nog te doen'; verwijdert de boekingen van het afvinken. |
@@ -274,6 +282,16 @@ bijschrijvingen, positief), `net` = `fromSavings − toSavings`, en `perPot: [Po
 oude veld `total` bestaat nog en is nu gelijk aan `net` (kan dus negatief of nul zijn).
 
 **`SavingsTransfer.amount`** is het netto bedrag met teken, niet meer altijd positief.
+
+**Verrekenen op de overboeking zelf (`ownSavingsWarning`).** Een bankregel tussen de betaalrekening en een
+eigen spaarrekening (tegenrekening = IBAN van een spaarrekening, vergeleken zonder spaties en hoofdletters) is
+de overboeking zelf. Kiest de gebruiker daar "verrekenen met spaar" of een pot, dan gaat hetzelfde geld nog een
+keer heen en weer. De functie geeft dan: "Dit is een overboeking naar (of: van) je eigen spaarrekening. Kies de
+pot aan de spaarkant; verrekenen met spaar is voor geld dat nog moet verhuizen." Alleen een waarschuwing:
+`BookingService.book` weigert het niet. `nil` als `reimburse` uit staat, de transactie niet op een
+betaalrekening staat, of de tegenrekening ontbreekt of geen eigen spaarrekening is. Het nakijkscherm roept het
+aan met `reimburse: true` en toont de zin zodra verrekenen in het concept staat (ook in een regel van een
+splitsing).
 
 **`SavingsTransferSummary`**: `transfer`, `entries`, `fromSavings`, `toSavings`, `perPot`, `net`,
 `needsBankTransfer` (false bij netto nul), `bookedEntries` (de boekingen van het afvinken),

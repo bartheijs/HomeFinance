@@ -102,6 +102,25 @@ public enum SavingsTransferService {
         return OpenReimbursements(entries: entries, fromSavings: parts.from, toSavings: parts.to, perPot: parts.perPot)
     }
 
+    /// Waarschuwing als de gebruiker "verrekenen met spaar" (of een pot) kiest bij een banktransactie op een
+    /// betaalrekening waarvan de tegenrekening een eigen spaarrekening is. Zo'n boeking IS de overboeking:
+    /// de pot kies je aan de spaarkant, verrekenen is voor geld dat nog moet verhuizen. Alleen een waarschuwing;
+    /// boeken blijft mogelijk. Nil als `reimburse` uit staat of het geen overboeking met eigen spaar is.
+    public static func ownSavingsWarning(_ db: Database, bankTransaction: BankTransaction,
+                                         reimburse: Bool) throws -> String? {
+        guard reimburse, !bankTransaction.amount.isZero,
+              try Account.fetchOne(db, key: bankTransaction.accountId)?.kind == .betaal else { return nil }
+        let counterparty = AccountService.normalizeIBAN(bankTransaction.counterpartyIban)
+        guard !counterparty.isEmpty else { return nil }
+        let ownSavings = try Account.filter(Column("kind") == AccountKind.spaar.rawValue).fetchAll(db)
+            .contains { AccountService.normalizeIBAN($0.iban ?? "") == counterparty }
+        guard ownSavings else { return nil }
+        return (bankTransaction.amount.isNegative
+                ? "Dit is een overboeking naar je eigen spaarrekening. "
+                : "Dit is een overboeking van je eigen spaarrekening. ")
+            + "Kies de pot aan de spaarkant; verrekenen met spaar is voor geld dat nog moet verhuizen."
+    }
+
     /// Openstaande boekingen zonder pot, zodat het scherm kan waarschuwen.
     public static func openWithoutPot(_ db: Database) throws -> [Entry] {
         try Entry.fetchAll(db, sql: """

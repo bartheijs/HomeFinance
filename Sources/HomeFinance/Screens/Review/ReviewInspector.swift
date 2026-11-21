@@ -109,7 +109,7 @@ private struct ReviewDetail: View {
     /// Hoogstens één melding: waarom je hier even moet opletten.
     @ViewBuilder private var warning: some View {
         let s = row.suggestion
-        let text: String? = if let match = row.match {
+        let text: String? = if let match = row.match, row.usesDistribution || match.looksSeparate {
             match.warning
         } else if s.amountDiffers, let expected = s.expectedAmount {
             "De regel verwacht \(expected.formatted()). Klopt de post nog?"
@@ -163,9 +163,20 @@ private struct ReviewDetail: View {
                     Button(distribution.name) { store.chooseDistribution(distribution, for: row, model) }
                 }
             }
-            if let name = row.match?.distribution?.name, !store.isEdited(row) {
+            if let name = row.activeMatch?.distribution?.name, !store.isEdited(row) {
                 Label("Vaste storting: \(name)", systemImage: "arrow.triangle.branch").fontWeight(.medium)
                     .help("Een vaste storting is een bedrag dat regelmatig van de betaalrekening naar de spaarrekening gaat en daar over potten wordt verdeeld.")
+            }
+            if row.canSwitchDistribution, let name = row.match?.distribution?.name {
+                if row.usesDistribution {
+                    Button("Niet de vaste storting: één pot kiezen") { store.setUsesDistribution(false, for: row, model) }
+                        .buttonStyle(.link)
+                        .help("Voor een losse overboeking naar spaar: het hele bedrag gaat naar één pot die je zelf kiest.")
+                } else {
+                    Button("Toch de vaste storting \(name)") { store.setUsesDistribution(true, for: row, model) }
+                        .buttonStyle(.link)
+                        .help("Verdeel het bedrag over de potten van de vaste storting.")
+                }
             }
             if draft.wrappedValue.isSplit {
                 VStack(alignment: .leading, spacing: 6) {
@@ -179,7 +190,7 @@ private struct ReviewDetail: View {
                 }
                 if let index = draft.wrappedValue.lines.firstIndex(where: \.isDifference) {
                     differenceChoice(index)
-                } else if row.match == nil || store.isEdited(row) {
+                } else if row.activeMatch == nil || store.isEdited(row) {
                     Text("Deze transactie is gesplitst.").font(.callout).foregroundStyle(.secondary)
                 }
                 Button("Aanpassen…") { moreBinding.wrappedValue = true }.buttonStyle(.link)
@@ -197,6 +208,11 @@ private struct ReviewDetail: View {
                         d.reimbursePotId = choice == ReviewSettlePicker.withoutPot ? nil : choice
                         draft.wrappedValue = d
                     }))
+            }
+            if let text = store.ownSavingsWarning(for: row) {
+                Label(text, systemImage: "info.circle")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if store.kind == .betaal { periodChoice }
         }
@@ -252,7 +268,10 @@ private struct ReviewDetail: View {
 
     private var hint: String {
         if store.isEdited(row) { return "Je eigen keuze. De app onthoudt dit voor de volgende keer." }
-        if let match = row.match, match.distribution != nil {
+        if row.match != nil, !row.usesDistribution {
+            return "Niet de vaste storting: kies de pot waar dit geld heen gaat."
+        }
+        if let match = row.activeMatch, match.distribution != nil {
             return match.exactAmount ? "Herkend aan de rekeningen en het bedrag van de vaste storting."
                                      : "Herkend aan de rekeningen; het bedrag wijkt \(match.difference.formatted(alwaysSign: true)) af van de vaste storting."
         }

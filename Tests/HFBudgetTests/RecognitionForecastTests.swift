@@ -261,3 +261,100 @@ import Testing
         }
     }
 }
+
+/// 6e: een losse overboeking naar spaar niet aanzien voor de vaste storting, en waarschuwen bij verrekenen op
+/// een overboeking met de eigen spaarrekening.
+@Suite struct LosseOverboekingTests {
+    /// Vaste storting 100,00 + 150,00 = 250,00 van Testbetaal naar Testspaar.
+    private func vast(_ db: Database, _ fx: Fixture) throws -> Distribution {
+        let vast = try DistributionService.create(db, name: "Vast sparen", accountId: fx.spaar.id!,
+                                                  sourceAccountId: fx.betaal.id)
+        try DistributionService.setLines(db, distributionId: vast.id!, [
+            (fx.potVerzekering.id!, c(10_000)), (fx.potVakantie.id!, c(15_000))])
+        return vast
+    }
+
+    @Test func grens() {
+        let totaal = c(25_000)
+        #expect(!DistributionService.isFarFromTotal(c(12_500), total: totaal))   // precies de helft
+        #expect(DistributionService.isFarFromTotal(c(12_499), total: totaal))
+        #expect(!DistributionService.isFarFromTotal(c(37_500), total: totaal))   // precies anderhalf keer
+        #expect(DistributionService.isFarFromTotal(c(37_501), total: totaal))
+        #expect(!DistributionService.isFarFromTotal(c(25_000), total: totaal))
+        #expect(!DistributionService.isFarFromTotal(c(100), total: .zero))
+    }
+
+    @Test func grootVerschilGeenVerdeling() throws {
+        let fx = try Fixture()
+        try fx.app.write { db in
+            let vast = try vast(db, fx)
+            // 18,95 en 500,00 naar spaar: te ver van 250,00 af.
+            for cents: Int64 in [1_895, 50_000] {
+                let los = try fx.tx(db, fx.spaar, "2027-01-28", cents, iban: Fixture.betaalIban)
+                let match = try #require(try DistributionService.recognize(db, bankTransaction: los))
+                #expect(match.looksSeparate && match.side == .destination && match.distribution?.id == vast.id)
+                #expect(match.allocations.isEmpty && !match.exactAmount)
+                #expect(match.difference == c(cents) - c(25_000))
+                #expect(match.warning?.contains("losse overboeking") == true)
+                // Toch de vaste storting kiezen kan: dan wel de verdeling.
+                let toch = try DistributionService.proposal(db, distributionId: vast.id!, for: los)
+                #expect(!toch.looksSeparate && toch.allocations.map(\.amount) == [c(10_000), c(15_000)])
+            }
+            // In recognizeAll net zo.
+            #expect(try DistributionService.recognizeAll(db, accountId: fx.spaar.id!).values.allSatisfy(\.looksSeparate))
+        }
+    }
+
+    @Test func kleinVerschilWelVerdeling() throws {
+        let fx = try Fixture()
+        try fx.app.write { db in
+            _ = try vast(db, fx)
+            // 240,00 en 300,00: binnen de grens, verdeling met verschil zoals altijd.
+            for (cents, verschil): (Int64, Int64) in [(24_000, -1_000), (30_000, 5_000)] {
+                let t = try fx.tx(db, fx.spaar, "2027-01-28", cents, iban: Fixture.betaalIban)
+                let match = try #require(try DistributionService.recognize(db, bankTransaction: t))
+                #expect(!match.looksSeparate && match.difference == c(verschil))
+                #expect(match.allocations.map(\.amount) == [c(10_000), c(15_000)])
+            }
+            let exact = try fx.tx(db, fx.spaar, "2027-01-29", 25_000, iban: Fixture.betaalIban)
+            let match = try #require(try DistributionService.recognize(db, bankTransaction: exact))
+            #expect(!match.looksSeparate && match.exactAmount && match.warning == nil)
+        }
+    }
+
+    @Test func herkomstkantBlijftGelijk() throws {
+        let fx = try Fixture()
+        try fx.app.write { db in
+            let vast = try vast(db, fx)
+            try DistributionService.link(db, distributionId: vast.id!, budgetItemId: fx.reserveringen.id!)
+            let af = try fx.tx(db, fx.betaal, "2027-01-27", -1_895, iban: Fixture.spaarIban)
+            let match = try #require(try DistributionService.recognize(db, bankTransaction: af))
+            #expect(match.side == .source && !match.looksSeparate)
+            #expect(match.allocations.map(\.amount) == [c(-1_895)])
+        }
+    }
+
+    @Test func waarschuwingVerrekenenBijEigenSpaar() throws {
+        let fx = try Fixture()
+        try fx.app.write { db in
+            let naarSpaar = try fx.tx(db, fx.betaal, "2027-01-27", -1_895, iban: "nl00 test 0000 0000 02")
+            let vanSpaar = try fx.tx(db, fx.betaal, "2027-01-27", 5_000, iban: Fixture.spaarIban)
+            let winkel = try fx.tx(db, fx.betaal, "2027-01-27", -1_895, iban: "NL00TEST0000000099")
+            let zonder = try fx.tx(db, fx.betaal, "2027-01-27", -1_895)
+            let spaarkant = try fx.tx(db, fx.spaar, "2027-01-27", 1_895, iban: Fixture.betaalIban)
+
+            let naar = try #require(try SavingsTransferService.ownSavingsWarning(db, bankTransaction: naarSpaar, reimburse: true))
+            #expect(naar.contains("naar je eigen spaarrekening") && naar.contains("spaarkant"))
+            let van = try #require(try SavingsTransferService.ownSavingsWarning(db, bankTransaction: vanSpaar, reimburse: true))
+            #expect(van.contains("van je eigen spaarrekening"))
+            // Zonder verrekenen, bij een vreemde of geen tegenrekening, en aan de spaarkant: niets.
+            #expect(try SavingsTransferService.ownSavingsWarning(db, bankTransaction: naarSpaar, reimburse: false) == nil)
+            for t in [winkel, zonder, spaarkant] {
+                #expect(try SavingsTransferService.ownSavingsWarning(db, bankTransaction: t, reimburse: true) == nil)
+            }
+            // Alleen waarschuwen: boeken met verrekenen blijft mogelijk.
+            try BookingService.book(db, bankTransactionId: naarSpaar.id!, allocations: [
+                Allocation(amount: c(-1_895), label: "Naar spaar", potId: fx.potVakantie.id, reimburse: true)])
+        }
+    }
+}

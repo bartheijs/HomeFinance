@@ -26,10 +26,25 @@ public struct DistributionMatch: Equatable, Sendable {
     public var allocations: [Allocation]
     /// Nederlandse waarschuwing voor de gebruiker, bv. als er geen post gekoppeld is.
     public var warning: String?
+    /// Doelkant: het bedrag wijkt zo sterk af van het totaal van de storting (zie
+    /// `DistributionService.isFarFromTotal`) dat het lijkt op een losse overboeking. Er is dan géén verdeling
+    /// voorgesteld (`allocations` is leeg); de gebruiker kiest één pot, of toch de storting via `proposal`.
+    public var looksSeparate: Bool = false
 
     /// De ene passende storting, of nil als de gebruiker moet kiezen.
     public var distribution: Distribution? { distributions.count == 1 ? distributions[0] : nil }
     public var isAmbiguous: Bool { distributions.count > 1 }
+
+    public init(distributions: [Distribution], side: DistributionSide, exactAmount: Bool, difference: Money,
+                allocations: [Allocation], warning: String?, looksSeparate: Bool = false) {
+        self.distributions = distributions
+        self.side = side
+        self.exactAmount = exactAmount
+        self.difference = difference
+        self.allocations = allocations
+        self.warning = warning
+        self.looksSeparate = looksSeparate
+    }
 }
 
 extension DistributionService {
@@ -43,6 +58,8 @@ extension DistributionService {
     ///   gekoppeld is.
     /// - Passen er meer stortingen, dan wint de ene waarvan het totaal gelijk is aan het bedrag; is die er niet
     ///   precies één keer, dan komen alle kandidaten terug en kiest de gebruiker.
+    /// - Doelkant met één storting en een bedrag dat sterk afwijkt (`isFarFromTotal`): geen verdeling maar een
+    ///   twijfelgeval (`looksSeparate`), want het lijkt een losse overboeking.
     public static func recognize(_ db: Database, bankTransaction: BankTransaction) throws -> DistributionMatch? {
         try recognize(db, bankTransaction, context: try RecognitionContext(db))
     }
@@ -60,6 +77,15 @@ extension DistributionService {
             }
         }
         return result
+    }
+
+    /// Een overgeboekt bedrag wijkt sterk af van het totaal van een vaste storting als het minder dan de helft
+    /// of meer dan anderhalf keer dat totaal is. Dan lijkt het een losse overboeking en stelt `recognize` geen
+    /// verdeling voor. Bij een totaal van nul of minder is er geen grens.
+    public static func isFarFromTotal(_ amount: Money, total: Money) -> Bool {
+        guard total > .zero else { return false }
+        let amount = amount.magnitude.cents
+        return amount * 2 < total.cents || amount * 2 > total.cents * 3
     }
 
     /// Het voorstel voor één gekozen storting bij een banktransactie (na een keuze uit meer kandidaten).
@@ -128,6 +154,15 @@ extension DistributionService {
             return DistributionMatch(distributions: candidates, side: side, exactAmount: false, difference: .zero,
                                      allocations: [], warning: "Er passen \(candidates.count) vaste stortingen bij "
                                         + "deze transactie. Kies welke het is.")
+        }
+        if side == .destination, let total = context.totals[first.id!],
+           isFarFromTotal(transaction.amount, total: total) {
+            return DistributionMatch(distributions: [first], side: side, exactAmount: false,
+                                     difference: transaction.amount - total, allocations: [],
+                                     warning: "Dit lijkt een losse overboeking: \(transaction.amount.formatted()) is "
+                                        + "heel anders dan de vaste storting \(first.name) (\(total.formatted())). "
+                                        + "Kies één pot, of kies toch de vaste storting.",
+                                     looksSeparate: true)
         }
         return try match(db, first, side: side, transaction: transaction)
     }

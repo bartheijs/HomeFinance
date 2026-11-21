@@ -138,7 +138,16 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
 6. **Grotere schermpunten** hieronder oppakken, als de gebruiker dat wil.
 6a, 6b en 6c (wensen van 21 november) zijn gebouwd op 21 november; zie "21 november" hierboven. **Maar zie
    "Let op" bovenaan: die versie werkte niet bij de gebruiker en is teruggedraaid.**
-6e. **Vaste storting niet herkennen bij een heel ander bedrag** (21 november). Een losse overboeking van
+6e. **Vaste storting niet herkennen bij een heel ander bedrag** — klaar (21 november), nog niet geïnstalleerd.
+   Wat er gebouwd is: `DistributionService.recognize` stelt aan de spaarkant geen verdeling meer voor als het
+   bedrag minder dan de helft of meer dan anderhalf keer het totaal van de storting is (`isFarFromTotal`); het
+   wordt een twijfelgeval "lijkt een losse overboeking" (`looksSeparate`). Bij een kleiner verschil blijft de
+   verdeling met "verschil naar". In Nakijken kan de gebruiker bij een herkende storting aan de spaarkant altijd
+   wisselen: "Niet de vaste storting: één pot kiezen" en "Toch de vaste storting …". Aan de betaalkant staat er
+   één zin uitleg zodra bij een overboeking met de eigen spaarrekening verrekenen of een pot wordt gekozen
+   (`SavingsTransferService.ownSavingsWarning`); boeken blijft mogelijk. Bij Transacties wordt een vermoedelijk
+   losse overboeking niet als storting getoond. Tests in `LosseOverboekingTests`.
+   Oorspronkelijke melding: Een losse overboeking van
    betaal naar spaar werd aan de spaarkant herkend als de maandelijkse vaste storting (zelfde tegenrekening),
    ook al scheelde het bedrag sterk; het verschil kwam in één pot en alle reserveringspotten kregen hun
    maandbedrag dubbel. `DistributionService.recognize` (doelkant): bij een groot verschil geen verdeling

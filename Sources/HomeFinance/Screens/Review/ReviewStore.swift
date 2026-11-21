@@ -96,8 +96,17 @@ struct ReviewRow: Identifiable, Equatable {
     let settlement: SavingsTransferMatch?
     /// Deze transactie is één kant van een overboeking tussen eigen rekeningen.
     let pair: TransferPair?
+    /// Doelkant van een herkende storting: de gebruiker boekt het als de vaste storting (verdeling over de
+    /// potten) of juist als één pot. Standaard de verdeling, behalve als het een losse overboeking lijkt.
+    var usesDistribution = true
+    /// Waarschuwing als bij deze transactie verrekenen met spaar wordt gekozen (overboeking met eigen spaar).
+    var ownSavingsWarning: String?
 
     var id: Int64 { item.id }
+    /// De vaste storting zoals die meetelt voor het voorstel: nil als de gebruiker één pot kiest.
+    var activeMatch: DistributionMatch? { usesDistribution ? match : nil }
+    /// Aan de doelkant kan de gebruiker wisselen tussen de vaste storting en één pot.
+    var canSwitchDistribution: Bool { match?.side == .destination && match?.distribution != nil }
     var tx: BankTransaction { item.transaction }
 }
 
@@ -204,6 +213,8 @@ final class ReviewStore {
     private var defaults: [Int64: ReviewDraft] = [:]
     /// De vaste storting die de gebruiker koos toen er meer kandidaten waren.
     private var chosenMatches: [Int64: DistributionMatch] = [:]
+    /// Keuze van de gebruiker tussen vaste storting (true) en één pot (false), per transactie.
+    private var distributionChoice: [Int64: Bool] = [:]
 
     // MARK: Afgeleid
 
@@ -302,19 +313,25 @@ final class ReviewStore {
                 }
                 return true
             }
-            rows = queue.filter { $0.transaction.accountId == accountId }.map { item in
+            rows = try queue.filter { $0.transaction.accountId == accountId }.map { item in
                 let tx = item.transaction
                 let suggestion = suggestions[item.id] ?? Suggestion(bankTransactionId: item.id)
                 let settlement = settlements[item.id]
                 let match = settlement == nil ? chosenMatches[item.id] ?? matches[item.id] : nil
                 let pair = pairs.first { $0.from.id == tx.id || $0.to.id == tx.id }
+                let uses = match.map { m in
+                    m.side == .destination && m.distribution != nil ? distributionChoice[item.id] ?? !m.looksSeparate : true
+                } ?? true
+                let ownSavings = account.kind == .betaal
+                    ? try SavingsTransferService.ownSavingsWarning(db, bankTransaction: tx, reimburse: true) : nil
                 return ReviewRow(
                     item: item, suggestion: suggestion,
                     cleanLabel: LabelCleaner.cleanLabel(counterparty: tx.counterpartyName, description: tx.descriptionText),
                     group: settlement != nil ? .doubt
-                        : match.map { $0.distribution != nil && $0.exactAmount ? .certain : .doubt }
+                        : match.map { $0.distribution != nil && $0.exactAmount && uses ? .certain : .doubt }
                         ?? Self.group(suggestion, hasProposal: pair != nil),
-                    match: match, settlement: settlement, pair: pair)
+                    match: match, settlement: settlement, pair: pair,
+                    usesDistribution: uses, ownSavingsWarning: ownSavings)
             }
             .sorted { ($0.group.rawValue, $0.tx.day, $0.id) < ($1.group.rawValue, $1.tx.day, $1.id) }
 
@@ -328,6 +345,7 @@ final class ReviewStore {
         let ids = Set(rows.map(\.id))
         drafts = drafts.filter { ids.contains($0.key) }
         chosenMatches = chosenMatches.filter { ids.contains($0.key) }
+        distributionChoice = distributionChoice.filter { ids.contains($0.key) }
         defaults = defaults.filter { ids.contains($0.key) }
         for row in rows {
             let fresh = makeDefault(row)
@@ -355,7 +373,7 @@ final class ReviewStore {
                                 tagIds: Set(s.tagIds))
         if draft.label.isEmpty { draft.label = "Onbekend" }
         // Een vaste storting gaat vóór de regels.
-        if let match = row.match, match.distribution != nil, !match.allocations.isEmpty {
+        if let match = row.activeMatch, match.distribution != nil, !match.allocations.isEmpty {
             draft.tagIds = []
             if match.side == .source, let only = match.allocations.first {
                 draft.label = only.label
@@ -401,6 +419,33 @@ final class ReviewStore {
             }
         }
         if ok { drafts[row.id] = nil; load(model) }
+    }
+
+    /// Doelkant van een herkende vaste storting: boeken als de storting (verdeling over de potten) of als één pot.
+    /// Kiest de gebruiker de storting terwijl er nog geen verdeling is (het leek een losse overboeking), dan
+    /// wordt het voorstel van die storting opgehaald.
+    func setUsesDistribution(_ on: Bool, for row: ReviewRow, _ model: AppModel) {
+        guard row.canSwitchDistribution, let id = row.match?.distribution?.id else { return }
+        if on, row.match?.allocations.isEmpty == true {
+            let ok = model.perform {
+                chosenMatches[row.id] = try model.db.read {
+                    try DistributionService.proposal($0, distributionId: id, for: row.tx)
+                }
+            }
+            guard ok else { return }
+        }
+        distributionChoice[row.id] = on
+        drafts[row.id] = nil
+        load(model)
+    }
+
+    /// De waarschuwing bij verrekenen met spaar op een overboeking met de eigen spaarrekening, als die in het
+    /// concept gekozen is (ook in een regel van een splitsing). Nil als er niets te waarschuwen is.
+    func ownSavingsWarning(for row: ReviewRow) -> String? {
+        guard let text = row.ownSavingsWarning else { return nil }
+        let draft = draft(for: row)
+        let settles = draft.isSplit ? draft.lines.contains { $0.settlePotId != nil } : draft.reimburse
+        return settles ? text : nil
     }
 
     /// Maakt een tag (en zet verrekenen aan vanaf de begindatum van de rekening) en zet hem op deze transactie.

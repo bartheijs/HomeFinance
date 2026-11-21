@@ -430,7 +430,8 @@ final class TransactionsStore {
                 let suggestion = try suggestions[id] ?? RuleEngine.suggest(for: item.transaction, db)
                 let transfer = transfers[id]
                 list.append(TransactionsPending(transaction: item.transaction, suggestion: suggestion,
-                                                match: transfer == nil ? matches[id] : nil, transferMatch: transfer))
+                                                match: transfer == nil ? matches[id].flatMap { $0.looksSeparate ? nil : $0 } : nil,
+                                                transferMatch: transfer))
             }
             return list
         }
