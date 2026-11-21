@@ -71,7 +71,7 @@ struct GridScreen: View {
         for item in try BudgetItem.filter(Column("distributionId") != nil).fetchAll(db) {
             guard let id = item.id, let distributionId = item.distributionId, let summary = summaries[distributionId] else { continue }
             let lines = summary.lines.map { "• \($0.potName): \($0.amount.formatted())" }
-            result[id] = (["Gekoppeld aan de vaste storting \(summary.name) naar \(summary.accountName): \(summary.total.formatted())"]
+            result[id] = (["Gekoppeld aan Automatisch sparen: \(summary.name) naar \(summary.accountName): \(summary.total.formatted())"]
                 + lines).joined(separator: "\n")
         }
         return result
@@ -127,7 +127,7 @@ struct GridScreen: View {
 
                 Button("Jaaroverzicht") { showOverview.toggle() }
                     .keyboardShortcut("j", modifiers: .command)
-                    .help("Van 'op de rekening op 1-1' naar 'besteedbaar': het blok dat in Excel onderaan het jaarblad staat (⌘J).")
+                    .help("Van 'op de rekening op 1-1' naar 'vrij te besteden': het blok dat in Excel onderaan het jaarblad staat (⌘J).")
                     .popover(isPresented: $showOverview, arrowEdge: .bottom) {
                         if let summary { GridYearOverview(summary: summary) }
                     }
@@ -202,16 +202,16 @@ struct GridYearOverview: View {
                 .padding(.bottom, 10)
             line("Op de rekening op 1-1", summary.openingBalance,
                  help: "Wat er op 1 januari op de betaalrekening(en) stond.")
-            line("IN", summary.income, sign: "+", help: "Alle inkomsten tot en met de peildag, vaste posten en divers samen.")
-            line("UIT", summary.expenses.magnitude, sign: "−", help: "Alle uitgaven tot en met de peildag, vaste posten en divers samen.")
+            line("IN", summary.income, sign: "+", help: "Alle inkomsten tot en met de peildag, vaste posten en overig samen.")
+            line("UIT", summary.expenses.magnitude, sign: "−", help: "Alle uitgaven tot en met de peildag, vaste posten en overig samen.")
             Divider().padding(.vertical, 5)
             line("Op de rekening", summary.balance, strong: true, help: "Het berekende saldo van de betaalrekening(en).")
-            line("Anti-rood", summary.buffers, sign: "−",
-                 help: "Buffer die je op de rekening wilt laten staan: anti-rood \(summary.antiRood.formatted()) plus tijdelijk anti-rood \(summary.tijdelijkAntiRood.formatted()).")
+            line("Minimaal aan het eind van de maand", summary.buffers, sign: "−",
+                 help: "Buffer die je op de rekening wilt laten staan: minimaal op je betaalrekening \(summary.antiRood.formatted()) plus tijdelijk geleend van spaar \(summary.tijdelijkAntiRood.formatted()).")
             Divider().padding(.vertical, 5)
-            line("Besteedbaar", summary.spendable, strong: true,
+            line("Vrij te besteden", summary.spendable, strong: true,
                  color: summary.spendable.isNegative ? Theme.negative : Theme.accent,
-                 help: "Op de rekening min anti-rood: wat je vrij kunt uitgeven.")
+                 help: "Op de rekening min wat je minimaal laat staan: wat je vrij kunt uitgeven.")
         }
         .padding(16)
         .frame(width: 300)

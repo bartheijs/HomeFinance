@@ -73,7 +73,7 @@ struct PotsAnnualSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Nieuw jaarbedrag").font(.title2.weight(.semibold))
-                Text("Voor een rekening die één keer per jaar komt, zoals wegenbelasting. Je spaart er elke maand een twaalfde voor in een potje; dit venster zet potje, vaste storting en post in één keer goed.")
+                Text("Voor een rekening die één keer per jaar komt, zoals wegenbelasting. Je spaart er elke maand een twaalfde voor in een potje; dit venster zet potje, vaste overboeking en post in één keer goed.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             .padding(20)
@@ -158,13 +158,13 @@ struct PotsAnnualSheet: View {
 
     private var distributionSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Vaste storting").font(.headline)
-            Picker("Vaste storting", selection: $distributionId) {
+            Text("Automatisch sparen").font(.headline)
+            Picker("Automatisch sparen", selection: $distributionId) {
                 ForEach(data.distributions, id: \.id) { d in
                     Text(data.linkedItem[d.id!].map { "\(d.name) (post \($0))" } ?? d.name).tag(d.id)
                 }
                 if !data.distributions.isEmpty { Divider() }
-                Text("Nieuwe vaste storting").tag(Int64?.none)
+                Text("Nieuwe vaste overboeking").tag(Int64?.none)
             }
             .labelsHidden().fixedSize()
             .onChange(of: distributionId) { _, _ in existingPotId = nil }
@@ -178,7 +178,7 @@ struct PotsAnnualSheet: View {
                         .fixedSize()
                     }
                 }
-                Text("Een nieuwe storting betekent ook een nieuwe overboeking bij de bank.")
+                Text("Een nieuwe overboeking betekent ook een nieuwe overboeking bij de bank.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
@@ -188,9 +188,9 @@ struct PotsAnnualSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Post in je begroting \(String(year))").font(.headline)
             if let distributionId, let label = data.linkedItem[distributionId] {
-                Text("Post \(label) volgt het totaal van deze storting vanzelf.").font(.callout).foregroundStyle(.secondary)
+                Text("Post \(label) volgt het totaal van deze overboeking vanzelf.").font(.callout).foregroundStyle(.secondary)
             } else if !data.yearExists {
-                Text("Er is geen open begrotingsjaar \(String(year)). De begroting rekent er pas mee als je de storting later aan een post koppelt.")
+                Text("Er is geen open begrotingsjaar \(String(year)). De begroting rekent er pas mee als je de overboeking later aan een post koppelt.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
                 Picker("Post", selection: $itemTag) {
@@ -208,7 +208,7 @@ struct PotsAnnualSheet: View {
                               prompt: Text(distributionId == nil ? newDistributionName : "Naam van de post"))
                         .textFieldStyle(.roundedBorder).frame(width: 240)
                 }
-                Text("Het plan van de post wordt min het totaal van de storting: zo telt de overboeking als uitgave op je betaalrekening.")
+                Text("Het plan van de post wordt min het totaal van de overboeking: zo telt de overboeking als uitgave op je betaalrekening.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }

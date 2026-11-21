@@ -53,12 +53,12 @@ public struct PotChain: Equatable, Sendable {
     /// "Krijgt € 42,00 per maand via vaste storting X (post Y)." Bij meer stortingen staat het lijstje in `lines`.
     public var sentence: String {
         switch lines.count {
-        case 0: return "Krijgt geen geld via een vaste storting."
+        case 0: return "Krijgt geen geld via een vaste overboeking."
         case 1:
             let line = lines[0]
-            return "Krijgt \(line.amount.formatted()) per maand via vaste storting \(line.distribution.nameWithItem)."
+            return "Krijgt \(line.amount.formatted()) per maand via Automatisch sparen: \(line.distribution.nameWithItem)."
         default:
-            return "Krijgt \(monthly.formatted()) per maand via \(lines.count) vaste stortingen:"
+            return "Krijgt \(monthly.formatted()) per maand via \(lines.count) vaste overboekingen:"
         }
     }
 }
@@ -79,7 +79,7 @@ public struct ItemChain: Equatable, Sendable {
         case 1: target = "1 potje (\(distribution.potNames[0]))"
         default: target = "\(count) potjes"
         }
-        return "Gaat via vaste storting \(distribution.name) naar \(target)."
+        return "Gaat via Automatisch sparen: \(distribution.name) naar \(target)."
     }
 }
 
@@ -138,12 +138,12 @@ public struct ReserveBuildup: Equatable, Sendable {
     public var sentence: String {
         if let distribution {
             let count = lines.count == 1 ? "1 potje" : "\(lines.count) potjes"
-            return "De opbouw komt uit de vaste storting \(distribution.name) (\(count), \(distributionTotal.formatted()) per maand). Je wijzigt de verdeling bij Vaste stortingen."
+            return "De opbouw komt uit Automatisch sparen: \(distribution.name) (\(count), \(distributionTotal.formatted()) per maand). Je wijzigt de verdeling bij Automatisch sparen."
         }
         if reserveLineCount > 0 {
-            return "\(itemLabel) is nog niet aan een vaste storting gekoppeld. De opbouw komt uit de RES-regels hieronder."
+            return "\(itemLabel) is nog niet aan een vaste overboeking gekoppeld. De opbouw komt uit de RES-regels hieronder."
         }
-        return "\(itemLabel) is nog niet aan een vaste storting gekoppeld en heeft geen opbouw."
+        return "\(itemLabel) is nog niet aan een vaste overboeking gekoppeld en heeft geen opbouw."
     }
 
     /// De RES-regels en de vaste storting tellen niet op tot hetzelfde bedrag. Alleen bij een koppeling met RES-regels.
@@ -154,13 +154,13 @@ public struct ReserveBuildup: Equatable, Sendable {
     /// Waarschuwing als de RES-regels en de storting uit elkaar lopen, anders nil.
     public var warning: String? {
         guard isOutOfStep, let distribution else { return nil }
-        return "Let op: de RES-regels tellen op tot \(reserveLineTotal.formatted()) per maand, de vaste storting \(distribution.name) tot \(distributionTotal.formatted()). Het maandgrid en \"nog te besteden\" rekenen \(itemLabel) nog met de RES-regels. Maak de RES-regels gelijk aan de storting om het verschil weg te werken."
+        return "Let op: de RES-regels tellen op tot \(reserveLineTotal.formatted()) per maand, Automatisch sparen: \(distribution.name) tot \(distributionTotal.formatted()). Het maandgrid en \"nog over deze maand\" rekenen \(itemLabel) nog met de RES-regels. Maak de RES-regels gelijk aan de overboeking om het verschil weg te werken."
     }
 
     /// Uitleg bij de groep RES-regels in de begroting, als er een storting gekoppeld is.
     public var reserveLinesNote: String? {
         guard distribution != nil, reserveLineCount > 0 else { return nil }
-        return "De verdeling over potjes staat bij Vaste stortingen. Deze RES-regels zijn de oude opbouw: het maandgrid rekent het plan van \(itemLabel) er nog mee, dus houd hun som gelijk aan de storting."
+        return "De verdeling over potjes staat bij Automatisch sparen. Deze RES-regels zijn de oude opbouw: het maandgrid rekent het plan van \(itemLabel) er nog mee, dus houd hun som gelijk aan de overboeking."
     }
 
     /// De stortingsregels als informatieve rijen voor het maandgrid (onder RESERVERINGEN, telt nergens mee).

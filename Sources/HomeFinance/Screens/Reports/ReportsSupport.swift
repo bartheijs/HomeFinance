@@ -258,7 +258,7 @@ struct ReportsEntryList: View {
     }
 
     private func subtitle(_ entry: EntryRow) -> String {
-        let kind = entry.itemLabel ?? (entry.isDivers ? "Divers" : (entry.potName ?? ""))
+        let kind = entry.itemLabel ?? (entry.isDivers ? "Overig" : (entry.potName ?? ""))
         let counterparty = entry.bank?.counterpartyName ?? ""
         return [kind, counterparty.isEmpty ? entry.accountName : counterparty].filter { !$0.isEmpty }.joined(separator: " · ")
     }

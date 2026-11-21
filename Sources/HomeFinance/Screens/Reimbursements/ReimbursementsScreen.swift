@@ -25,7 +25,7 @@ struct ReimbursementsScreen: View {
     var body: some View {
         VStack(spacing: 0) {
             ScreenHeader("Nog overboeken",
-                         subtitle: "Wat je van de betaalrekening betaalde maar uit een pot hoort te komen, en wat binnenkwam maar naar een pot moet: samen één bedrag om over te maken.")
+                         subtitle: "Je betaalde dit vanaf je betaalrekening, maar het hoort bij een potje (of het kwam binnen en moet naar een potje). Zet het later in één overboeking recht.")
             content
         }
         .task(id: ReloadKey(revision: model.revision, year: model.year)) { reload() }
@@ -73,7 +73,7 @@ struct ReimbursementsScreen: View {
         ContentUnavailableView {
             Label("Er staat niets open", systemImage: "checkmark.circle")
         } description: {
-            Text("Heb je iets van de betaalrekening betaald dat uit een pot hoort te komen, of kwam er iets binnen dat naar een pot moet? Zet dan bij die boeking ‘Nog overboeken met spaar’ aan in Nakijken of Transacties. Hij verschijnt daarna hier.")
+            Text("Heb je iets van de betaalrekening betaald dat uit een potje hoort te komen, of kwam er iets binnen dat naar een potje moet? Zet dan bij die boeking ‘Nog overboeken met spaar’ aan in Nakijken of Transacties. Hij verschijnt daarna hier.")
         } actions: {
             HStack {
                 Button("Naar Nakijken") { model.selection = .review }
@@ -110,9 +110,9 @@ struct ReimbursementsScreen: View {
                     .foregroundStyle(selection.isEmpty ? Color.secondary : Color.primary)
                     .lineLimit(1).minimumScaleFactor(0.6)
                     .contentTransition(.numericText())
-                    .help("Het saldo van de aangevinkte boekingen: wat uit de potten komt min wat naar de potten gaat.")
+                    .help("Het saldo van de aangevinkte boekingen: wat uit de potjes komt min wat naar de potjes gaat.")
                 if !selection.isEmpty {
-                    Text("uit potten \(selection.fromSavings.formatted()) · naar potten \(selection.toSavings.formatted())")
+                    Text("uit potjes \(selection.fromSavings.formatted()) · naar potjes \(selection.toSavings.formatted())")
                         .font(.body).monospacedDigit().foregroundStyle(.secondary)
                 }
             }
@@ -120,13 +120,13 @@ struct ReimbursementsScreen: View {
             if !selection.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(betweenPots
-                         ? "Er hoeft niets overgemaakt te worden. Met de knop werkt de app je potten meteen bij."
-                         : "Maak het bedrag eerst over in je bank-app. Daarna zet je het hier op overgeboekt; de app werkt je potten en beide rekeningen meteen bij en herkent de overboeking bij je volgende import.")
+                         ? "Er hoeft niets overgemaakt te worden. Met de knop werkt de app je potjes meteen bij."
+                         : "Maak het bedrag eerst over in je bank-app. Daarna zet je het hier op overgeboekt; de app werkt je potjes en beide rekeningen meteen bij en herkent de overboeking bij je volgende import.")
                         .font(.callout).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 14) {
                         Button { settle(selection) } label: {
-                            Text(betweenPots ? "Boek over tussen potten" : "Ik heb dit overgemaakt").padding(.horizontal, 6)
+                            Text(betweenPots ? "Boek over tussen potjes" : "Ik heb dit overgemaakt").padding(.horizontal, 6)
                         }
                         .buttonStyle(.borderedProminent).controlSize(.extraLarge)
                         .keyboardShortcut(.return, modifiers: .command)
@@ -141,8 +141,8 @@ struct ReimbursementsScreen: View {
                     }
                     if selection.withoutPot > 0 {
                         Label(selection.withoutPot == 1
-                              ? "Bij 1 boeking is nog geen pot gekozen. Kies de pot hieronder, of vink de boeking uit."
-                              : "Bij \(selection.withoutPot) boekingen is nog geen pot gekozen. Kies de pot hieronder, of vink ze uit.",
+                              ? "Bij 1 boeking is nog geen potje gekozen. Kies het potje hieronder, of vink de boeking uit."
+                              : "Bij \(selection.withoutPot) boekingen is nog geen potje gekozen. Kies het potje hieronder, of vink ze uit.",
                               systemImage: "exclamationmark.triangle.fill")
                             .font(.callout).foregroundStyle(Theme.warning)
                     }
@@ -155,7 +155,7 @@ struct ReimbursementsScreen: View {
         if selection.isEmpty { return "Niets aangevinkt om over te boeken" }
         if selection.net > .zero { return "Maak over van spaar naar betaal" }
         if selection.net < .zero { return "Maak over van betaal naar spaar" }
-        return "Niets over te maken; wel te verschuiven tussen potten"
+        return "Niets over te maken; wel te verschuiven tussen potjes"
     }
 
     // MARK: De boekingen
@@ -165,11 +165,11 @@ struct ReimbursementsScreen: View {
         let into = group.entries.filter { $0.amount > .zero }
         VStack(alignment: .leading, spacing: 22) {
             if !out.isEmpty {
-                list("Komt uit een pot", help: "Uitgaven die je van de betaalrekening deed, maar die een pot betaalt.",
+                list("Komt uit een potje", help: "Uitgaven die je van de betaalrekening deed, maar die een potje betaalt.",
                      entries: out, data: data)
             }
             if !into.isEmpty {
-                list("Gaat naar een pot", help: "Bijschrijvingen op de betaalrekening die je doorstort naar een pot.",
+                list("Gaat naar een potje", help: "Bijschrijvingen op de betaalrekening die je doorstort naar een potje.",
                      entries: into, data: data)
             }
         }
@@ -196,8 +196,8 @@ struct ReimbursementsScreen: View {
 
     private func perPot(_ selection: ReimbSelection) -> some View {
         ReimbPanel {
-            disclosureHeader("Per pot", count: selection.perPot.count, open: showPerPot,
-                             help: "Wat elke pot uit gaat of in komt, en het saldo van de pot erna.") {
+            disclosureHeader("Per potje", count: selection.perPot.count, open: showPerPot,
+                             help: "Wat elk potje uit gaat of in komt, en het saldo van het potje erna.") {
                 showPerPot.toggle()
             }
             if showPerPot {
@@ -245,7 +245,7 @@ struct ReimbursementsScreen: View {
                     .help("Verwijdert deze overboeking; de boekingen staan dan weer open.")
                 Button("Zet op overgeboekt") { markDone(transfer) }
                     .buttonStyle(.borderedProminent)
-                    .help("Boekt deze overboeking op de gekozen datum en werkt de potten bij.")
+                    .help("Boekt deze overboeking op de gekozen datum en werkt de potjes bij.")
             }
             .padding(18)
         }
@@ -308,7 +308,7 @@ struct ReimbursementsScreen: View {
         guard !selection.isEmpty else { return }
         let day = Day(date: date)
         let ids = selection.entries.map(\.id)
-        model.perform("Overgeboekt. De potten zijn bijgewerkt.") {
+        model.perform("Overgeboekt. De potjes zijn bijgewerkt.") {
             try model.db.write { db in
                 let transfer = try SavingsTransferService.createSavingsTransfer(db, entryIds: ids, day: day)
                 guard let id = transfer.id else { return }
@@ -319,7 +319,7 @@ struct ReimbursementsScreen: View {
 
     private func markDone(_ transfer: SavingsTransferDetail) {
         let day = Day(date: date)
-        model.perform("Overgeboekt. De potten zijn bijgewerkt.") {
+        model.perform("Overgeboekt. De potjes zijn bijgewerkt.") {
             try model.db.write { db in _ = try SavingsTransferService.markDone(db, savingsTransferId: transfer.id, on: day) }
         }
     }

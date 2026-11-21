@@ -97,11 +97,11 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
         case let .resItemNoEntries(item):
             return "Op de reserveringsregel \(item) kan niet geboekt worden. Boek op de regel RESERVERINGEN."
         case .budgetItemOnSavings:
-            return "Een boeking op een spaarrekening kan geen vaste post hebben, alleen een pot."
+            return "Een boeking op een spaarrekening kan geen vaste post hebben, alleen een potje."
         case .potRequiresReimburse:
-            return "Op een betaalrekening kan een pot alleen gekozen worden bij ‘Nog overboeken met spaar’."
+            return "Op een betaalrekening kan een potje alleen gekozen worden bij ‘Nog overboeken met spaar’."
         case let .potWrongAccount(pot):
-            return "De pot \(pot) hoort niet bij deze spaarrekening."
+            return "Het potje \(pot) hoort niet bij deze spaarrekening."
         case .reimburseOnSavings:
             return "‘Nog overboeken met spaar’ kan alleen bij een boeking op een betaalrekening."
         case .reimburseNotExpense:
@@ -129,9 +129,9 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
         case .notLinked:
             return "Deze transactie is niet gekoppeld als overboeking."
         case let .potNotEmpty(pot, balance):
-            return "De pot \(pot) heeft nog een saldo van \(balance.formatted()). Archiveren kan pas bij € 0,00."
+            return "Het potje \(pot) heeft nog een saldo van \(balance.formatted()). Archiveren kan pas bij € 0,00."
         case let .potHasEntries(pot):
-            return "De pot \(pot) heeft boekingen en kan niet verwijderd worden. Archiveer de pot."
+            return "Het potje \(pot) heeft boekingen en kan niet verwijderd worden. Archiveer het potje."
         case let .notReimbursable(entry):
             return "De boeking '\(entry)' staat niet (meer) open bij Nog overboeken."
         case let .signMismatch(direction):
@@ -143,7 +143,7 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
         case let .reserveTotalExists(year):
             return "Het jaar \(year) heeft al een regel RESERVERINGEN. Er kan er maar één zijn."
         case let .itemHasEntries(item, count):
-            return "De post \(item) heeft \(count) boeking(en). Verwijderen kan alleen als die 'divers' worden."
+            return "De post \(item) heeft \(count) boeking(en). Verwijderen kan alleen als die 'overig' worden."
         case let .duplicateIban(iban):
             return "Er bestaat al een rekening met IBAN \(iban)."
         case let .duplicateName(name):
@@ -174,7 +174,7 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
         case let .itemMissingInYear(item, year):
             return "De post \(item) bestaat niet in \(year). Maak de post in dat jaar aan of kies een andere maand."
         case let .accountInUse(account):
-            return "De rekening \(account) heeft boekingen, transacties of potten en kan niet verwijderd worden. "
+            return "De rekening \(account) heeft boekingen, transacties of potjes en kan niet verwijderd worden. "
                 + "Archiveer de rekening."
         }
     }
@@ -200,7 +200,7 @@ enum Check {
     }
 
     static func account(_ db: Database, _ id: Int64) throws -> Account { try fetch(db, Account.self, id, "Rekening") }
-    static func pot(_ db: Database, _ id: Int64) throws -> Pot { try fetch(db, Pot.self, id, "Pot") }
+    static func pot(_ db: Database, _ id: Int64) throws -> Pot { try fetch(db, Pot.self, id, "Potje") }
     static func item(_ db: Database, _ id: Int64) throws -> BudgetItem { try fetch(db, BudgetItem.self, id, "Post") }
     static func entry(_ db: Database, _ id: Int64) throws -> Entry { try fetch(db, Entry.self, id, "Boeking") }
     static func tag(_ db: Database, _ id: Int64) throws -> Tag { try fetch(db, Tag.self, id, "Tag") }

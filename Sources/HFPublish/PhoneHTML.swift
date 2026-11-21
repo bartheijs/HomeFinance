@@ -114,10 +114,10 @@ extension PhoneDashboard {
         let main = budget.spendableEndOfMonth, now = budget.spendable
         let monthName = Day.monthNames[snapshot.today.month - 1]
         var lines = ["<section class=\"hero\">",
-                     "<div class=\"label\">Nog te besteden deze maand</div>",
+                     "<div class=\"label\">Nog over deze maand</div>",
                      "<div class=\"big\(main.isNegative ? " neg" : "")\">\(bigAmount(main))</div>",
                      "<div class=\"sub\">Als alle vaste lasten en inkomsten van \(monthName) binnen zijn.</div>",
-                     "<div class=\"now\">Besteedbaar nu <strong\(now.isNegative ? " class=\"neg\"" : "")>\(amount(now))</strong></div>"]
+                     "<div class=\"now\">Vrij te besteden <strong\(now.isNegative ? " class=\"neg\"" : "")>\(amount(now))</strong></div>"]
         if !notes.isEmpty {
             lines.append("<div class=\"notes\">\n\(notes.joined(separator: "\n"))\n</div>")
         }
@@ -164,7 +164,7 @@ extension PhoneDashboard {
         }
         lines.append("</div>")
         lines.append("</details>")
-        lines.append("<div class=\"sub fine\">Verwacht met de vaste stortingen en de verwachte bedragen van deze pot.</div>")
+        lines.append("<div class=\"sub fine\">Verwacht met de vaste overboekingen en de verwachte bedragen van dit potje.</div>")
         lines.append("</section>")
         return lines.joined(separator: "\n")
     }
@@ -269,7 +269,7 @@ extension PhoneDashboard {
         }
         var lines = ["<section class=\"card\">", "<h2>Vaste posten in \(Day.monthNames[month - 1])</h2>",
                      "<div class=\"stats\">",
-                     stat(fixed.paidCount, "betaald"), stat(fixed.openCount, "open"),
+                     stat(fixed.paidCount, "betaald"), stat(fixed.openCount, "nog verwacht"),
                      stat(fixed.lateCount, "te laat", red: fixed.lateCount > 0),
                      "</div>"]
         if !fixed.late.isEmpty {
@@ -298,7 +298,7 @@ extension PhoneDashboard {
         let line = points.indices.map { "\(f(x($0))),\(f(y(values[$0])))" }.joined(separator: " ")
         let zero = y(0)
         let area = "\(f(x(0))),\(f(zero)) \(line) \(f(x(points.count - 1))),\(f(zero))"
-        var svg = ["<svg class=\"trend\" viewBox=\"0 0 \(Int(width)) 122\" width=\"100%\" role=\"img\" aria-label=\"Verloop van besteedbaar per maand\">",
+        var svg = ["<svg class=\"trend\" viewBox=\"0 0 \(Int(width)) 122\" width=\"100%\" role=\"img\" aria-label=\"Verloop van vrij te besteden per maand\">",
                    "<polygon class=\"area\" points=\"\(area)\"/>",
                    "<line class=\"zero\" x1=\"\(f(left))\" y1=\"\(f(zero))\" x2=\"\(f(right))\" y2=\"\(f(zero))\"/>",
                    "<polyline class=\"line\" points=\"\(line)\"/>",
@@ -316,7 +316,7 @@ extension PhoneDashboard {
         }
         return """
         <section class="card">
-        <h2>Besteedbaar per maand</h2>
+        <h2>Vrij te besteden per maand</h2>
         \(svg.joined(separator: "\n"))
         <div class="sub cap">\(caption("Laagst", lowest))<br>\(caption("Hoogst", highest))</div>
         </section>
@@ -362,7 +362,7 @@ extension PhoneDashboard {
     static func yearMissingCard(_ snapshot: PhoneSnapshot) -> String {
         """
         <section class="hero">
-        <div class="label">Nog te besteden deze maand</div>
+        <div class="label">Nog over deze maand</div>
         <div class="missing">Er is nog geen begroting voor \(snapshot.today.year).</div>
         <div class="sub">Maak het jaar aan in HomeFinance op je Mac, bij Posten. Daarna staan hier weer je cijfers.</div>
         </section>

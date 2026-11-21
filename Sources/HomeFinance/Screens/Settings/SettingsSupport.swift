@@ -21,7 +21,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .rekeningen: "Je betaal- en spaarrekeningen, en de controle met het banksaldo."
-        case .regels: "Een regel ontstaat als je in Nakijken ‘Onthoud als regel’ aanvinkt, of als je hem hier maakt."
+        case .regels: "Een regel ontstaat als je in Nakijken ‘Voortaan zo indelen’ aanvinkt, of als je hem hier maakt."
         case .tags: "Kenmerken om uitgaven te volgen, zoals tanken of uit eten."
         case .backup: "Reservekopieën van je administratie."
         case .telefoon: "Je belangrijkste cijfers als pagina op je telefoon."

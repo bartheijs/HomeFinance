@@ -81,7 +81,14 @@ private struct TransactionsSingleDetail: View {
                                 tagsRow
                                 if canSettle { settleRow }
                             }
-                            if store.kind == .betaal { periodRow }
+                            if store.kind == .betaal {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    periodRow
+                                    Text(TransactionsFormat.periodExplanation)
+                                        .font(.caption).foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
                             more
                         }
                         .disabled(locked)
@@ -139,13 +146,13 @@ private struct TransactionsSingleDetail: View {
         HStack(spacing: 8) {
             if let p = pending {
                 action("checkmark", "Boek volgens voorstel (⌘⏎)", disabled: !p.hasSuggestion) { store.bookSuggested(model, [p]) }
-                actionMenu(store.kind == .betaal ? "tablecells" : "tray.full", store.kind == .betaal ? "Toewijzen aan post…" : "Toewijzen aan pot…") {
+                actionMenu(store.kind == .betaal ? "tablecells" : "tray.full", store.kind == .betaal ? "Indelen bij post…" : "Indelen bij potje…") {
                     TransactionsAssignMenuItems(store: store, ids: ids)
                 }
                 action("square.split.2x1", "Splitsen…") { store.startSplit(model, item) }
                 action("forward.end", "Sla over: niet boeken, bv. omdat je hem al met de hand hebt ingevoerd") { store.skip(model, ids: ids) }
             } else if let row {
-                actionMenu(store.kind == .betaal ? "tablecells" : "tray.full", store.kind == .betaal ? "Toewijzen aan post…" : "Toewijzen aan pot…") {
+                actionMenu(store.kind == .betaal ? "tablecells" : "tray.full", store.kind == .betaal ? "Indelen bij post…" : "Indelen bij potje…") {
                     TransactionsAssignMenuItems(store: store, ids: ids)
                 }
                 if store.tagsAllowed || !row.tags.isEmpty {
@@ -206,11 +213,11 @@ private struct TransactionsSingleDetail: View {
             switch store.kind {
             case .betaal:
                 TransactionsItemPicker(items: store.lookups.items(year: item.day.year), selection: itemBinding)
-                    .help("De vaste post uit je begroting van \(String(item.day.year)). Divers = hoort bij geen vaste post.")
+                    .help("De vaste post uit je begroting van \(String(item.day.year)). Overig = hoort bij geen vaste post.")
             case .spaar:
                 TransactionsPotPicker(pots: store.lookups.pots(accountId: store.accountId, keeping: row?.potId),
                                       noneTitle: "Niet toegewezen", selection: potBinding)
-                    .help("De pot op deze spaarrekening waar het bedrag bij komt of af gaat.")
+                    .help("Het potje op deze spaarrekening waar het bedrag bij komt of af gaat.")
             }
             if let p = pending {
                 Text(p.suggestion.confidence == .geen ? "Geen regel herkent deze transactie. Wat je kiest geldt alleen voor deze boeking."
@@ -282,7 +289,7 @@ private struct TransactionsSingleDetail: View {
                 .help(TransactionsFormat.settleHelp + " (V)")
             if reimburseBinding.wrappedValue {
                 HStack(spacing: 8) {
-                    Text(item.amount.isNegative ? "Komt uit pot" : "Gaat naar pot").font(.callout).foregroundStyle(.secondary)
+                    Text(item.amount.isNegative ? "Komt uit potje" : "Gaat naar potje").font(.callout).foregroundStyle(.secondary)
                     TransactionsPotPicker(pots: store.lookups.pots(accountId: nil, keeping: reimbursePotBinding.wrappedValue),
                                           noneTitle: "Nog niet gekozen", selection: reimbursePotBinding)
                         .disabled(inTransfer)
@@ -302,7 +309,7 @@ private struct TransactionsSingleDetail: View {
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
             if let pot = row?.potName {
-                Text("Pot \(pot)").font(.callout).foregroundStyle(.secondary)
+                Text("Potje \(pot)").font(.callout).foregroundStyle(.secondary)
             }
             Button("Naar Nog overboeken") { model.selection = .reimbursements }
         }
@@ -347,8 +354,8 @@ private struct TransactionsSingleDetail: View {
         let current = periodBinding.wrappedValue
         let options = [-1, 0, 1].map { TransactionsFormat.period(item.day, offset: $0) }
         return HStack(spacing: 8) {
-            Text("Telt mee in").font(.callout).foregroundStyle(.secondary)
-            Picker("Telt mee in", selection: periodBinding) {
+            Text("Hoort bij maand").font(.callout).foregroundStyle(.secondary)
+            Picker("Hoort bij maand", selection: periodBinding) {
                 ForEach(options, id: \.month) { option in
                     Text(Day.monthNames[option.month - 1] + (option.year == item.day.year ? "" : " \(String(option.year))"))
                         .tag(option.key)
@@ -646,7 +653,7 @@ private struct TransactionsMultiDetail: View {
                 Menu {
                     TransactionsAssignMenuItems(store: store, ids: ids)
                 } label: {
-                    Label(store.kind == .betaal ? "Toewijzen aan post" : "Toewijzen aan pot", systemImage: store.kind == .betaal ? "tablecells" : "tray.full")
+                    Label(store.kind == .betaal ? "Indelen bij post" : "Indelen bij potje", systemImage: store.kind == .betaal ? "tablecells" : "tray.full")
                 }
                 if !rows.isEmpty, store.tagsAllowed || !store.tagsPresent(in: ids).isEmpty {
                     Menu {
@@ -659,7 +666,7 @@ private struct TransactionsMultiDetail: View {
                         Button { store.toggleReimburse(model, ids: ids) } label: {
                             Label("Nog overboeken met spaar aan/uit", systemImage: "arrow.triangle.swap").frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .help("Zet ‘Nog overboeken met spaar’ aan voor alle gekozen boekingen; staat het overal al aan, dan gaat het uit (V). De pot kies je per boeking of via rechtsklik.")
+                        .help("Zet ‘Nog overboeken met spaar’ aan voor alle gekozen boekingen; staat het overal al aan, dan gaat het uit (V). Het potje kies je per boeking of via rechtsklik.")
                     }
                     if rows.contains(where: { $0.accountKind == .betaal }) {
                         Button { store.toggleTemporaryLoan(model, ids: ids) } label: {

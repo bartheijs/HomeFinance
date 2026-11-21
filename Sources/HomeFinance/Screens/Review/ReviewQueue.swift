@@ -15,7 +15,7 @@ struct ReviewQueueView: View {
                     section("Na te kijken", store.toCheckRows,
                             help: "Geen regel gevonden, of de regel is niet zeker van de post of het bedrag. Kijk deze zelf na.")
                     section("Zeker", store.rows.filter { $0.group == .certain },
-                            help: "Tegenpartij en bedrag kloppen met een regel of een vaste storting. Deze kun je in één keer boeken.")
+                            help: "Tegenpartij en bedrag kloppen met een regel of een vaste overboeking. Deze kun je in één keer boeken.")
                 }
                 .padding(8)
             }
@@ -109,16 +109,16 @@ struct ReviewQueueRow: View {
                 .help("Een overboeking met spaar die je bij Nog overboeken hebt vastgelegd. Deze boek je niet opnieuw; je koppelt hem eraan.")
         } else if let match = row.match, match.looksSeparate, !row.usesDistribution, !store.isEdited(row),
                   draft.target == .none {
-            label("Losse overboeking? Kies pot", attention: true)
-                .help("Het bedrag is heel anders dan de vaste storting. Kies één pot, of kies toch de vaste storting.")
+            label("Losse overboeking? Kies potje", attention: true)
+                .help("Het bedrag is heel anders dan de vaste overboeking. Kies één potje, of kies toch de vaste overboeking.")
         } else if let match = row.match, row.usesDistribution, !store.isEdited(row) {
             if let distribution = match.distribution {
                 label(match.exactAmount ? distribution.name : "\(distribution.name) · ander bedrag", attention: !match.exactAmount)
-                    .help(match.exactAmount ? "Herkend als vaste storting."
-                                            : "Herkend als vaste storting, maar het bedrag wijkt \(match.difference.formatted(alwaysSign: true)) af.")
+                    .help(match.exactAmount ? "Herkend als vaste overboeking."
+                                            : "Herkend als vaste overboeking, maar het bedrag wijkt \(match.difference.formatted(alwaysSign: true)) af.")
             } else {
-                label("Kies vaste storting", attention: true)
-                    .help("Er passen meer vaste stortingen bij deze overboeking.")
+                label("Kies vaste overboeking", attention: true)
+                    .help("Er passen meer vaste overboekingen bij deze overboeking.")
             }
         } else if draft.isSplit {
             label("Gesplitst in \(draft.lines.count)")

@@ -206,7 +206,7 @@ struct TransactionsScreen: View {
         let direction: String = switch open.direction {
         case .fromSavings: "\(open.transferAmount.formatted()) van spaar naar betaal"
         case .toSavings: "\(open.transferAmount.formatted()) van betaal naar spaar"
-        case .none: "tussen potten"
+        case .none: "tussen potjes"
         }
         return HStack(spacing: 10) {
             Image(systemName: "arrow.triangle.swap").foregroundStyle(.secondary)

@@ -639,8 +639,8 @@ final class TransactionsStore {
 
     private func targetName(_ draft: TransactionsDraft) -> String {
         switch kind {
-        case .betaal: lookups.item(draft.itemId)?.label ?? "Divers"
-        case .spaar: lookups.pot(draft.potId)?.name ?? "geen pot"
+        case .betaal: lookups.item(draft.itemId)?.label ?? "Overig"
+        case .spaar: lookups.pot(draft.potId)?.name ?? "geen potje"
         }
     }
 
@@ -726,7 +726,7 @@ final class TransactionsStore {
         let isSingle = total == 1
         if isSingle, let p = news.first, selection.contains(.bank(p.id)) { reselectBankId = p.id }
         remember(itemLabel: itemLabel)
-        let name = itemLabel ?? "Divers"
+        let name = itemLabel ?? "Overig"
         run(model, {
             if missing > 0 {
                 return "\(TransactionsFormat.number(total - missing)) op ‘\(name)’ gezet; \(missing) niet (de post bestaat niet in dat jaar)"
@@ -763,8 +763,8 @@ final class TransactionsStore {
         let name = lookups.pot(potId)?.name
         let count = rows.count + news.count
         run(model, {
-            guard let name else { return "Niet meer aan een pot toegewezen" }
-            return count == 1 ? "Toegewezen aan pot ‘\(name)’" : "\(TransactionsFormat.number(count)) toegewezen aan pot ‘\(name)’"
+            guard let name else { return "Niet meer aan een potje toegewezen" }
+            return count == 1 ? "Toegewezen aan potje ‘\(name)’" : "\(TransactionsFormat.number(count)) toegewezen aan potje ‘\(name)’"
         }) { db in
             for row in rows {
                 var e = try EntryService.draft(db, entryId: row.id)
@@ -865,7 +865,7 @@ final class TransactionsStore {
             return
         }
         let on = !rows.allSatisfy(\.reimburse)
-        run(model, { on ? "Nog overboeken met spaar aangezet. Kies nog de pot." : "Nog overboeken met spaar uitgezet" }) { db in
+        run(model, { on ? "Nog overboeken met spaar aangezet. Kies nog het potje." : "Nog overboeken met spaar uitgezet" }) { db in
             for row in rows { try EntryService.setReimburse(db, entryId: row.id, on, potId: on ? row.potId : nil) }
         }
     }
@@ -877,10 +877,10 @@ final class TransactionsStore {
         let name = lookups.pot(potId)?.name
         let allOut = rows.allSatisfy { $0.amount.isNegative }, allIn = rows.allSatisfy { !$0.amount.isNegative }
         run(model, {
-            guard let name else { return "Nog overboeken met spaar aangezet; pot nog niet gekozen" }
-            if allOut { return "Komt uit pot ‘\(name)’" }
-            if allIn { return "Gaat naar pot ‘\(name)’" }
-            return "Nog overboeken met pot ‘\(name)’"
+            guard let name else { return "Nog overboeken met spaar aangezet; potje nog niet gekozen" }
+            if allOut { return "Komt uit potje ‘\(name)’" }
+            if allIn { return "Gaat naar potje ‘\(name)’" }
+            return "Nog overboeken met potje ‘\(name)’"
         }) { db in
             for row in rows { try EntryService.setReimburse(db, entryId: row.id, true, potId: potId) }
         }
@@ -1166,9 +1166,11 @@ enum TransactionsFormat {
     private static let dutch = Locale(identifier: "nl_NL")
     private static let weekdays = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"]
 
-    static let loanHelp = "Geld dat je even van spaar haalt en later terugboekt. Het telt niet mee als besteedbaar zolang het uitstaat. Markeer ook de terugboeking."
+    static let loanHelp = "Geld dat je even van spaar haalt en later terugboekt. Het telt niet mee in vrij te besteden zolang het uitstaat. Markeer ook de terugboeking."
 
-    static let settleHelp = "Bij een uitgave komt het bedrag uit de pot op de spaarrekening, bij een bijschrijving gaat het naar de pot. Het saldo maak je later in één keer over bij Nog overboeken."
+    static let settleHelp = "Bij een uitgave komt het bedrag uit het potje op de spaarrekening, bij een bijschrijving gaat het naar het potje. Het saldo maak je later in één keer over bij Nog overboeken."
+    /// Uitleg van één zin bij "Hoort bij maand" (UX-stap C3), grijs onder de keuze.
+    static let periodExplanation = "Deze boeking telt mee in een andere maand dan de datum, bijvoorbeeld loon dat op de 25e binnenkomt voor de maand erna."
     static let periodHelp = "Voor iets dat eind van de maand is betaald maar bij de volgende maand hoort. Het saldo van je rekening verandert er niet door."
 
     /// "yyyy-MM" voor de maand vóór (−1), van (0) of na (+1) de datum; nil voor de maand van de datum zelf.

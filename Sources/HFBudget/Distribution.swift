@@ -30,7 +30,7 @@ public enum DistributionService {
     public static func create(_ db: Database, name: String, accountId: Int64,
                               sourceAccountId: Int64? = nil) throws -> Distribution {
         try atomic(db) {
-            var distribution = Distribution(name: try Check.nonEmpty(name, "De naam van de storting"),
+            var distribution = Distribution(name: try Check.nonEmpty(name, "De naam van de overboeking"),
                                             accountId: accountId, sourceAccountId: sourceAccountId)
             try savingsAccount(db, accountId)
             try validateSource(db, sourceAccountId, target: accountId)
@@ -45,7 +45,7 @@ public enum DistributionService {
     public static func rename(_ db: Database, distributionId: Int64, name: String) throws -> Distribution {
         try atomic(db) {
             var distribution = try fetch(db, distributionId)
-            distribution.name = try Check.nonEmpty(name, "De naam van de storting")
+            distribution.name = try Check.nonEmpty(name, "De naam van de overboeking")
             try distribution.update(db)
             return distribution
         }
@@ -117,10 +117,10 @@ public enum DistributionService {
                 let pot = try Check.pot(db, line.potId)
                 guard pot.accountId == distribution.accountId else { throw BudgetError.potWrongAccount(pot: pot.name) }
                 guard line.amount > .zero else {
-                    throw BudgetError.validation("Het bedrag voor de pot \(pot.name) moet groter dan nul zijn.")
+                    throw BudgetError.validation("Het bedrag voor het potje \(pot.name) moet groter dan nul zijn.")
                 }
                 guard seen.insert(line.potId).inserted else {
-                    throw BudgetError.validation("De pot \(pot.name) staat meer dan één keer in de verdeling.")
+                    throw BudgetError.validation("Het potje \(pot.name) staat meer dan één keer in de verdeling.")
                 }
             }
             try db.execute(sql: "DELETE FROM distributionLine WHERE distributionId = ?", arguments: [distributionId])
@@ -176,7 +176,7 @@ public enum DistributionService {
             let item = try Check.item(db, budgetItemId)
             try Check.yearOpen(db, yearId: item.yearId)
             guard item.direction == .UIT else {
-                throw BudgetError.validation("Alleen een UIT-post kan aan een vaste storting gekoppeld worden; "
+                throw BudgetError.validation("Alleen een UIT-post kan aan een vaste overboeking gekoppeld worden; "
                     + "\(item.label) is \(item.direction.rawValue).")
             }
             try db.execute(sql: "UPDATE budgetItem SET distributionId = ? WHERE id = ?",
@@ -249,7 +249,7 @@ public enum DistributionService {
                 ORDER BY sortOrder, id
                 """, arguments: [accountId, PotKind.reservering])
             guard !pots.isEmpty else {
-                throw BudgetError.validation("Deze rekening heeft geen reserveringspotten met een maandbedrag.")
+                throw BudgetError.validation("Deze rekening heeft geen reserveringspotjes met een maandbedrag.")
             }
             let distribution = try create(db, name: name, accountId: accountId)
             try setLines(db, distributionId: distribution.id!, pots.map { (potId: $0.id!, amount: $0.monthlyAmount) })
@@ -268,19 +268,19 @@ public enum DistributionService {
         guard let sourceAccountId else { return }
         let source = try Check.account(db, sourceAccountId)
         guard sourceAccountId != target, source.kind == .betaal else {
-            throw BudgetError.validation("De herkomst van een vaste storting moet een betaalrekening zijn, "
-                + "en een andere dan de spaarrekening waar de storting op binnenkomt.")
+            throw BudgetError.validation("De herkomst van een vaste overboeking moet een betaalrekening zijn, "
+                + "en een andere dan de spaarrekening waar de overboeking op binnenkomt.")
         }
     }
 
     static func fetch(_ db: Database, _ id: Int64) throws -> Distribution {
-        try Check.fetch(db, Distribution.self, id, "Vaste storting")
+        try Check.fetch(db, Distribution.self, id, "Vaste overboeking")
     }
 
     private static func savingsAccount(_ db: Database, _ accountId: Int64) throws {
         let account = try Check.account(db, accountId)
         guard account.kind == .spaar else {
-            throw BudgetError.validation("Een vaste storting hoort bij een spaarrekening; \(account.name) is een betaalrekening.")
+            throw BudgetError.validation("Een vaste overboeking hoort bij een spaarrekening; \(account.name) is een betaalrekening.")
         }
     }
 

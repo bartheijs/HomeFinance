@@ -171,7 +171,7 @@ struct GridCellPopover: View {
     private var emptyText: String {
         switch target.kind {
         case .item: "Nog geen boekingen in deze maand."
-        case .divers(let positive): positive ? "Geen diverse inkomsten in deze maand." : "Geen diverse uitgaven in deze maand."
+        case .divers(let positive): positive ? "Geen overige inkomsten in deze maand." : "Geen overige uitgaven in deze maand."
         }
     }
 
@@ -197,7 +197,7 @@ struct GridCellPopover: View {
                 .disabled(isCurrent)
             }
         } label: {
-            Text("Telt mee in: \(Day.monthNames[entry.budgetMonth - 1])").font(.caption)
+            Text("Hoort bij maand: \(Day.monthNames[entry.budgetMonth - 1])").font(.caption)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -328,7 +328,7 @@ struct GridEntryForm: View {
                                 .labelsHidden().fixedSize()
                                 .environment(\.locale, Locale(identifier: "nl_NL"))
                             if otherMonth {
-                                Text("De datum valt in \(Day.monthNames[chosenDay.month - 1]); de boeking telt mee in \(Day.monthNames[month - 1]).")
+                                Text("De datum valt in \(Day.monthNames[chosenDay.month - 1]); de boeking hoort bij \(Day.monthNames[month - 1]).")
                                     .font(.caption).foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }

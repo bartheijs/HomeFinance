@@ -220,7 +220,7 @@ struct GridBodyLayer: View, Equatable {
     private func yearHelp(_ row: GridItemRow) -> String {
         if row.kind == .reserveLine {
             if row.id < 0 {
-                return "\(row.label): \(row.plan.magnitude.formatted()) per maand via de vaste storting. Telt niet mee in de totalen."
+                return "\(row.label): \(row.plan.magnitude.formatted()) per maand via de vaste overboeking. Telt niet mee in de totalen."
             }
             return "\(row.label) is een onderdeel van RESERVERINGEN. Telt niet mee in de totalen."
         }
@@ -282,7 +282,7 @@ struct GridLabelLayer: View, Equatable {
             .frame(width: layout.labelWidth, height: layout.rowHeight, alignment: .leading)
             .background(GridPalette.reserveBand)
             .help(row.id < 0
-                  ? "\(row.label): \(row.plan.magnitude.formatted()) per maand via de vaste storting. Ter informatie; telt niet mee in de totalen. Je wijzigt de verdeling bij Vaste stortingen."
+                  ? "\(row.label): \(row.plan.magnitude.formatted()) per maand via de vaste overboeking. Ter informatie; telt niet mee in de totalen. Je wijzigt de verdeling bij Automatisch sparen."
                   : "\(row.label) is een RES-regel: een onderdeel van de maandelijkse overboeking RESERVERINGEN. Ter informatie; telt niet mee in de totalen.")
         case .reserveTotal:
             Button(action: onToggleReserve) {
@@ -419,7 +419,7 @@ struct GridFooterLayer: View, Equatable {
             GridNumberCell(content: content(line, totals, future: future, year: false), width: layout.columnWidth,
                            height: layout.rowHeight, fontSize: layout.fontSize)
                 .help(line == .ruimte
-                      ? "Ruimte · \(month): \(totals.ruimte.formatted(alwaysSign: true))\nPlan van de verwachte posten \(totals.planExpected.formatted()) + IN divers \(totals.inDivers.formatted()) + UIT divers \(totals.uitDivers.formatted())"
+                      ? "Ruimte · \(month): \(totals.ruimte.formatted(alwaysSign: true))\nPlan van de verwachte posten \(totals.planExpected.formatted()) + IN overig \(totals.inDivers.formatted()) + UIT overig \(totals.uitDivers.formatted())"
                       : "\(line.title) · \(month): \(line.value(totals).formatted())")
         }
     }

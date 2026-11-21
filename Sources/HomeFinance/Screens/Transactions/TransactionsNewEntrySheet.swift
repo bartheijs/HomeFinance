@@ -45,14 +45,14 @@ struct TransactionsNewEntrySheet: View {
                             TransactionsItemPicker(items: store.lookups.items(year: draft.day.year), selection: $draft.itemId)
                         } label: {
                             Text("Post")
-                            Text("Divers = hoort bij geen vaste post")
+                            Text("Overig = hoort bij geen vaste post")
                         }
                     case .spaar:
                         LabeledContent {
                             TransactionsPotPicker(pots: store.lookups.pots(accountId: accountId),
                                                   noneTitle: "Niet toegewezen", selection: $draft.potId)
                         } label: {
-                            Text("Pot")
+                            Text("Potje")
                             Text("Waar het bedrag bij komt of af gaat")
                         }
                     }
@@ -80,7 +80,7 @@ struct TransactionsNewEntrySheet: View {
                         }
                         .help(TransactionsFormat.settleHelp)
                         if draft.reimburse {
-                            LabeledContent(draft.isIncome ? "Gaat naar pot" : "Komt uit pot") {
+                            LabeledContent(draft.isIncome ? "Gaat naar potje" : "Komt uit potje") {
                                 TransactionsPotPicker(pots: store.lookups.pots(accountId: nil),
                                                       noneTitle: "Nog niet gekozen", selection: $draft.potId)
                             }

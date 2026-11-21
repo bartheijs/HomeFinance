@@ -119,17 +119,17 @@ struct ReportsSpendableTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             ReportsQuestion("Hoeveel kunnen we vrij uitgeven?",
-                            detail: "Besteedbaar is wat er op de betaalrekening staat, min de buffers. Stand aan het eind van elke maand.")
+                            detail: "Vrij te besteden is wat er op de betaalrekening staat, min de buffers. Stand aan het eind van elke maand.")
             HStack(spacing: 56) {
-                ReportsKeyNumber(title: "Besteedbaar nu", value: summary.spendable.formatted(),
+                ReportsKeyNumber(title: "Vrij te besteden", value: summary.spendable.formatted(),
                                  tint: summary.spendable.isNegative ? ReportsColor.over : .primary)
                 ReportsKeyNumber(title: "Op de rekening", value: summary.balance.formatted())
                 ReportsKeyNumber(title: "Buffers", value: summary.buffers.formatted())
-                    .help("Anti-rood en tijdelijk anti-rood: dit blijft op de rekening staan en telt niet mee als besteedbaar.")
+                    .help("Minimaal op je betaalrekening en tijdelijk geleend van spaar: dit blijft op de rekening staan en telt niet mee in vrij te besteden.")
             }
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 18) {
-                    ReportsLegendItem(title: "Besteedbaar", color: ReportsColor.accent)
+                    ReportsLegendItem(title: "Vrij te besteden", color: ReportsColor.accent)
                     ReportsLegendItem(title: "Op de rekening", color: ReportsColor.neutral, dashed: true)
                 }
                 chart.frame(height: 340)
@@ -141,12 +141,12 @@ struct ReportsSpendableTab: View {
     private var chart: some View {
         Chart {
             ForEach(points) { p in
-                AreaMark(x: .value("Maand", ReportsFormat.month(p.day.month)), y: .value("Besteedbaar", p.spendable.doubleValue))
+                AreaMark(x: .value("Maand", ReportsFormat.month(p.day.month)), y: .value("Vrij te besteden", p.spendable.doubleValue))
                     .foregroundStyle(LinearGradient(colors: [ReportsColor.accent.opacity(0.22), ReportsColor.accent.opacity(0.02)],
                                                     startPoint: .top, endPoint: .bottom))
                     .interpolationMethod(.monotone)
                 LineMark(x: .value("Maand", ReportsFormat.month(p.day.month)), y: .value("Bedrag", p.spendable.doubleValue),
-                         series: .value("Reeks", "Besteedbaar"))
+                         series: .value("Reeks", "Vrij te besteden"))
                     .foregroundStyle(ReportsColor.accent)
                     .lineStyle(StrokeStyle(lineWidth: 3))
                     .interpolationMethod(.monotone)
@@ -162,7 +162,7 @@ struct ReportsSpendableTab: View {
                     .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))) {
                         ReportsTooltip(title: "Stand op \(p.day.short())", lines: [
                             .init(label: "Op de rekening", color: ReportsColor.neutral, value: p.balance.formatted()),
-                            .init(label: "Besteedbaar", color: ReportsColor.accent, value: p.spendable.formatted()),
+                            .init(label: "Vrij te besteden", color: ReportsColor.accent, value: p.spendable.formatted()),
                         ])
                     }
             }
@@ -178,7 +178,7 @@ struct ReportsSpendableTab: View {
             GridRow {
                 ReportsColumnTitle("Stand op", alignment: .leading)
                 ReportsColumnTitle("Op de rekening", help: "Saldo van de betaalrekening(en)")
-                ReportsColumnTitle("Besteedbaar", help: "Op de rekening min buffers")
+                ReportsColumnTitle("Vrij te besteden", help: "Op de rekening min buffers")
             }
             Divider()
             ForEach(points) { p in

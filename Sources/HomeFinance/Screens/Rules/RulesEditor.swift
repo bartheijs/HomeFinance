@@ -184,7 +184,7 @@ struct RulesEditor: View {
     private var resultSection: some View {
         Section {
             Picker("Post", selection: $draft.targetItemLabel) {
-                Text("Divers").tag(String?.none)
+                Text("Overig").tag(String?.none)
                 Divider()
                 ForEach(postOptions, id: \.self) { label in
                     Text(label).tag(Optional(label))
@@ -194,15 +194,15 @@ struct RulesEditor: View {
                     Text("\(missing) (niet in \(String(year)))").tag(Optional(missing))
                 }
             }
-            .help("De vaste post van \(String(year)) waarop geboekt wordt. Divers = geen vaste post.")
-            Picker("Pot", selection: $draft.targetPotId) {
+            .help("De vaste post van \(String(year)) waarop geboekt wordt. Overig = geen vaste post.")
+            Picker("Potje", selection: $draft.targetPotId) {
                 Text("Geen").tag(Int64?.none)
                 Divider()
                 ForEach(data.pots.filter { !$0.archived || $0.id == draft.targetPotId }) { pot in
                     Text(pot.name).tag(pot.id)
                 }
             }
-            .help("Spaarrekening: de pot waar het bedrag bij of af gaat. Betaalrekening: de pot die de uitgave vergoedt.")
+            .help("Spaarrekening: het potje waar het bedrag bij of af gaat. Betaalrekening: het potje die de uitgave vergoedt.")
             TextField("Omschrijving", text: $draft.entryLabel.rulesText, prompt: Text("eigen tekst of tegenpartij"))
                 .focused($labelFocused)
                 .help("De leesbare tekst van de boeking. Leeg = bij een overboeking met een korte eigen tekst (zoals 'Zakgeld') die tekst, anders de opgeschoonde naam van de tegenpartij.")
@@ -217,7 +217,7 @@ struct RulesEditor: View {
             }
             Toggle(isOn: $draft.reimburse) {
                 Text("Nog overboeken met spaar")
-                Text("Uitgave: komt uit de pot. Bijschrijving: gaat naar de pot. Staat daarna bij Nog overboeken.")
+                Text("Uitgave: komt uit het potje. Bijschrijving: gaat naar het potje. Staat daarna bij Nog overboeken.")
             }
             if draft.reimburse {
                 Picker("Nog overboeken bij", selection: $draft.reimburseDirection) {
@@ -225,7 +225,7 @@ struct RulesEditor: View {
                         Text(direction.title).tag(direction)
                     }
                 }
-                .help("Alleen in deze richting stelt de regel ‘Nog overboeken met spaar’ en de pot voor. In de andere richting doet hij een voorstel zonder overboeken en zonder pot, als twijfelgeval in Nakijken.")
+                .help("Alleen in deze richting stelt de regel ‘Nog overboeken met spaar’ en het potje voor. In de andere richting doet hij een voorstel zonder overboeken en zonder potje, als twijfelgeval in Nakijken.")
             }
         } header: {
             Text("Dan")

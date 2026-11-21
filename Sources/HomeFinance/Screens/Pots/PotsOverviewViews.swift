@@ -36,14 +36,14 @@ struct PotsAccountStrip: View {
             HStack(alignment: .top, spacing: 40) {
                 figure("Op de spaarrekening", amount: account.balance, caption: "t/m \(asOf.short())",
                        help: "Het saldo van de spaarrekening: het beginsaldo plus alle boekingen tot en met vandaag.")
-                figure("In potten", amount: account.potTotal,
-                       caption: activeCount == 1 ? "1 pot" : "\(activeCount) potten",
-                       help: "De som van alle potten op deze rekening.")
+                figure("In potjes", amount: account.potTotal,
+                       caption: activeCount == 1 ? "1 potje" : "\(activeCount) potjes",
+                       help: "De som van alle potjes op deze rekening.")
                 unallocated
                 if account.negativePotCount > 0 {
-                    figure("In de min, gedekt door andere potten", amount: account.borrowedFromOtherPots,
-                           caption: account.negativePotCount == 1 ? "1 pot in de min" : "\(account.negativePotCount) potten in de min",
-                           help: "Potten die in de min staan, worden zolang gedekt door je andere potten. Het geld staat nog op de spaarrekening, maar met een ander doel.")
+                    figure("In de min, gedekt door andere potjes", amount: account.borrowedFromOtherPots,
+                           caption: account.negativePotCount == 1 ? "1 potje in de min" : "\(account.negativePotCount) potjes in de min",
+                           help: "Potjes die in de min staan, worden zolang gedekt door je andere potjes. Het geld staat nog op de spaarrekening, maar met een ander doel.")
                 }
                 Spacer(minLength: 0)
             }
@@ -54,7 +54,7 @@ struct PotsAccountStrip: View {
                       systemImage: showDistribution ? "chevron.up" : "chart.bar.xaxis")
             }
             .buttonStyle(.plain).foregroundStyle(Theme.accent)
-            .help("Laat zien hoe het spaarsaldo over de potten verdeeld is en hoe het saldo dit jaar verliep.")
+            .help("Laat zien hoe het spaarsaldo over de potjes verdeeld is en hoe het saldo dit jaar verliep.")
 
             if showDistribution {
                 VStack(alignment: .leading, spacing: 16) {
@@ -92,11 +92,11 @@ struct PotsAccountStrip: View {
                     Image(systemName: "exclamationmark.triangle.fill").font(.title3).foregroundStyle(Theme.warning)
                 }
             }
-            Text(isZero ? "elke euro heeft een pot"
-                 : (account.unallocated.isNegative ? "de potten zijn samen meer dan het saldo" : "dit geld heeft nog geen pot"))
+            Text(isZero ? "elke euro heeft een potje"
+                 : (account.unallocated.isNegative ? "de potjes zijn samen meer dan het saldo" : "dit geld heeft nog geen potje"))
                 .font(.callout).foregroundStyle(isZero ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.warning)).lineLimit(1)
         }
-        .help("Niet toegewezen = saldo van de spaarrekening − de som van de potten. Dit hoort € 0,00 te zijn: dan heeft elke euro op de spaarrekening een pot. Is het positief, wijs dan de boekingen zonder pot aan een pot toe. Is het negatief, dan zit er in de potten meer dan er op de rekening staat.")
+        .help("Niet toegewezen = saldo van de spaarrekening − de som van de potjes. Dit hoort € 0,00 te zijn: dan heeft elke euro op de spaarrekening een potje. Is het positief, wijs dan de boekingen zonder potje aan een potje toe. Is het negatief, dan zit er in de potjes meer dan er op de rekening staat.")
     }
 
     private var balanceChart: some View {
@@ -136,7 +136,7 @@ struct PotsDistributionBar: View {
 
     var body: some View {
         if slices.isEmpty {
-            Text("Er staat nog geen geld in de potten.").font(.caption).foregroundStyle(.secondary)
+            Text("Er staat nog geen geld in de potjes.").font(.caption).foregroundStyle(.secondary)
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 GeometryReader { geo in
@@ -154,7 +154,7 @@ struct PotsDistributionBar: View {
                     .clipShape(RoundedRectangle(cornerRadius: 5))
                 }
                 .frame(height: 10)
-                .accessibilityLabel("Verdeling van het spaarsaldo over de potten")
+                .accessibilityLabel("Verdeling van het spaarsaldo over de potjes")
 
                 PotsFlowLayout(spacing: 16, lineSpacing: 6) {
                     ForEach(slices) { slice in
@@ -226,7 +226,7 @@ struct PotsGroupHeader: View {
                     .rotationEffect(.degrees(expanded ? 90 : 0))
                     .frame(width: 14)
                 Text(title).font(.title3.weight(.semibold))
-                Text(pots.count == 1 ? "1 pot" : "\(pots.count) potten").font(.callout).foregroundStyle(.secondary)
+                Text(pots.count == 1 ? "1 potje" : "\(pots.count) potjes").font(.callout).foregroundStyle(.secondary)
                 Spacer(minLength: 12)
                 Text(pots.map(\.balance).sum().formatted())
                     .font(.title3.weight(.semibold)).monospacedDigit()
@@ -268,14 +268,14 @@ struct PotsRowView: View {
                     if !pot.pendingSettlement.isZero {
                         Text(PotsFormat.pending(pot.pendingSettlement))
                             .font(.callout).foregroundStyle(.secondary).lineLimit(1)
-                            .help("Er staan boekingen op de betaalrekening open die nog met deze pot rechtgezet moeten worden. Dat doe je bij Nog overboeken.")
+                            .help("Er staan boekingen op de betaalrekening open die nog met dit potje rechtgezet moeten worden. Dat doe je bij Nog overboeken.")
                     }
                     if let recovery = pot.recovery {
                         Text(PotsRecoveryText.line(recovery))
                             .font(.callout)
                             .foregroundStyle(recovery.status == .herstelt ? Color.secondary : Theme.warning)
                             .lineLimit(1)
-                            .help("Deze pot staat in de min: zolang dekken je andere potten het tekort.")
+                            .help("Dit potje staat in de min: zolang dekken je andere potjes het tekort.")
                     } else if let goal = pot.goal {
                         HStack(spacing: 10) {
                             PotsTargetBar(pot: pot, barOnly: true).frame(width: 140)
@@ -300,7 +300,7 @@ struct PotsRowView: View {
         .background(selected ? Theme.accent.opacity(0.12) : (hovering ? Color.primary.opacity(0.04) : .clear))
         .onHover { hovering = $0 }
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .help("Klik voor het verloop, de mutaties en de acties van deze pot.")
+        .help("Klik voor het verloop, de mutaties en de acties van dit potje.")
     }
 }
 
@@ -352,14 +352,14 @@ struct PotsUnallocatedCard: View {
         PotsPanel {
             HStack(spacing: 12) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
-                Text(entries.count == 1 ? "1 boeking op de spaarrekening heeft nog geen pot"
-                     : "\(entries.count) boekingen op de spaarrekening hebben nog geen pot")
+                Text(entries.count == 1 ? "1 boeking op de spaarrekening heeft nog geen potje"
+                     : "\(entries.count) boekingen op de spaarrekening hebben nog geen potje")
                     .font(.body)
                 Spacer(minLength: 12)
                 Button(expanded ? "Sluit" : "Wijs toe…") {
                     withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
                 }
-                .help("Kies per boeking de pot waar het geld bij hoort.")
+                .help("Kies per boeking het potje waar het geld bij hoort.")
             }
             .padding(.horizontal, 18).padding(.vertical, 12)
 
@@ -387,7 +387,7 @@ struct PotsUnallocatedCard: View {
             MoneyText(entry.amount, alwaysSign: true)
             if distributable.contains(entry.id) {
                 Button("Verdeel") { distribute(entry) }
-                    .help("Dit bedrag is precies de som van de maandbedragen van de reserveringspotten. Verdeel het in één keer: elke pot krijgt zijn maandbedrag.")
+                    .help("Dit bedrag is precies de som van de maandbedragen van de reserveringspotjes. Verdeel het in één keer: elk potje krijgt zijn maandbedrag.")
             }
             Menu {
                 let own = pots.filter { $0.accountId == entry.accountId && !$0.archived }
@@ -402,10 +402,10 @@ struct PotsUnallocatedCard: View {
                     }
                 }
             } label: {
-                Text("Kies pot…")
+                Text("Kies potje…")
             }
             .fixedSize()
-            .help("Wijs deze boeking toe aan een pot.")
+            .help("Wijs deze boeking toe aan een potje.")
         }
         .font(.body)
         .padding(.horizontal, 18).padding(.vertical, 9)
@@ -427,14 +427,14 @@ struct PotsCancelledLine: View {
                 HStack(spacing: 8) {
                     Image(systemName: "chevron.right").font(.caption.weight(.semibold))
                         .rotationEffect(.degrees(expanded ? 90 : 0))
-                    Text(pairs.count == 1 ? "2 boekingen heffen elkaar op en hebben geen pot nodig"
-                         : "\(pairs.count * 2) boekingen heffen elkaar op en hebben geen pot nodig")
+                    Text(pairs.count == 1 ? "2 boekingen heffen elkaar op en hebben geen potje nodig"
+                         : "\(pairs.count * 2) boekingen heffen elkaar op en hebben geen potje nodig")
                 }
                 .font(.callout).foregroundStyle(.secondary)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Twee boekingen zonder pot met precies tegengestelde bedragen strepen elkaar weg. Ze veranderen niets aan de verdeling over de potten.")
+            .help("Twee boekingen zonder potje met precies tegengestelde bedragen strepen elkaar weg. Ze veranderen niets aan de verdeling over de potjes.")
 
             if expanded {
                 VStack(spacing: 0) {
@@ -491,7 +491,7 @@ struct PotsOpeningBlock: View {
                 }
                 Spacer(minLength: 12)
                 Button("Beginbedragen nalopen", action: review)
-                    .help("Vul per pot in wat erin zat op \(opening.openingDate.short(withYear: true)), de dag waarop je met deze rekening in de app begon.")
+                    .help("Vul per potje in wat erin zat op \(opening.openingDate.short(withYear: true)), de dag waarop je met deze rekening in de app begon.")
             }
             .padding(.horizontal, 18).padding(.vertical, 12)
         }

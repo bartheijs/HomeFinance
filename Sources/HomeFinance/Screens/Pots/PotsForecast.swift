@@ -23,9 +23,9 @@ enum PotsRecoveryText {
 
     static func sentence(_ recovery: PotRecovery) -> String {
         switch recovery.status {
-        case .herstelt: return "Deze pot staat in de min en leent van je andere potten. Met wat er nu bij komt staat hij vanzelf weer op nul."
-        case .wordtNietAangevuld: return "Deze pot staat in de min en leent van je andere potten. Er komt nu niets bij: zet een vaste storting of een verwachting, of verplaats geld uit een andere pot."
-        case .duurtLangerDan10Jaar: return "Deze pot staat in de min en leent van je andere potten. Met wat er nu bij komt duurt aanvullen langer dan 10 jaar."
+        case .herstelt: return "Dit potje staat in de min en wordt zolang gedekt door je andere potjes. Met wat er nu bij komt staat het vanzelf weer op nul."
+        case .wordtNietAangevuld: return "Dit potje staat in de min en wordt zolang gedekt door je andere potjes. Er komt nu niets bij: zet een vaste overboeking of een verwachting, of verplaats geld uit een ander potje."
+        case .duurtLangerDan10Jaar: return "Dit potje staat in de min en wordt zolang gedekt door je andere potjes. Met wat er nu bij komt duurt aanvullen langer dan 10 jaar."
         }
     }
 }
@@ -43,17 +43,17 @@ struct PotsRecoveryBlock: View {
                 .foregroundStyle(recovery.status == .herstelt ? Color.secondary : Theme.warning)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 6) {
-                row("Gedekt door andere potten", recovery.shortfall.formatted())
+                row("Gedekt door andere potjes", recovery.shortfall.formatted())
                 row("Komt erbij per maand", recovery.perMonth.isZero ? "niets" : recovery.perMonth.formatted())
                 row("Weer op nul", recovery.recoveryDate.map { "rond \(PotsRecoveryText.month($0))" }
                     ?? (recovery.status == .wordtNietAangevuld ? "wordt niet aangevuld" : "niet binnen 10 jaar"))
             }
             if recovery.status != .herstelt {
-                Button("Vaste stortingen…", action: onDistributions)
+                Button("Automatisch sparen…", action: onDistributions)
                     .buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout)
             }
         }
-        .help("Potten die in de min staan, worden zolang gedekt door je andere potten. Het geld staat nog op de spaarrekening, maar met een ander doel.")
+        .help("Potjes die in de min staan, worden zolang gedekt door je andere potjes. Het geld staat nog op de spaarrekening, maar met een ander doel.")
     }
 
     private func row(_ title: String, _ value: String) -> some View {
@@ -104,7 +104,7 @@ enum PotsGoalText {
             }
             return "Met wat je nu stort haal je het doel niet op tijd."
         case .verlopen: return "De doeldatum is voorbij en het doel is nog niet gehaald."
-        case .zonderDatum: return "Zet een doeldatum bij deze pot om te zien wat je per maand nodig hebt."
+        case .zonderDatum: return "Zet een doeldatum bij dit potje om te zien wat je per maand nodig hebt."
         }
     }
 }
@@ -133,7 +133,7 @@ struct PotsGoalBlock: View {
                         help: "Wat je vanaf nu elke maand moet storten om het doel op de doeldatum te halen. Losse verwachtingen tot die datum zijn meegeteld.")
                 }
                 row("Je stort nu per maand", goal.currentPerMonth.isZero ? "niets" : goal.currentPerMonth.formatted(),
-                    help: "Volgens je vaste stortingen.")
+                    help: "Volgens je vaste overboekingen.")
                 row("Doel gehaald op", reachText,
                     help: "De eerste dag waarop je het doel haalt als je zo blijft storten.")
             }
@@ -173,9 +173,9 @@ struct PotsGoalBlock: View {
                 }
             }
             if PotsGoalText.needsAttention(goal) || goal.currentPerMonth.isZero {
-                Button("Vaste stortingen…", action: onDistributions)
+                Button("Automatisch sparen…", action: onDistributions)
                     .buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout)
-                    .help("Pas aan wat er elke maand naar deze pot gaat.")
+                    .help("Pas aan wat er elke maand naar dit potje gaat.")
             }
         }
     }
@@ -254,7 +254,7 @@ struct PotsForecastSection: View {
                 // Een pot die al in de min staat krijgt deze waarschuwing alleen als hij nog verder zakt.
                 if forecast.lowestPoint.balance.isNegative,
                    !forecast.startBalance.isNegative || forecast.lowestPoint.balance < forecast.startBalance {
-                    Label("Rond \(forecast.lowestPoint.day.short(withYear: true)) komt deze pot naar verwachting op \(forecast.lowestPoint.balance.formatted()).",
+                    Label("Rond \(forecast.lowestPoint.day.short(withYear: true)) komt dit potje naar verwachting op \(forecast.lowestPoint.balance.formatted()).",
                           systemImage: "exclamationmark.triangle")
                         .font(.callout).foregroundStyle(Theme.warning)
                         .fixedSize(horizontal: false, vertical: true)
@@ -357,8 +357,8 @@ struct PotsForecastSection: View {
         }
         .frame(height: 160)
         .padding(.top, 10)
-        .accessibilityLabel("Werkelijk en verwacht saldo van de pot \(pot.name)")
-        .help("Doorgetrokken lijn: het echte saldo. Gestippeld: wat je verwacht, met je vaste stortingen en losse verwachtingen.")
+        .accessibilityLabel("Werkelijk en verwacht saldo van het potje \(pot.name)")
+        .help("Doorgetrokken lijn: het echte saldo. Gestippeld: wat je verwacht, met je vaste overboekingen en losse verwachtingen.")
     }
 
     // MARK: Stand op een dag
@@ -417,9 +417,9 @@ struct PotsForecastSection: View {
                 .buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout)
                 .padding(.top, 2)
             }
-            group("Elke maand uit je vaste stortingen", note: nil, attention: false) {
+            group("Elke maand uit je vaste overboekingen", note: nil, attention: false) {
                 if recurring.isEmpty {
-                    Text("Er gaat nog geen vaste storting naar deze pot.").font(.callout).foregroundStyle(.secondary)
+                    Text("Er gaat nog geen vaste overboeking naar dit potje.").font(.callout).foregroundStyle(.secondary)
                 }
                 ForEach(recurring) { line in
                     HStack {
@@ -428,9 +428,9 @@ struct PotsForecastSection: View {
                         Text("\(line.amount.formatted(alwaysSign: true)) per maand").monospacedDigit()
                     }
                     .font(.callout)
-                    .help("Uit de vaste storting \(line.name) van \(line.distributionTotal.formatted()) in totaal.")
+                    .help("Uit Automatisch sparen: \(line.name) van \(line.distributionTotal.formatted()) in totaal.")
                 }
-                Button("Vaste stortingen…", action: onDistributions)
+                Button("Automatisch sparen…", action: onDistributions)
                     .buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout)
                     .padding(.top, 2)
             }
@@ -690,14 +690,14 @@ struct PotsForecastSheet: View {
             Text(existing == nil ? "Verwachting toevoegen" : "Verwachting wijzigen").font(.headline).padding(.top, 16)
             Form {
                 Section {
-                    LabeledContent("Pot", value: potName)
+                    LabeledContent("Potje", value: potName)
                     DatePicker("Datum", selection: $date, displayedComponents: .date)
                     Picker("Richting", selection: $incoming) {
                         Text("Erbij").tag(true)
                         Text("Eraf").tag(false)
                     }
                     .pickerStyle(.segmented)
-                    .help("Erbij: geld dat je in deze pot verwacht. Eraf: een uitgave die je uit deze pot verwacht.")
+                    .help("Erbij: geld dat je in dit potje verwacht. Eraf: een uitgave die je uit dit potje verwacht.")
                     MoneyField("Bedrag", value: $amount)
                     TextField("Omschrijving", text: $label, prompt: Text(incoming ? "bijv. vakantiegeld" : "bijv. nieuwe banden"))
                     HStack {
@@ -712,11 +712,11 @@ struct PotsForecastSheet: View {
                                 Image(systemName: "chevron.down.circle")
                             }
                             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                            .help("Kies een bestaand project van deze pot.")
+                            .help("Kies een bestaand project van dit potje.")
                         }
                     }
                 } footer: {
-                    Text("Een verwachting is geen boeking. Hij telt alleen mee in de vooruitblik van deze pot.")
+                    Text("Een verwachting is geen boeking. Hij telt alleen mee in de vooruitblik van dit potje.")
                         .font(.callout).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }

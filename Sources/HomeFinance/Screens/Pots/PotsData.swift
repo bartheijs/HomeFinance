@@ -111,7 +111,7 @@ struct PotsSlice: Identifiable, Equatable {
         let rest = positive.dropFirst(maxNamed)
         if !rest.isEmpty {
             let total = rest.map(\.balance).sum()
-            result.append(PotsSlice(id: "rest", name: "\(rest.count) kleinere potten", amount: total,
+            result.append(PotsSlice(id: "rest", name: "\(rest.count) kleinere potjes", amount: total,
                                     share: share(total), color: Color.secondary.opacity(0.45), potId: nil))
         }
         if unallocated > .zero {

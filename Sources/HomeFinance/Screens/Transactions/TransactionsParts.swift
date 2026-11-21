@@ -265,7 +265,7 @@ struct TransactionsItemPicker: View {
 
     var body: some View {
         Picker("Post", selection: $selection) {
-            Text("Divers (geen vaste post)").tag(Int64?.none)
+            Text("Overig (geen vaste post)").tag(Int64?.none)
             let income = items.filter { $0.direction == .IN }
             let expense = items.filter { $0.direction == .UIT }
             if !expense.isEmpty {
@@ -290,18 +290,18 @@ struct TransactionsPotPicker: View {
     @Binding var selection: Int64?
 
     var body: some View {
-        Picker("Pot", selection: $selection) {
+        Picker("Potje", selection: $selection) {
             Text(noneTitle).tag(Int64?.none)
             let reserve = pots.filter { $0.kind == .reservering }
             let saving = pots.filter { $0.kind == .spaar }
             if !reserve.isEmpty {
-                Section("Reserveringspotten") { ForEach(reserve) { Text($0.name).tag($0.id) } }
+                Section("Reserveringspotjes") { ForEach(reserve) { Text($0.name).tag($0.id) } }
             }
             if !saving.isEmpty {
-                Section("Spaarpotten") { ForEach(saving) { Text($0.name).tag($0.id) } }
+                Section("Spaarpotjes") { ForEach(saving) { Text($0.name).tag($0.id) } }
             }
             if let selection, !pots.contains(where: { $0.id == selection }) {
-                Text("Onbekende pot").tag(Optional(selection))
+                Text("Onbekend potje").tag(Optional(selection))
             }
         }
         .labelsHidden()

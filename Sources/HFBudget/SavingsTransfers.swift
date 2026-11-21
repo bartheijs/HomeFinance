@@ -118,7 +118,7 @@ public enum SavingsTransferService {
         return (bankTransaction.amount.isNegative
                 ? "Dit is een overboeking naar je eigen spaarrekening. "
                 : "Dit is een overboeking van je eigen spaarrekening. ")
-            + "Kies de pot aan de spaarkant; ‘Nog overboeken met spaar’ is voor geld dat nog moet verhuizen."
+            + "Kies het potje aan de spaarkant; ‘Nog overboeken met spaar’ is voor geld dat nog moet verhuizen."
     }
 
     /// Openstaande boekingen zonder pot, zodat het scherm kan waarschuwen.
@@ -179,7 +179,7 @@ public enum SavingsTransferService {
                 if !moves.isEmpty {
                     guard let savingsId = accounts.savings else {
                         throw BudgetError.validation("Het is niet duidelijk op welke spaarrekening deze overboeking hoort. "
-                            + "Kies bij de boekingen een pot.")
+                            + "Kies bij de boekingen een potje.")
                     }
                     for move in moves {
                         created.append(try EntryService.create(db, EntryDraft(
@@ -459,7 +459,7 @@ public enum SavingsTransferService {
                 + "Maak per betaalrekening een aparte overboeking.")
         }
         guard savings.count <= 1 else {
-            throw BudgetError.validation("De gekozen boekingen horen bij potten op verschillende spaarrekeningen. "
+            throw BudgetError.validation("De gekozen boekingen horen bij potjes op verschillende spaarrekeningen. "
                 + "Maak per spaarrekening een aparte overboeking.")
         }
         if savings.isEmpty {

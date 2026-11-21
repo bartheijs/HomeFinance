@@ -26,7 +26,7 @@ struct PotsScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScreenHeader("Potten", subtitle: subtitle) { headerControls }
+            ScreenHeader("Potjes", subtitle: subtitle) { headerControls }
             content
         }
         .task(id: ReloadKey(revision: model.revision, year: model.year, accountId: accountId, potId: selectedPotId)) {
@@ -50,13 +50,13 @@ struct PotsScreen: View {
                               today: model.today)
             }
         }
-        .confirmationDialog("Pot \(potToDelete?.name ?? "") verwijderen?",
+        .confirmationDialog("Potje \(potToDelete?.name ?? "") verwijderen?",
                             isPresented: Binding(get: { potToDelete != nil }, set: { if !$0 { potToDelete = nil } }),
                             presenting: potToDelete) { pot in
             Button("Verwijder", role: .destructive) { delete(pot) }
             Button("Annuleer", role: .cancel) {}
         } message: { _ in
-            Text("De pot heeft geen boekingen en verdwijnt helemaal. Dit kun je niet terugdraaien.")
+            Text("Het potje heeft geen boekingen en verdwijnt helemaal. Dit kun je niet terugdraaien.")
         }
     }
 
@@ -69,7 +69,7 @@ struct PotsScreen: View {
     // MARK: Kop
 
     private var subtitle: String {
-        "Elke euro op de spaarrekening hoort bij een pot. Klik op een pot voor de details."
+        "Een potje is een deel van je spaargeld met een eigen bestemming. Klik op een potje voor de details."
     }
 
     private var activeAccounts: [PotsAccountRef] { (data?.savingsAccounts ?? []).filter { !$0.archived } }
@@ -94,15 +94,15 @@ struct PotsScreen: View {
             if data.allPots.contains(where: \.archived) {
                 Toggle("Toon archief", isOn: $showArchived)
                     .toggleStyle(.checkbox)
-                    .help("Laat ook de potten zien die je gearchiveerd hebt.")
+                    .help("Laat ook de potjes zien die je gearchiveerd hebt.")
             }
             if !data.savingsAccounts.isEmpty {
                 Button("Nieuw jaarbedrag…") { sheet = .annual }
-                    .help("Voor een rekening die één keer per jaar komt: maakt in één keer het potje, de regel in de vaste storting en de post in je begroting.")
-                Button { sheet = .new } label: { Label("Nieuwe pot…", systemImage: "plus") }
+                    .help("Voor een rekening die één keer per jaar komt: maakt in één keer het potje, de regel in de vaste overboeking en de post in je begroting.")
+                Button { sheet = .new } label: { Label("Nieuw potje…", systemImage: "plus") }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut("n", modifiers: .command)
-                    .help("Maak een nieuwe reservering of spaarpot (⌘N)")
+                    .help("Maak een nieuwe reservering of spaarpotje (⌘N)")
             }
         }
     }
@@ -113,7 +113,7 @@ struct PotsScreen: View {
         if let data {
             if data.savingsAccounts.isEmpty {
                 EmptyState(title: "Nog geen spaarrekening",
-                           message: "Potten verdelen het saldo van een spaarrekening. Voeg eerst bij Instellingen een spaarrekening toe; daarna maak je hier je potten.",
+                           message: "Potjes verdelen het saldo van een spaarrekening. Voeg eerst bij Instellingen een spaarrekening toe; daarna maak je hier je potjes.",
                            icon: "building.columns", actionTitle: "Naar Instellingen") {
                     model.settingsTab = "rekeningen"
                     model.selection = .settings
@@ -129,9 +129,9 @@ struct PotsScreen: View {
                         }
                         .padding(.horizontal, 24)
                     }
-                    EmptyState(title: "Nog geen potten",
-                               message: "Maak een pot voor elk doel waar je geld voor opzij zet, bijvoorbeeld Wegenbelasting, Vakantie of een spaarpot per kind. Daarna wijs je de boekingen op de spaarrekening aan een pot toe.",
-                               icon: "square.grid.3x3.topleft.filled", actionTitle: "Nieuwe pot…") { sheet = .new }
+                    EmptyState(title: "Nog geen potjes",
+                               message: "Maak een potje voor elk doel waar je geld voor opzij zet, bijvoorbeeld Wegenbelasting, Vakantie of een spaarpotje per kind. Daarna wijs je de boekingen op de spaarrekening aan een potje toe.",
+                               icon: "square.grid.3x3.topleft.filled", actionTitle: "Nieuw potje…") { sheet = .new }
                 }
             } else {
                 GeometryReader { geo in
@@ -227,7 +227,7 @@ struct PotsScreen: View {
             if !savings.isEmpty {
                 PotsPanel {
                     PotsGroupHeader(title: "Sparen",
-                                    explanation: "Spaarpotten per gezinslid, met het doel als dat er is.",
+                                    explanation: "Spaarpotjes per gezinslid, met het doel als dat er is.",
                                     pots: savings, expanded: !savingsCollapsed) {
                         withAnimation(.easeInOut(duration: 0.2)) { savingsCollapsed.toggle() }
                     }
@@ -296,7 +296,7 @@ struct PotsScreen: View {
     // MARK: Schrijven
 
     private func assign(_ entry: EntryRow, to potId: Int64) {
-        let name = data?.pot(potId)?.name ?? "de pot"
+        let name = data?.pot(potId)?.name ?? "het potje"
         model.perform("Toegewezen aan \(name)") {
             try model.db.write { db in
                 var draft = try EntryService.draft(db, entryId: entry.id)
@@ -308,7 +308,7 @@ struct PotsScreen: View {
 
     private func distribute(_ entry: EntryRow) {
         guard let bankTransactionId = entry.bankTransactionId else { return }
-        model.perform("Verdeeld over de reserveringspotten") {
+        model.perform("Verdeeld over de reserveringspotjes") {
             try model.db.write { db in
                 guard let split = try PotService.distribution(db, for: entry.amount, accountId: entry.accountId) else { return }
                 // De gebruiker verdeelt zelf, dus de regels zijn meteen nagekeken.
@@ -319,19 +319,19 @@ struct PotsScreen: View {
     }
 
     private func archive(_ pot: PotSummary) {
-        model.perform("Pot \(pot.name) gearchiveerd") {
+        model.perform("Potje \(pot.name) gearchiveerd") {
             try model.db.write { db in try PotService.archive(db, potId: pot.id) }
         }
     }
 
     private func unarchive(_ pot: PotSummary) {
-        model.perform("Pot \(pot.name) staat weer in de lijst") {
+        model.perform("Potje \(pot.name) staat weer in de lijst") {
             try model.db.write { db in try PotService.unarchive(db, potId: pot.id) }
         }
     }
 
     private func delete(_ pot: PotSummary) {
-        model.perform("Pot \(pot.name) verwijderd") {
+        model.perform("Potje \(pot.name) verwijderd") {
             try model.db.write { db in try PotService.delete(db, potId: pot.id) }
         }
     }

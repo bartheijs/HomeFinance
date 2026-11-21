@@ -59,8 +59,8 @@ struct PotChainView: View {
         if !chain.lines.isEmpty {
             HStack(spacing: 12) {
                 ForEach(chain.lines) { line in
-                    ChainLinkButton(title: "Vaste storting \(line.distribution.name)",
-                                    help: "Open de vaste storting \(line.distribution.name) bij Vaste stortingen.") {
+                    ChainLinkButton(title: "Automatisch sparen: \(line.distribution.name)",
+                                    help: "Open Automatisch sparen: \(line.distribution.name).") {
                         model.jump(.distribution(line.distribution.id))
                     }
                 }
@@ -85,8 +85,8 @@ struct ItemChainView: View {
         if let sentence = chain.sentence, let distribution = chain.distribution {
             ChainBox {
                 Text(sentence).font(.callout).fixedSize(horizontal: false, vertical: true)
-                ChainLinkButton(title: "Open vaste storting \(distribution.name)",
-                                help: "Bekijk of wijzig de verdeling over de potjes bij Vaste stortingen.") {
+                ChainLinkButton(title: "Open Automatisch sparen: \(distribution.name)",
+                                help: "Bekijk of wijzig de verdeling over de potjes bij Automatisch sparen.") {
                     model.jump(.distribution(distribution.id))
                 }
             }

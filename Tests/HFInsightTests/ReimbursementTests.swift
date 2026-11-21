@@ -86,9 +86,9 @@ private let today = Fixture.today
         #expect(o.direction == .none)
         #expect(o.perPot.map(\.amount) == [eur(75), eur(120), eur(-195)])
         #expect(try attention() == .openReimbursements(amount: .zero, count: 3, direction: .none))
-        #expect(try attention()?.message == "3 boekingen over te boeken tussen potten.")
+        #expect(try attention()?.message == "3 boekingen over te boeken tussen potjes.")
         #expect(AttentionItem.openReimbursements(amount: .zero, count: 1, direction: .none).message
-                == "1 boeking over te boeken tussen potten.")
+                == "1 boeking over te boeken tussen potjes.")
     }
 
     @Test func samePotBothWaysAndPendingPerPot() throws {

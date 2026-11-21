@@ -142,13 +142,13 @@ extension RuleEngine {
         let subject = who.isEmpty ? "deze regel" : who.joined(separator: " ")
 
         var parts: [String] = []
-        let pot = potName ?? rule.targetPotId.map { "pot \($0)" }
+        let pot = potName ?? rule.targetPotId.map { "potje \($0)" }
         if let item = RuleMatcher.filled(rule.targetItemLabel) {
             parts.append("post \(item)")
         } else if !rule.reimburse, let pot {
-            parts.append("pot \(pot)")
+            parts.append("potje \(pot)")
         } else {
-            parts.append("post Divers")
+            parts.append("post Overig")
         }
         if rule.reimburse {
             let direction: String = switch rule.reimburseDirection {
@@ -156,7 +156,7 @@ extension RuleEngine {
             case .outgoing: " bij geld eruit"
             case .both: ""
             }
-            parts.append("nog overboeken met " + (pot.map { "pot \($0)" } ?? "spaar") + direction)
+            parts.append("nog overboeken met " + (pot.map { "potje \($0)" } ?? "spaar") + direction)
         }
         if let label = RuleMatcher.filled(rule.entryLabel) { parts.append("omschrijving '\(label)'") }
         if !tagNames.isEmpty {

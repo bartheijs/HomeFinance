@@ -134,8 +134,8 @@ private struct TransactionsFeedRow: View {
     private func entrySubtitle(_ row: EntryRow) -> String {
         var parts: [String] = []
         switch row.accountKind {
-        case .betaal: parts.append(row.itemLabel ?? "Divers")
-        case .spaar: parts.append(row.potName.map { "Pot \($0)" } ?? "Nog geen pot")
+        case .betaal: parts.append(row.itemLabel ?? "Overig")
+        case .spaar: parts.append(row.potName.map { "Potje \($0)" } ?? "Nog geen potje")
         }
         // Een verrekende boeking krijgt een vinkje bij zijn tag; een uitgave die nog openstaat bij een tag die
         // verrekend wordt heet "voorgeschoten (tag)".
@@ -152,7 +152,7 @@ private struct TransactionsFeedRow: View {
             }
         }
         parts += Insight.linkLabels(amount: row.amount, reimburse: false, potName: nil, settlingTagNames: advanced.map(\.name))
-        if let month = TransactionsFormat.month(of: row.period) { parts.append("telt in \(Day.monthNamesShort[month - 1])") }
+        if let month = TransactionsFormat.month(of: row.period) { parts.append("hoort bij \(Day.monthNamesShort[month - 1])") }
         if row.temporaryLoan { parts.append(row.amount.isNegative ? "terug naar spaar" : "tijdelijk geleend van spaar") }
         if let bank = row.bank, bank.amount != row.amount { parts.append("gesplitst") }
         if row.bankTransactionId == nil { parts.append("handinvoer") }
@@ -164,7 +164,7 @@ private struct TransactionsFeedRow: View {
     private func suggestionTarget(_ p: TransactionsPending) -> String? {
         guard p.hasSuggestion else { return nil }
         if let match = p.bookableMatch, let distribution = match.distribution {
-            if match.side == .destination { return "\(distribution.name): verdeeld over \(match.allocations.count) potten" }
+            if match.side == .destination { return "\(distribution.name): verdeeld over \(match.allocations.count) potjes" }
             return store.lookups.item(match.allocations.first?.budgetItemId)?.label ?? distribution.name
         }
         switch store.kind {
@@ -173,7 +173,7 @@ private struct TransactionsFeedRow: View {
             let settling = s.tagIds.compactMap { store.lookups.tag($0) }.filter(\.settles).map(\.name)
             let extra = Insight.linkLabels(amount: p.transaction.amount, reimburse: s.reimburse,
                                            potName: store.lookups.pot(s.potId)?.name, settlingTagNames: settling)
-            return ([s.targetItemLabel ?? "Divers"] + extra).joined(separator: " · ")
+            return ([s.targetItemLabel ?? "Overig"] + extra).joined(separator: " · ")
         case .spaar: return store.lookups.pot(p.suggestion.potId)?.name
         }
     }
@@ -206,7 +206,7 @@ private struct TransactionsFeedRow: View {
                 store.selection = [item.id]
                 store.showDetail = true
             } label: {
-                Text(match.isAmbiguous ? "Vaste storting: kies welke…" : "\(match.distribution?.name ?? "Vaste storting"): bedrag wijkt af…")
+                Text(match.isAmbiguous ? "Vaste overboeking: kies welke…" : "\(match.distribution?.name ?? "Vaste storting"): bedrag wijkt af…")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(Theme.warning)
                     .padding(.horizontal, 9).padding(.vertical, 3)
@@ -214,7 +214,7 @@ private struct TransactionsFeedRow: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .help("Deze transactie past bij een vaste storting, maar niet precies. Klik om de verdeling te zien en te kiezen waar het verschil heen gaat.")
+            .help("Deze transactie past bij een vaste overboeking, maar niet precies. Klik om de verdeling te zien en te kiezen waar het verschil heen gaat.")
         } else if let target = suggestionTarget(p) {
             Button {
                 store.bookSuggested(model, [p])
@@ -236,14 +236,14 @@ private struct TransactionsFeedRow: View {
             Menu {
                 TransactionsAssignMenuItems(store: store, ids: [item.id])
             } label: {
-                Text(store.kind == .betaal ? "Kies post…" : "Kies pot…")
+                Text(store.kind == .betaal ? "Kies post…" : "Kies potje…")
                     .font(.caption.weight(.medium))
             }
             .menuStyle(.button)
             .buttonStyle(.bordered)
             .controlSize(.mini)
             .fixedSize()
-            .help(p.suggestion.warnings.isEmpty ? "Geen regel herkent deze transactie. Kies waar hij bij hoort. Een regel maak je in Nakijken (‘Onthoud als regel’) of bij Instellingen › Regels."
+            .help(p.suggestion.warnings.isEmpty ? "Geen regel herkent deze transactie. Kies waar hij bij hoort. Een regel maak je in Nakijken (‘Voortaan zo indelen’) of bij Instellingen › Regels."
                                                 : p.suggestion.warnings.joined(separator: "\n"))
         }
     }
@@ -271,7 +271,7 @@ private struct TransactionsFeedRow: View {
                     Button { store.bookSuggested(model, [p]) } label: { TransactionsIconLabel(icon: "checkmark") }
                         .help("Boek volgens voorstel")
                 }
-                iconMenu(store.kind == .betaal ? "tablecells" : "tray.full", help: store.kind == .betaal ? "Toewijzen aan post…" : "Toewijzen aan pot…") {
+                iconMenu(store.kind == .betaal ? "tablecells" : "tray.full", help: store.kind == .betaal ? "Indelen bij post…" : "Indelen bij potje…") {
                     TransactionsAssignMenuItems(store: store, ids: [item.id])
                 }
                 iconMenu("ellipsis", help: "Meer acties") {
@@ -279,7 +279,7 @@ private struct TransactionsFeedRow: View {
                     Button("Sla over", systemImage: "forward.end") { store.skip(model, ids: [item.id]) }
                 }
             } else if let row = item.entry {
-                iconMenu(store.kind == .betaal ? "tablecells" : "tray.full", help: store.kind == .betaal ? "Toewijzen aan post…" : "Toewijzen aan pot…") {
+                iconMenu(store.kind == .betaal ? "tablecells" : "tray.full", help: store.kind == .betaal ? "Indelen bij post…" : "Indelen bij potje…") {
                     TransactionsAssignMenuItems(store: store, ids: [item.id])
                 }
                 if store.tagsAllowed || !row.tags.isEmpty {
@@ -350,7 +350,7 @@ struct TransactionsAssignMenuItems: View {
                 }
             }
             Section {
-                Button("Divers (geen vaste post)") { store.assign(model, ids: ids, itemLabel: nil) }
+                Button("Overig (geen vaste post)") { store.assign(model, ids: ids, itemLabel: nil) }
             }
             let expense = items.filter { $0.direction == .UIT }, income = items.filter { $0.direction == .IN }
             if !expense.isEmpty {
@@ -373,7 +373,7 @@ struct TransactionsAssignMenuItems: View {
             Section {
                 Button("Niet toegewezen") { store.assign(model, ids: ids, potId: nil) }
             }
-            Section("Potten") {
+            Section("Potjes") {
                 ForEach(pots) { pot in Button(pot.name) { store.assign(model, ids: ids, potId: pot.id) } }
             }
         }
@@ -429,7 +429,7 @@ struct TransactionsContextMenu: View {
                     store.bookSuggested(model, ids: ids)
                 }
             }
-            Menu(store.kind == .betaal ? "Toewijzen aan post" : "Toewijzen aan pot", systemImage: store.kind == .betaal ? "tablecells" : "tray.full") {
+            Menu(store.kind == .betaal ? "Indelen bij post" : "Indelen bij potje", systemImage: store.kind == .betaal ? "tablecells" : "tray.full") {
                 TransactionsAssignMenuItems(store: store, ids: ids)
             }
             if !rows.isEmpty, store.tagsAllowed || !store.tagsPresent(in: ids).isEmpty {
@@ -495,7 +495,7 @@ struct TransactionsSettleMenuItems: View {
             .filter { $0.accountKind == .betaal && !$0.amount.isZero }
         let allOut = rows.allSatisfy { $0.amount.isNegative }, allIn = rows.allSatisfy { !$0.amount.isNegative }
         let current = rows.count == 1 && rows[0].reimburse ? rows[0].potId : nil
-        Section(allOut ? "Komt uit pot" : (allIn ? "Gaat naar pot" : "Overboeken met pot")) {
+        Section(allOut ? "Komt uit potje" : (allIn ? "Gaat naar potje" : "Overboeken met potje")) {
             ForEach(store.lookups.pots(accountId: nil, keeping: current)) { pot in
                 Button {
                     store.setReimbursePot(model, ids: ids, potId: pot.id)
@@ -505,7 +505,7 @@ struct TransactionsSettleMenuItems: View {
             }
         }
         Section {
-            Button("Pot later kiezen") { store.setReimbursePot(model, ids: ids, potId: nil) }
+            Button("Potje later kiezen") { store.setReimbursePot(model, ids: ids, potId: nil) }
             if rows.contains(where: \.reimburse) {
                 Button("Niet meer bij Nog overboeken") {
                     // Staat het overal aan, dan zet de schakelaar het uit.

@@ -17,10 +17,10 @@ struct ReportsDiversTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            ReportsQuestion("Waar gingen de diverse uitgaven naartoe?",
-                            detail: "Diverse uitgaven zijn uitgaven zonder vaste post. In \(period): \(total.magnitude.formatted()).")
+            ReportsQuestion("Waar gingen de overige uitgaven naartoe?",
+                            detail: "Overig: boekingen die bij geen enkele post horen. In \(period): \(total.magnitude.formatted()).")
             if buckets.isEmpty {
-                Label("Geen diverse uitgaven in \(period). Kies een andere maand of het hele jaar.", systemImage: "tray")
+                Label("Geen overige uitgaven in \(period). Kies een andere maand of het hele jaar.", systemImage: "tray")
                     .font(.title3).foregroundStyle(.secondary).padding(.vertical, 24)
             } else {
                 chart.frame(height: CGFloat(buckets.count) * 58 + 10).frame(maxWidth: 860)
@@ -49,6 +49,6 @@ struct ReportsDiversTab: View {
         .chartYAxis {
             AxisMarks(position: .leading) { _ in AxisValueLabel().font(.body).foregroundStyle(Color.primary) }
         }
-        .help("Zonder tag: diverse uitgaven die nog geen tag hebben. Een uitgave met twee tags telt bij beide mee.")
+        .help("Zonder tag: overige uitgaven die nog geen tag hebben. Een uitgave met twee tags telt bij beide mee.")
     }
 }

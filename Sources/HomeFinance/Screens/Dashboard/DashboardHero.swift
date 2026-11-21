@@ -11,7 +11,7 @@ struct DashboardHero: View {
     var unbooked: Int = 0
     @State private var showBreakdown = false
 
-    private static let mainHelp = "Je saldo nu, plus wat er deze maand nog aan vaste posten binnenkomt en afgaat, min je anti-roodbuffer."
+    private static let mainHelp = "Je saldo nu, plus wat er deze maand nog aan vaste posten binnenkomt en afgaat, min wat je minimaal op je betaalrekening laat staan."
     private static let nowHelp = "Wat er nu vrij op de rekening staat, zonder de posten die deze maand nog komen."
 
     private var endTint: Color { spendable.spendableEndOfMonth.isNegative ? Theme.negative : Theme.accent }
@@ -19,8 +19,11 @@ struct DashboardHero: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Nog te besteden deze maand").font(.title3.weight(.medium)).foregroundStyle(.secondary)
+            Text("Nog over deze maand").font(.title3.weight(.medium)).foregroundStyle(.secondary)
                 .help(Self.mainHelp)
+            Text("Wat je deze maand nog kunt uitgeven, na de vaste posten die nog komen.")
+                .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Text(spendable.spendableEndOfMonth.formatted())
                 .font(.system(size: 76, weight: .bold, design: .rounded))
                 .monospacedDigit()
@@ -34,12 +37,15 @@ struct DashboardHero: View {
                 .padding(.top, 2)
                 .help("Als alle vaste lasten en inkomsten van \(monthName) zijn binnen, houd je dit over.")
             if unbooked > 0 { unbookedWarning }
-            (Text("Besteedbaar nu: ").foregroundStyle(.secondary)
+            (Text("Vrij te besteden: ").foregroundStyle(.secondary)
                 + Text(spendable.spendable.formatted()).fontWeight(.semibold)
                     .foregroundColor(spendable.spendable.isNegative ? Theme.negative : .primary))
                 .font(.body).monospacedDigit()
                 .padding(.top, 14)
                 .help(Self.nowHelp)
+            Text("Wat er nu op je betaalrekening staat, min wat je wilt laten staan en wat je van spaar hebt geleend.")
+                .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Button {
                 withAnimation(.easeInOut(duration: 0.15)) { showBreakdown.toggle() }
             } label: {
@@ -83,7 +89,7 @@ struct DashboardHero: View {
         VStack(alignment: .leading, spacing: 7) {
             line("Saldo betaalrekening nu", spendable.balance, sign: " ",
                  help: "Wat er vandaag op de betaalrekening(en) staat volgens de boekingen.")
-            line("Anti-rood", spendable.antiRood, sign: "−",
+            line("Minimaal aan het eind van de maand", spendable.antiRood, sign: "−",
                  help: "Vaste buffer die altijd op de rekening blijft staan, zodat je niet rood komt te staan.")
             if !spendable.tijdelijkAntiRood.isZero {
                 line("Tijdelijk geleend van spaar", spendable.tijdelijkAntiRood, sign: "−",
@@ -91,7 +97,7 @@ struct DashboardHero: View {
             }
             ForEach(spendable.returningTags) { tag in
                 line("Komt nog terug: \(tag.name)", tag.amount, sign: "+",
-                     help: "Voorgeschoten (\(tag.name)): geld dat je nog terugkrijgt. Het telt mee omdat ‘telt mee in nog te besteden’ aan staat (Instellingen › Tags).")
+                     help: "Voorgeschoten (\(tag.name)): geld dat je nog terugkrijgt. Het telt mee omdat ‘reken mee als inkomen dat nog komt’ aan staat (Instellingen › Tags).")
             }
             if !spendable.returningTags.isEmpty {
                 Text("Voorgeschoten geld dat nog terugkomt, telt hier alvast mee.")
@@ -99,7 +105,7 @@ struct DashboardHero: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Divider()
-            total("Besteedbaar nu", spendable.spendable).help(Self.nowHelp)
+            total("Vrij te besteden", spendable.spendable).help(Self.nowHelp)
 
             Text("Nog verwacht deze maand").font(.subheadline).foregroundStyle(.secondary)
                 .padding(.top, 10)
@@ -131,7 +137,7 @@ struct DashboardHero: View {
                 .help("Uitgaven die nog uit een potje komen (of geld dat nog naar een potje moet). Hier telt het alvast mee alsof het al is overgeboekt.")
             }
             Divider()
-            total("Nog te besteden", spendable.spendableEndOfMonth).help(Self.mainHelp)
+            total("Nog over", spendable.spendableEndOfMonth).help(Self.mainHelp)
 
             HStack(spacing: 0) {
                 Text("Is een post al betaald maar staat hij er nog? Vink hem af in het ")
@@ -183,7 +189,7 @@ struct DashboardYearMissingCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Nog geen begroting voor \(String(year))")
                     .font(.system(.title2, design: .rounded).weight(.bold))
-                Text("Besteedbaar en de vaste posten kunnen pas getoond worden als het jaar \(String(year)) bestaat. Maak het jaar aan bij Posten; je kunt de posten van vorig jaar overnemen.")
+                Text("Vrij te besteden en de vaste posten kunnen pas getoond worden als het jaar \(String(year)) bestaat. Maak het jaar aan bij Posten; je kunt de posten van vorig jaar overnemen.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Button {

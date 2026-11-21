@@ -79,7 +79,7 @@ struct SettingsYearItemRow: View {
                     .font(.caption).foregroundStyle(.secondary)
                     .padding(.horizontal, 7).padding(.vertical, 2)
                     .background(Color.primary.opacity(0.06), in: Capsule())
-                    .help("Het planbedrag volgt de vaste storting ‘\(name)’")
+                    .help("Het planbedrag volgt Automatisch sparen: ‘\(name)’")
                 if buildup?.isOutOfStep == true {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
                         .help(buildup?.warning ?? "")
@@ -171,7 +171,7 @@ struct SettingsYearItemRow: View {
                 Button { onMove(1) } label: { Label("Omlaag", systemImage: "chevron.down") }.disabled(isLast)
                 Spacer()
                 Button(role: .destructive, action: onDelete) { Label("Verwijder post", systemImage: "trash") }
-                    .help(entryCount > 0 ? "De \(SettingsFormat.count(entryCount, "boeking", "boekingen")) op deze post kunnen divers worden"
+                    .help(entryCount > 0 ? "De \(SettingsFormat.count(entryCount, "boeking", "boekingen")) op deze post kunnen overig worden"
                                          : "Op deze post staan geen boekingen")
             }
             .controlSize(.small)
@@ -213,7 +213,7 @@ struct SettingsYearItemRow: View {
                     .font(.callout).foregroundStyle(Theme.warning).fixedSize(horizontal: false, vertical: true)
             }
             if buildup.distribution != nil {
-                Button("Verdeling wijzigen bij Vaste stortingen", action: onGoToPots).controlSize(.small)
+                Button("Verdeling wijzigen bij Automatisch sparen", action: onGoToPots).controlSize(.small)
             }
         }
     }
@@ -221,7 +221,7 @@ struct SettingsYearItemRow: View {
     /// Naam van de vaste storting waaraan deze post gekoppeld is, of nil.
     private var distributionName: String? {
         guard let id = item.distributionId else { return nil }
-        return distributions.first { $0.id == id }?.name ?? "vaste storting"
+        return distributions.first { $0.id == id }?.name ?? "vaste overboeking"
     }
 
     @ViewBuilder private var planField: some View {
@@ -231,10 +231,10 @@ struct SettingsYearItemRow: View {
                     Text(item.planAmount.magnitude.formatted()).monospacedDigit()
                     Image(systemName: "lock.fill").font(.caption).foregroundStyle(.tertiary)
                 }
-                Text("Volgt het totaal van de vaste storting ‘\(name)’.")
+                Text("Volgt het totaal van Automatisch sparen: ‘\(name)’.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if chain == nil {
-                    Button("Naar Vaste stortingen", action: onGoToPots).controlSize(.small)
+                    Button("Naar Automatisch sparen", action: onGoToPots).controlSize(.small)
                 }
             }
         } else if item.isReserveTotal {
@@ -301,8 +301,8 @@ struct SettingsYearItemRow: View {
     @ViewBuilder private var extraRow: some View {
         if item.direction == .UIT, item.distributionId != nil || !distributions.isEmpty {
             GridRow {
-                Text("Hoort bij vaste storting").foregroundStyle(.secondary)
-                Picker("Vaste storting", selection: Binding(get: { item.distributionId }, set: { onLink($0) })) {
+                Text("Gekoppeld aan Automatisch sparen").foregroundStyle(.secondary)
+                Picker("Automatisch sparen", selection: Binding(get: { item.distributionId }, set: { onLink($0) })) {
                     Text("Geen").tag(Int64?.none)
                     Divider()
                     ForEach(distributions.filter { !$0.archived || $0.id == item.distributionId }) { option in
@@ -310,20 +310,20 @@ struct SettingsYearItemRow: View {
                     }
                 }
                 .labelsHidden().fixedSize()
-                .help("Gekoppeld aan een vaste storting volgt het planbedrag vanzelf het totaal van die storting.")
+                .help("Gekoppeld aan een vaste overboeking volgt het planbedrag vanzelf het totaal van die overboeking.")
             }
         } else if item.direction == .RES {
             GridRow {
-                Text("Vult pot").foregroundStyle(.secondary)
-                Picker("Pot", selection: Binding(get: { draft.potId }, set: { draft.potId = $0; commit() })) {
-                    Text("Geen pot").tag(Int64?.none)
+                Text("Vult potje").foregroundStyle(.secondary)
+                Picker("Potje", selection: Binding(get: { draft.potId }, set: { draft.potId = $0; commit() })) {
+                    Text("Geen potje").tag(Int64?.none)
                     Divider()
                     ForEach(pots.filter { !$0.archived || $0.id == draft.potId }) { pot in
                         Text(pot.name).tag(pot.id)
                     }
                 }
                 .labelsHidden().fixedSize()
-                .help("De pot op de spaarrekening die met dit deel van de reservering gevuld wordt")
+                .help("Het potje op de spaarrekening die met dit deel van de reservering gevuld wordt")
             }
         }
     }

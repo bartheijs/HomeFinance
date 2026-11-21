@@ -53,7 +53,7 @@ public struct SpendableExplanation: Equatable, Sendable {
             }
         }
         text += outgoing.isZero ? " en gaat er niets meer af." : " en gaat nog \(outgoing.formatted()) af."
-        if !keptAside.isZero { text += " \(keptAside.formatted()) laat je staan als buffer." }
+        if !keptAside.isZero { text += " \(keptAside.formatted()) laat je minimaal op je betaalrekening staan." }
         return text
     }
 }

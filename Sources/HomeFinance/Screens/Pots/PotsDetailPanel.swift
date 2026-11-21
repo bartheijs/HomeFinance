@@ -30,7 +30,7 @@ struct PotsDetailPanel: View {
                 if let recovery = pot.recovery { PotsRecoveryBlock(recovery: recovery, onDistributions: onDistributions) }
                 if let goal = pot.goal { PotsGoalBlock(pot: pot, goal: goal, onDistributions: onDistributions) }
                 if history.isEmpty {
-                    Text("Deze pot heeft nog geen boekingen. Hij krijgt saldo zodra je een boeking op de spaarrekening aan deze pot toewijst, of geld uit een andere pot hierheen verplaatst.")
+                    Text("Dit potje heeft nog geen boekingen. Hij krijgt saldo zodra je een boeking op de spaarrekening aan dit potje toewijst, of geld uit een ander potje hierheen verplaatst.")
                         .font(.callout).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
@@ -64,7 +64,7 @@ struct PotsDetailPanel: View {
                 Spacer(minLength: 4)
                 Menu {
                     Button("Bewerk…", systemImage: "pencil", action: onEdit)
-                    Button("Verplaats naar andere pot…", systemImage: "arrow.left.arrow.right", action: onMove)
+                    Button("Verplaats naar ander potje…", systemImage: "arrow.left.arrow.right", action: onMove)
                         .disabled(pot.archived)
                     Divider()
                     if pot.archived {
@@ -80,7 +80,7 @@ struct PotsDetailPanel: View {
                     Image(systemName: "ellipsis.circle")
                 }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                .help("Meer acties voor deze pot")
+                .help("Meer acties voor dit potje")
                 Button(action: onClose) { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
                     .buttonStyle(.borderless)
                     .keyboardShortcut(.cancelAction)
@@ -100,13 +100,13 @@ struct PotsDetailPanel: View {
                     Text(PotsFormat.pending(pot.pendingSettlement)).font(.callout).foregroundStyle(.secondary)
                     Button("Naar Nog overboeken") { model.selection = .reimbursements }
                         .buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout)
-                        .help("Open Nog overboeken om deze boekingen met de pot recht te zetten.")
+                        .help("Open Nog overboeken om deze boekingen met het potje recht te zetten.")
                 }
             }
 
             HStack(spacing: 0) {
                 fact("Per maand", pot.distributionAmount.isZero ? "–" : pot.distributionAmount.formatted())
-                    .help("Wat er volgens je vaste stortingen elke maand naar deze pot gaat.")
+                    .help("Wat er volgens je vaste overboekingen elke maand naar dit potje gaat.")
                 Divider().frame(height: 26).padding(.horizontal, 10)
                 fact("Gestort \(String(asOf.year))", pot.depositsThisYear.isZero ? "–" : pot.depositsThisYear.formatted(alwaysSign: true))
                 Divider().frame(height: 26).padding(.horizontal, 10)
@@ -117,16 +117,16 @@ struct PotsDetailPanel: View {
 
             HStack(spacing: 8) {
                 Button(action: onMove) {
-                    Label("Verplaats naar andere pot…", systemImage: "arrow.left.arrow.right")
+                    Label("Verplaats naar ander potje…", systemImage: "arrow.left.arrow.right")
                 }
                 .disabled(pot.archived)
-                .help("Zet een bedrag over van deze pot naar een andere pot. Het saldo van de spaarrekening verandert niet.")
+                .help("Zet een bedrag over van dit potje naar een ander potje. Het saldo van de spaarrekening verandert niet.")
                 Button("Bewerk", action: onEdit)
                     .keyboardShortcut("e", modifiers: .command)
                     .help("Naam, soort, eigenaar, beginbedrag en spaardoel wijzigen (⌘E)")
                 if !pot.archived && pot.balance.isZero {
                     Button("Archiveer", action: onArchive)
-                        .help("Een lege pot die je niet meer gebruikt verdwijnt uit de lijst. De boekingen blijven bewaard.")
+                        .help("Een leeg potje die je niet meer gebruikt verdwijnt uit de lijst. De boekingen blijven bewaard.")
                 }
             }
             .controlSize(.regular)
@@ -134,7 +134,7 @@ struct PotsDetailPanel: View {
     }
 
     private var subtitle: String {
-        if pot.balance.isNegative { return "Deze pot staat in de min · \(accountName)" }
+        if pot.balance.isNegative { return "Dit potje staat in de min · \(accountName)" }
         return "Saldo op \(asOf.short(withYear: true)) · \(accountName)"
     }
 
@@ -197,7 +197,7 @@ struct PotsDetailPanel: View {
                 }
             }
             .frame(height: 150)
-            .accessibilityLabel("Saldo van de pot \(pot.name) in de tijd")
+            .accessibilityLabel("Saldo van het potje \(pot.name) in de tijd")
         }
     }
 
@@ -212,7 +212,7 @@ struct PotsDetailPanel: View {
                 Text("\(history.count)").font(.callout).monospacedDigit().foregroundStyle(.secondary)
                 Spacer()
                 Text("saldo erna").font(.caption).foregroundStyle(.secondary)
-                    .help("Het saldo van de pot direct na deze boeking.")
+                    .help("Het saldo van het potje direct na deze boeking.")
             }
             .padding(.bottom, 6)
             ForEach(shown) { row in

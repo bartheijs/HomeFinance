@@ -39,7 +39,7 @@ public enum AttentionItem: Equatable, Sendable {
             switch direction {
             case .fromSavings: return "\(amount.formatted()) over te maken van spaar naar betaal (\(count))."
             case .toSavings: return "\(amount.formatted()) over te maken van betaal naar spaar (\(count))."
-            case .none: return "\(count) over te boeken tussen potten."
+            case .none: return "\(count) over te boeken tussen potjes."
             }
         case .reconciliationDiffers(_, let name, let difference, let day):
             return "\(name): afstemming van \(day.dutch) heeft een verschil van \(difference.formatted())."

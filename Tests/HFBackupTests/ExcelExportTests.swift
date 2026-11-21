@@ -227,7 +227,7 @@ let exportMoment = date("2027-06-18 12:00:00")
             "xl/sharedStrings.xml", "xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml", "xl/worksheets/sheet3.xml",
             "xl/worksheets/sheet4.xml", "xl/worksheets/sheet5.xml",
         ])
-        #expect(book.sheetNames == ["Maandgrid", "Transacties", "Potten", "Vaste stortingen", "Toelichting"])
+        #expect(book.sheetNames == ["Maandgrid", "Transacties", "Potjes", "Automatisch sparen", "Toelichting"])
         // Nog een keer exporteren vervangt het bestand.
         let again = try Backup.exportYearAsExcel(try exportDatabase(), year: 2027, to: temp.sub("export"), now: exportMoment)
         #expect(again == url)
@@ -272,7 +272,7 @@ let exportMoment = date("2027-06-18 12:00:00")
 
         // Totaalrijen: 11 Vaste posten, 12 IN divers, 13 UIT divers, 14 Netto divers, 15 Resultaat.
         #expect((11...15).map { book.text(s, "A\($0)") }
-                == ["Vaste posten", "IN divers", "UIT divers", "Netto divers", "Resultaat"])
+                == ["Vaste posten", "IN overig", "UIT overig", "Netto overig", "Resultaat"])
         #expect(book.formula(s, "C11") == "SUM(C3:C9)" && book.cents(s, "C11") == 1_250_00)   // 2000 − 700 − 50
         #expect(book.cents(s, "D11") == -700_00 && book.cents(s, "E11") == -700_00 && book.cents(s, "F11") == 0)
         #expect(book.formula(s, "O11") == "SUM(C11:N11)" && book.cents(s, "O11") == -150_00)
@@ -290,9 +290,9 @@ let exportMoment = date("2027-06-18 12:00:00")
         #expect(book.text(s, "A19") == "IN" && book.cents(s, "B19") == 2_320_00)
         #expect(book.text(s, "A20") == "UIT" && book.cents(s, "B20") == -2_195_50)
         #expect(book.text(s, "A21") == "Op de rekening" && book.cents(s, "B21") == 1_124_50)
-        #expect(book.text(s, "A22") == "Anti-rood" && book.cents(s, "B22") == 500_00)
+        #expect(book.text(s, "A22") == "Minimaal aan het eind van de maand" && book.cents(s, "B22") == 500_00)
         #expect(book.text(s, "A23") == "Tijdelijk geleend van spaar" && book.cents(s, "B23") == 300_00)
-        #expect(book.text(s, "A24") == "Besteedbaar" && book.cents(s, "B24") == 324_50)
+        #expect(book.text(s, "A24") == "Vrij te besteden" && book.cents(s, "B24") == 324_50)
         #expect(book.formula(s, "B24") == "B21-B22-B23")
 
         // Eerste rij en eerste kolom bevroren; kolombreedtes gezet.
@@ -307,7 +307,7 @@ let exportMoment = date("2027-06-18 12:00:00")
         let s = "Transacties"
 
         #expect((0..<14).map { book.text(s, "\(Xlsx.column($0))1") } == [
-            "Datum", "Telt mee in", "Rekening", "Omschrijving", "Post of pot", "Divers", "Tags", "Bedrag",
+            "Datum", "Hoort bij maand", "Rekening", "Omschrijving", "Post of potje", "Overig", "Tags", "Bedrag",
             "Nog overboeken met spaar", "Tijdelijk geleend van spaar", "Nagekeken", "Notitie", "Tegenpartij", "Bankomschrijving",
         ])
         // 8 boekingen op de betaalrekening en 3 op de spaarrekening tellen mee in 2027 (die van 15-12-2026 niet).
@@ -349,10 +349,10 @@ let exportMoment = date("2027-06-18 12:00:00")
 
         // Potten: 2 rekening, 3 Auto, 4 Vakantie, 5 Totaal potten, 6 Niet toegewezen, 7 Saldo.
         // De gearchiveerde pot zonder saldo staat er niet in.
-        let p = "Potten"
+        let p = "Potjes"
         #expect(book.text(p, "D1") == "Saldo op 18-06-2027" && book.text(p, "E1") == "Gestort in 2027")
         #expect((2...7).map { book.text(p, "A\($0)") }
-                == ["Spaar", "Auto", "Vakantie", "Totaal potten", "Niet toegewezen", "Saldo Spaar"])
+                == ["Spaar", "Auto", "Vakantie", "Totaal potjes", "Niet toegewezen", "Saldo Spaar"])
         #expect(book.text(p, "B3") == "reservering" && book.text(p, "C4") == "Ouder 1" && book.cell(p, "C3") == nil)
         #expect(book.cents(p, "D3") == 280_00 && book.cents(p, "E3") == 400_00 && book.cents(p, "F3") == -120_00)
         #expect(book.cents(p, "G3") == 1_000_00)
@@ -366,7 +366,7 @@ let exportMoment = date("2027-06-18 12:00:00")
         #expect(book.formula(p, "D7") == "SUM(D5:D6)" && book.cents(p, "D7") == 540_00)
 
         // Vaste stortingen: 2 naam, 3 en 4 de regels, 5 het totaal.
-        let v = "Vaste stortingen"
+        let v = "Automatisch sparen"
         #expect(book.text(v, "A2") == "Maandelijkse reservering" && book.text(v, "B2") == "naar Spaar")
         #expect(book.text(v, "B3") == "Auto" && book.cents(v, "C3") == 100_00)
         #expect(book.text(v, "B4") == "Vakantie" && book.cents(v, "C4") == 50_00)
@@ -386,10 +386,10 @@ let exportMoment = date("2027-06-18 12:00:00")
         let temp = try TempFolder()
         let book = try ReadWorkbook(try Backup.exportYearAsExcel(try exportDatabase(), year: 2027, to: temp.url,
                                                                  now: date("2028-02-10 12:00:00")))
-        #expect(book.text("Potten", "D1") == "Saldo op 31-12-2027")
+        #expect(book.text("Potjes", "D1") == "Saldo op 31-12-2027")
         #expect(book.cell("Maandgrid", "B17")?.raw == String(Xlsx.serial(day("2027-12-31"))))
         #expect(book.cell("Toelichting", "B2")?.raw == String(Xlsx.serial(day("2028-02-10"))))
-        #expect(book.cents("Potten", "D3") == 280_00)
+        #expect(book.cents("Potjes", "D3") == 280_00)
     }
 
     @Test func emptyYearGivesHeadersOnly() throws {
@@ -403,7 +403,7 @@ let exportMoment = date("2027-06-18 12:00:00")
 
         #expect(book.sheetNames.count == 5)
         // Alleen de kopregel op de lijsten.
-        for sheet in ["Transacties", "Potten", "Vaste stortingen"] {
+        for sheet in ["Transacties", "Potjes", "Automatisch sparen"] {
             let rows = Set(try #require(book.sheets[sheet]).keys.compactMap { Int($0.drop { $0.isLetter }) })
             #expect(rows == [1], "\(sheet) heeft meer dan de kopregel")
         }
@@ -413,7 +413,7 @@ let exportMoment = date("2027-06-18 12:00:00")
         let fixed = try #require(book.row(s, labelled: "Vaste posten"))
         #expect(fixed == 3)
         #expect(book.cents(s, "C\(fixed)") == 0 && book.formula(s, "C\(fixed)") == nil)
-        let spendable = try #require(book.row(s, labelled: "Besteedbaar"))
+        let spendable = try #require(book.row(s, labelled: "Vrij te besteden"))
         #expect(book.cents(s, "B\(spendable)") == 0)
     }
 
@@ -449,8 +449,8 @@ let exportMoment = date("2027-06-18 12:00:00")
         let rows = Set(try #require(book.sheets["Transacties"]).keys.compactMap { Int($0.drop { $0.isLetter }) })
         #expect(rows.count == entries + 1)
         // Niet toegewezen op de spaarrekening is de rentebijschrijving.
-        let unassigned = try #require(book.row("Potten", labelled: "Niet toegewezen"))
-        #expect(book.cents("Potten", "D\(unassigned)") == DemoPlan.savingsInterest.cents)
+        let unassigned = try #require(book.row("Potjes", labelled: "Niet toegewezen"))
+        #expect(book.cents("Potjes", "D\(unassigned)") == DemoPlan.savingsInterest.cents)
     }
 
     @Test func writerHelpers() {

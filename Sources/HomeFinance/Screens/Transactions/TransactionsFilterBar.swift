@@ -27,7 +27,7 @@ struct TransactionsFilterBar: View {
                     }
                 }
                 .controlSize(.large)
-                .help("Filter op maand, post, pot, tag of status")
+                .help("Filter op maand, post, potje, tag of status")
                 .popover(isPresented: $showFilters, arrowEdge: .bottom) {
                     TransactionsFilterPopover(store: store)
                 }
@@ -81,7 +81,7 @@ struct TransactionsFilterBar: View {
             TransactionsFilterChip(text: "Post: \(item.label)", icon: "tablecells") { store.criteria.itemId = nil }
         }
         if let pot = lookups.pot(c.potId) {
-            TransactionsFilterChip(text: "Pot: \(pot.name)", icon: "tray.full") { store.criteria.potId = nil }
+            TransactionsFilterChip(text: "Potje: \(pot.name)", icon: "tray.full") { store.criteria.potId = nil }
         }
         if let tag = lookups.tag(c.tagId) {
             TransactionsFilterChip(text: tag.name, icon: "tag", tint: Color(hex: tag.color)) { store.criteria.tagId = nil }
@@ -90,7 +90,7 @@ struct TransactionsFilterBar: View {
             TransactionsFilterChip(text: c.status.title, icon: "circle.dotted") { store.criteria.status = .all }
         }
         if c.diversOnly {
-            TransactionsFilterChip(text: "Divers", icon: "square.dashed") { store.criteria.diversOnly = false }
+            TransactionsFilterChip(text: "Overig", icon: "square.dashed") { store.criteria.diversOnly = false }
         }
         if c.loanOnly {
             TransactionsFilterChip(text: "Tijdelijk geleend van spaar", icon: "hourglass") { store.criteria.loanOnly = false }
@@ -130,12 +130,12 @@ private struct TransactionsFilterPopover: View {
                 }
                 .help("Vaste post: een regel uit je begroting van \(String(model.year))")
             } else {
-                Picker("Pot", selection: $store.criteria.potId) {
-                    Text("Alle potten").tag(Int64?.none)
+                Picker("Potje", selection: $store.criteria.potId) {
+                    Text("Alle potjes").tag(Int64?.none)
                     Divider()
                     ForEach(lookups.pots(accountId: store.accountId, keeping: store.criteria.potId)) { Text($0.name).tag($0.id) }
                 }
-                .help("Pot: een deel van het saldo op de spaarrekening met een eigen doel")
+                .help("Potje: een deel van het saldo op de spaarrekening met een eigen doel")
             }
             Picker("Tag", selection: $store.criteria.tagId) {
                 Text("Alle tags").tag(Int64?.none)
@@ -144,10 +144,10 @@ private struct TransactionsFilterPopover: View {
             }
             .help("Tag: een label om uitgaven te volgen, bv. tanken of uit eten")
             if store.kind == .betaal {
-                Toggle("Alleen divers", isOn: $store.criteria.diversOnly)
+                Toggle("Alleen overig", isOn: $store.criteria.diversOnly)
                     .help("Losse uitgaven en ontvangsten zonder vaste post")
                 Toggle("Alleen nog overboeken met spaar", isOn: $store.criteria.reimburseOnly)
-                    .help("Boekingen die je met een pot op de spaarrekening rechtzet (Nog overboeken)")
+                    .help("Boekingen die je met een potje op de spaarrekening rechtzet (Nog overboeken)")
                 Toggle("Alleen tijdelijk geleend van spaar", isOn: $store.criteria.loanOnly)
                     .help(TransactionsFormat.loanHelp)
             }

@@ -95,7 +95,7 @@ private struct SetupSheet: View {
                     LabeledContent("Saldo op 1 januari") { MoneyField("0,00", value: $betaalBalance).frame(width: 140) }
                 }
                 Section("Spaarrekening") {
-                    Toggle("Ik houd ook een spaarrekening met potten bij", isOn: $hasSavings)
+                    Toggle("Ik houd ook een spaarrekening met potjes bij", isOn: $hasSavings)
                     if hasSavings {
                         TextField("Naam", text: $spaarName)
                         TextField("IBAN", text: $spaarIban, prompt: Text("NL00BANK0123456789"))
@@ -103,8 +103,8 @@ private struct SetupSheet: View {
                     }
                 }
                 Section("Buffer") {
-                    LabeledContent("Anti-roodbuffer") { MoneyField("0,00", value: $antiRood).frame(width: 140) }
-                    Text("Bedrag dat altijd op de betaalrekening moet blijven staan. Het telt niet mee als besteedbaar.")
+                    LabeledContent("Minimaal op je betaalrekening aan het eind van de maand") { MoneyField("0,00", value: $antiRood).frame(width: 140) }
+                    Text("Bedrag dat altijd op de betaalrekening moet blijven staan. Het telt niet mee in vrij te besteden.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }

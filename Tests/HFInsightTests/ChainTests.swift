@@ -32,9 +32,9 @@ import Testing
         let id = try distribution("Maandelijkse reserveringen", order: 1,
                                   lines: [(f.potAuto, 100), (f.potVakantie, 150)], item: f.reserveringen)
         let c = try chain()
-        #expect(c.pot(f.potAuto).sentence == "Krijgt € 100,00 per maand via vaste storting Maandelijkse reserveringen (post RESERVERINGEN).")
+        #expect(c.pot(f.potAuto).sentence == "Krijgt € 100,00 per maand via Automatisch sparen: Maandelijkse reserveringen (post RESERVERINGEN).")
         #expect(c.pot(f.potAuto).monthly == eur(100))
-        #expect(c.item(f.reserveringen).sentence == "Gaat via vaste storting Maandelijkse reserveringen naar 2 potjes.")
+        #expect(c.item(f.reserveringen).sentence == "Gaat via Automatisch sparen: Maandelijkse reserveringen naar 2 potjes.")
         #expect(c.item(f.reserveringen).distribution?.id == id)
         #expect(c.distribution(id)?.sentence == "Telt in je begroting als: post RESERVERINGEN.")
     }
@@ -42,15 +42,15 @@ import Testing
     @Test func distributionWithoutItemAndPotWithoutDistribution() throws {
         let id = try distribution("Extra spaar", order: 1, lines: [(f.potKind, 25)])
         let c = try chain()
-        #expect(c.pot(f.potKind).sentence == "Krijgt € 25,00 per maand via vaste storting Extra spaar (nog niet gekoppeld aan een post).")
+        #expect(c.pot(f.potKind).sentence == "Krijgt € 25,00 per maand via Automatisch sparen: Extra spaar (nog niet gekoppeld aan een post).")
         #expect(c.distribution(id)?.sentence == "Telt nog niet in je begroting van 2027: kies hieronder een post.")
-        #expect(c.pot(f.potAuto).sentence == "Krijgt geen geld via een vaste storting.")
+        #expect(c.pot(f.potAuto).sentence == "Krijgt geen geld via een vaste overboeking.")
         #expect(c.item(f.huur).sentence == nil)
     }
 
     @Test func singlePotNamesThePot() throws {
         try distribution("Extra spaar", order: 1, lines: [(f.potKind, 25)], item: f.lening)
-        #expect(try chain().item(f.lening).sentence == "Gaat via vaste storting Extra spaar naar 1 potje (Spaarpot Kind A).")
+        #expect(try chain().item(f.lening).sentence == "Gaat via Automatisch sparen: Extra spaar naar 1 potje (Spaarpot Kind A).")
     }
 
     @Test func potInTwoDistributionsGivesAList() throws {
@@ -59,7 +59,7 @@ import Testing
         try distribution("Oud", order: 3, lines: [(f.potAuto, 999)], archived: true)
         let pot = try chain().pot(f.potAuto)
         #expect(pot.lines.count == 2)
-        #expect(pot.sentence == "Krijgt € 120,00 per maand via 2 vaste stortingen:")
+        #expect(pot.sentence == "Krijgt € 120,00 per maand via 2 vaste overboekingen:")
         #expect(pot.lines.map(\.line) == ["€ 100,00 via Maandelijkse reserveringen (post RESERVERINGEN)",
                                           "€ 20,00 via Extra (nog niet gekoppeld aan een post)"])
     }
@@ -74,6 +74,6 @@ import Testing
         let id = try distribution("Maandelijkse reserveringen", order: 1, lines: [(f.potAuto, 100)], item: f.reserveringen)
         let c = try f.db.read { try Insight.chain($0, year: 2028) }
         #expect(c.distribution(id)?.distribution.items.isEmpty == true)
-        #expect(c.pot(f.potAuto).sentence == "Krijgt € 100,00 per maand via vaste storting Maandelijkse reserveringen (nog niet gekoppeld aan een post).")
+        #expect(c.pot(f.potAuto).sentence == "Krijgt € 100,00 per maand via Automatisch sparen: Maandelijkse reserveringen (nog niet gekoppeld aan een post).")
     }
 }

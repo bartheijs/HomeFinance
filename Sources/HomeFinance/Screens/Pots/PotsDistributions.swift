@@ -96,8 +96,8 @@ struct DistributionsScreen: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ScreenHeader("Vaste stortingen",
-                         subtitle: "Het bedrag dat je regelmatig van de betaalrekening naar de spaarrekening overmaakt, met de verdeling over je potten.")
+            ScreenHeader("Automatisch sparen",
+                         subtitle: "Vaste overboeking per maand, verdeeld over potjes. Elke maand gaat dit bedrag naar je spaarrekening en wordt het over deze potjes verdeeld.")
             Divider()
             if let data {
                 HStack(spacing: 0) {
@@ -142,23 +142,23 @@ struct DistributionsScreen: View {
                         listRow(summary, data: data)
                     }
                     if shown.isEmpty {
-                        Text("Nog geen vaste storting.").font(.callout).foregroundStyle(.secondary).padding(12)
+                        Text("Nog geen vaste overboeking.").font(.callout).foregroundStyle(.secondary).padding(12)
                     }
                 }
                 .padding(10)
             }
             Divider()
             VStack(alignment: .leading, spacing: 10) {
-                Button { selection = .new } label: { Label("Nieuwe storting", systemImage: "plus") }
+                Button { selection = .new } label: { Label("Nieuwe vaste overboeking", systemImage: "plus") }
                     .disabled(data.savings.isEmpty)
                 if !data.summaries.contains(where: { !$0.archived }) {
                     ForEach(data.accountsWithMonthlyAmounts, id: \.id) { account in
                         Button { createFromPots(account) } label: {
-                            Text("Maak een vaste storting van de bestaande maandbedragen")
+                            Text("Maak een vaste overboeking van de bestaande maandbedragen")
                                 .multilineTextAlignment(.leading)
                         }
                         .buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout)
-                        .help("Neemt de maandbedragen van de reserveringspotten op \(account.name) over als één storting. Daarna pas je hem hier aan.")
+                        .help("Neemt de maandbedragen van de reserveringspotjes op \(account.name) over als één overboeking. Daarna pas je hem hier aan.")
                     }
                 }
                 if data.summaries.contains(where: \.archived) {
@@ -183,7 +183,7 @@ struct DistributionsScreen: View {
                     Text(summary.total.formatted()).monospacedDigit()
                 }
                 Text("\(source) → \(summary.accountName)").font(.callout).foregroundStyle(.secondary).lineLimit(1)
-                Text((summary.lines.count == 1 ? "1 pot" : "\(summary.lines.count) potten") + (summary.archived ? " · gearchiveerd" : ""))
+                Text((summary.lines.count == 1 ? "1 potje" : "\(summary.lines.count) potjes") + (summary.archived ? " · gearchiveerd" : ""))
                     .font(.callout).foregroundStyle(.secondary)
             }
             .padding(.horizontal, 10).padding(.vertical, 8)
@@ -213,11 +213,11 @@ struct DistributionsScreen: View {
                 .id("new-\(generation)")
         case nil:
             ContentUnavailableView {
-                Label("Nog geen vaste storting", systemImage: "arrow.triangle.branch")
+                Label("Nog geen vaste overboeking", systemImage: "arrow.triangle.branch")
             } description: {
-                Text("Maak een storting en verdeel het bedrag over je potten. De app herkent de overboeking daarna bij het importeren en verdeelt hem vanzelf.")
+                Text("Maak een overboeking en verdeel het bedrag over je potjes. De app herkent de overboeking daarna bij het importeren en verdeelt hem vanzelf.")
             } actions: {
-                Button("Nieuwe storting") { selection = .new }.disabled(data.savings.isEmpty)
+                Button("Nieuwe vaste overboeking") { selection = .new }.disabled(data.savings.isEmpty)
             }
         }
     }
@@ -225,9 +225,9 @@ struct DistributionsScreen: View {
     private func createFromPots(_ account: Account) {
         guard let accountId = account.id else { return }
         var newId: Int64?
-        let ok = model.perform("Vaste storting gemaakt van de maandbedragen") {
+        let ok = model.perform("Vaste overboeking gemaakt van de maandbedragen") {
             try model.db.write { db in
-                newId = try DistributionService.createFromPots(db, accountId: accountId, name: "Maandelijkse storting",
+                newId = try DistributionService.createFromPots(db, accountId: accountId, name: "Maandelijks sparen",
                                                                year: model.today.year).id
             }
         }
@@ -293,7 +293,7 @@ private struct PotsDistributionEditor: View {
             Divider()
             footer
         }
-        .confirmationDialog("Vaste storting \(summary?.name ?? "") verwijderen?", isPresented: $confirmDelete) {
+        .confirmationDialog("Automatisch sparen: \(summary?.name ?? "") verwijderen?", isPresented: $confirmDelete) {
             Button("Verwijder", role: .destructive) { remove() }
             Button("Annuleer", role: .cancel) {}
         } message: {
@@ -305,7 +305,7 @@ private struct PotsDistributionEditor: View {
         Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 10) {
             GridRow {
                 Text("Naam").foregroundStyle(.secondary)
-                TextField("Naam", text: $draft.name, prompt: Text("bijv. Maandelijkse storting"))
+                TextField("Naam", text: $draft.name, prompt: Text("bijv. Maandelijks sparen"))
                     .textFieldStyle(.roundedBorder)
             }
             GridRow {
@@ -327,7 +327,7 @@ private struct PotsDistributionEditor: View {
                     .onChange(of: draft.accountId) { _, _ in draft.lines = [] }
                 } else {
                     Text(summary?.accountName ?? "")
-                        .help("De spaarrekening van een bestaande storting staat vast. Maak een nieuwe storting voor een andere rekening.")
+                        .help("De spaarrekening van een bestaande overboeking staat vast. Maak een nieuwe overboeking voor een andere rekening.")
                 }
             }
         }
@@ -335,9 +335,9 @@ private struct PotsDistributionEditor: View {
 
     private var lines: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Verdeling over de potten").font(.headline)
+            Text("Verdeling over de potjes").font(.headline)
             if draft.lines.isEmpty {
-                Text("Nog geen potten. Voeg de potten toe waar deze storting naartoe gaat.")
+                Text("Nog geen potjes. Voeg de potjes toe waar deze overboeking naartoe gaat.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             ForEach($draft.lines) { $line in
@@ -350,7 +350,7 @@ private struct PotsDistributionEditor: View {
                         Image(systemName: "minus.circle").foregroundStyle(.secondary)
                     }
                     .buttonStyle(.borderless)
-                    .help("Haal \(line.name) uit deze storting.")
+                    .help("Haal \(line.name) uit deze overboeking.")
                 }
             }
             HStack {
@@ -366,7 +366,7 @@ private struct PotsDistributionEditor: View {
                         }
                     }
                 } label: {
-                    Label("Pot toevoegen", systemImage: "plus")
+                    Label("Potje toevoegen", systemImage: "plus")
                 }
                 .fixedSize()
                 .disabled(addable.isEmpty)
@@ -379,7 +379,7 @@ private struct PotsDistributionEditor: View {
             }
             .padding(.top, 6)
             if draft.lines.contains(where: { ($0.amount ?? .zero).isZero }) {
-                Text("Potten zonder bedrag doen niet mee en verdwijnen bij het bewaren.")
+                Text("Potjes zonder bedrag doen niet mee en verdwijnen bij het bewaren.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
@@ -399,22 +399,23 @@ private struct PotsDistributionEditor: View {
                     }
                 }
             }
-            Picker("Hoort bij post", selection: $draft.itemId) {
+            Picker("Telt in je begroting als", selection: $draft.itemId) {
                 Text("Geen").tag(Int64?.none)
                 ForEach(data.items, id: \.id) { item in
                     Text(item.label).tag(item.id)
                 }
             }
             .fixedSize()
-            Text("Het planbedrag van deze post volgt het totaal van de storting.")
+            Text("Op je betaalrekening is deze overboeking een uitgave op deze post. Het planbedrag van de post volgt het totaal van de overboeking.")
                 .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             if let summary, let buildup = data.buildup, buildup.distribution?.id == summary.id, let warning = buildup.warning, !dirty {
                 // RESERVERINGEN: het plan in het maandgrid komt nog uit de RES-regels; opnieuw bewaren helpt dan niet.
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
                     .font(.callout).foregroundStyle(Theme.warning)
                     .fixedSize(horizontal: false, vertical: true)
             } else if let summary, summary.planMatchesTotal == false, let item = summary.item, !dirty {
-                Label("Het plan van \(item.label) is \(item.plan.magnitude.formatted()), maar deze storting is \(summary.total.formatted()). Bewaar de storting opnieuw of pas de post aan.",
+                Label("Het plan van \(item.label) is \(item.plan.magnitude.formatted()), maar deze overboeking is \(summary.total.formatted()). Bewaar de overboeking opnieuw of pas de post aan.",
                       systemImage: "exclamationmark.triangle.fill")
                     .font(.callout).foregroundStyle(Theme.warning)
                     .fixedSize(horizontal: false, vertical: true)
@@ -445,7 +446,7 @@ private struct PotsDistributionEditor: View {
             if summary != nil && dirty {
                 Button("Zet terug") { draft = original }
             }
-            Button(summary == nil ? "Maak storting" : "Bewaar") { save() }
+            Button(summary == nil ? "Maak vaste overboeking" : "Bewaar") { save() }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut("s", modifiers: .command)
                 .disabled(!canSave)
@@ -459,7 +460,7 @@ private struct PotsDistributionEditor: View {
         guard let accountId = draft.accountId else { return }
         let tuples = draft.validLines
         var savedId: Int64?
-        let ok = model.perform("Vaste storting \(trimmedName) bewaard") {
+        let ok = model.perform("Automatisch sparen: \(trimmedName) bewaard") {
             try model.db.write { db in
                 let id: Int64
                 if let summary {
@@ -501,7 +502,7 @@ private struct PotsDistributionEditor: View {
     }
 
     private func setArchived(_ summary: DistributionSummary, _ archived: Bool) {
-        let ok = model.perform(archived ? "Vaste storting gearchiveerd" : "Vaste storting staat weer in de lijst") {
+        let ok = model.perform(archived ? "Vaste overboeking gearchiveerd" : "Vaste overboeking staat weer in de lijst") {
             try model.db.write { db in try DistributionService.setArchived(db, distributionId: summary.id, archived) }
         }
         if ok && archived { onRemoved() }
@@ -509,7 +510,7 @@ private struct PotsDistributionEditor: View {
 
     private func remove() {
         guard let summary else { return }
-        let ok = model.perform("Vaste storting verwijderd") {
+        let ok = model.perform("Vaste overboeking verwijderd") {
             try model.db.write { db in try DistributionService.delete(db, distributionId: summary.id) }
         }
         if ok { onRemoved() }

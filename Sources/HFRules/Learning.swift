@@ -117,12 +117,12 @@ extension RuleEngine {
         }
         try rule.save(db)
 
-        var target = "divers"
+        var target = "overig"
         if let itemLabel {
             target = "post '\(itemLabel)'"
         } else if let potId = correction.potId {
             let name = try String.fetchOne(db, sql: "SELECT name FROM pot WHERE id = ?", arguments: [potId])
-            target = "pot '\(name ?? String(potId))'"
+            target = "potje '\(name ?? String(potId))'"
         }
         let amountText = rule.amount.map { " (bedrag \($0.formatted()))" } ?? ""
         let reimburseText = rule.reimburse ? ", nog overboeken met spaar bij \(rule.reimburseDirection.title)" : ""

@@ -84,7 +84,7 @@ struct PotsEditSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(pot == nil ? "Nieuwe pot" : "Pot bewerken").font(.headline).padding(.top, 16)
+            Text(pot == nil ? "Nieuw potje" : "Potje bewerken").font(.headline).padding(.top, 16)
             // De velden komen pas na het laden, zodat het beginbedrag meteen goed in het veld staat.
             if !loaded { Spacer() } else {
             Form {
@@ -102,7 +102,7 @@ struct PotsEditSheet: View {
                         }
                     }
                     TextField("Eigenaar (mag leeg)", text: $owner, prompt: Text("bijv. een gezinslid"))
-                        .help("Spaarpotten worden per eigenaar gegroepeerd.")
+                        .help("Spaarpotjes worden per eigenaar gegroepeerd.")
                     if !owners.isEmpty {
                         HStack(spacing: 8) {
                             Text("Kies:").font(.callout).foregroundStyle(.secondary)
@@ -118,7 +118,7 @@ struct PotsEditSheet: View {
                                                              set: { openingDate = $0; openingDateTouched = true }),
                                displayedComponents: .date)
                 } footer: {
-                    Text("Wat er al in de pot zat toen je met de app begon. Laat op 0,00 staan als de pot leeg begint.")
+                    Text("Wat er al in het potje zat toen je met de app begon. Laat op 0,00 staan als het potje leeg begint.")
                         .font(.callout).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -133,7 +133,7 @@ struct PotsEditSheet: View {
                         goalParts
                     } else {
                         MoneyField("Doelbedrag", value: $target)
-                            .help("Het bedrag dat je in deze pot wilt hebben. Laat leeg als de pot geen doel heeft. Een som zoals 40*65 mag ook.")
+                            .help("Het bedrag dat je in dit potje wilt hebben. Laat leeg als het potje geen doel heeft. Een som zoals 40*65 mag ook.")
                     }
                     Toggle("Met doeldatum", isOn: $hasTargetDate)
                     if hasTargetDate {
@@ -142,13 +142,13 @@ struct PotsEditSheet: View {
                 }
                 if let pot {
                     Section {
-                        LabeledContent("Per maand naar deze pot") {
+                        LabeledContent("Per maand naar dit potje") {
                             Text(pot.distributionAmount.isZero ? "nog niets" : pot.distributionAmount.formatted())
                                 .monospacedDigit()
                         }
-                        Button("Vaste stortingen…") { onDistributions() }
+                        Button("Automatisch sparen…") { onDistributions() }
                     } footer: {
-                        Text("Dit bedrag volgt uit je vaste stortingen. Je wijzigt het daar.")
+                        Text("Dit bedrag volgt uit je vaste overboekingen. Je wijzigt het daar.")
                             .font(.callout).foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -161,7 +161,7 @@ struct PotsEditSheet: View {
             HStack {
                 Spacer()
                 Button("Annuleer", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(pot == nil ? "Maak pot" : "Bewaar") { save() }
+                Button(pot == nil ? "Maak potje" : "Bewaar") { save() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canSave)
             }
@@ -241,7 +241,7 @@ struct PotsEditSheet: View {
         let targetDay: Day? = (targetValue != nil && hasTargetDate) ? Day(date: targetDate) : nil
         let openingDay = Day(date: openingDate)
         var savedId: Int64?
-        let ok = model.perform(pot == nil ? "Pot \(trimmedName) gemaakt" : "Pot \(trimmedName) bewaard") {
+        let ok = model.perform(pot == nil ? "Potje \(trimmedName) gemaakt" : "Potje \(trimmedName) bewaard") {
             try model.db.write { db in
                 // Het beginsaldo van de rekening bij de bank blijft gelijk; alleen de verdeling verandert.
                 let bankOpening = try PotService.openingSummary(db, accountId: accountId).total
@@ -317,7 +317,7 @@ struct PotsMoveSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("Verplaats naar andere pot").font(.headline).padding(.top, 16)
+            Text("Verplaats naar ander potje").font(.headline).padding(.top, 16)
             Form {
                 Section {
                     LabeledContent("Van") {
@@ -328,7 +328,7 @@ struct PotsMoveSheet: View {
                         }
                     }
                     Picker("Naar", selection: $toId) {
-                        Text("Kies een pot").tag(Int64?.none)
+                        Text("Kies een potje").tag(Int64?.none)
                         ForEach(PotKind.allCases, id: \.self) { kind in
                             let group = candidates.filter { $0.kind == kind }
                             if !group.isEmpty {
@@ -374,8 +374,8 @@ struct PotsMoveSheet: View {
 
     private var footer: String {
         overdraws
-            ? "Let op: dit is meer dan er in \(from.name) zit. De pot komt dan negatief te staan."
-            : "Het saldo van de spaarrekening verandert niet; alleen de verdeling over de potten."
+            ? "Let op: dit is meer dan er in \(from.name) zit. Het potje komt dan negatief te staan."
+            : "Het saldo van de spaarrekening verandert niet; alleen de verdeling over de potjes."
     }
 
     private func save() {
@@ -420,7 +420,7 @@ struct PotsOpeningSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Beginbedragen nalopen").font(.title3.weight(.semibold))
-                Text("Vul per pot in wat erin zat op de dag dat je met \(accountName) in de app begon. Samen met wat nog geen pot heeft is dat het beginsaldo van de rekening.")
+                Text("Vul per potje in wat erin zat op de dag dat je met \(accountName) in de app begon. Samen met wat nog geen potje heeft is dat het beginsaldo van de rekening.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -454,7 +454,7 @@ struct PotsOpeningSheet: View {
             }
             Divider()
             HStack(spacing: 6) {
-                Text("Potten").foregroundStyle(.secondary)
+                Text("Potjes").foregroundStyle(.secondary)
                 Text(potSum.formatted()).monospacedDigit()
                 Text("+ niet toegewezen").foregroundStyle(.secondary)
                 Text(unallocated.formatted()).monospacedDigit()
@@ -465,7 +465,7 @@ struct PotsOpeningSheet: View {
             }
             .font(.callout)
             .padding(.horizontal, 20).padding(.vertical, 12)
-            .help("Niet toegewezen hoort € 0,00 te zijn: dan heeft elke euro van het beginsaldo een pot.")
+            .help("Niet toegewezen hoort € 0,00 te zijn: dan heeft elke euro van het beginsaldo een potje.")
             Divider()
             HStack {
                 Spacer()

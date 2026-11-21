@@ -113,12 +113,12 @@ struct SettingsPhoneTab: View {
     private var sectionsCard: some View {
         Card("Wat staat erop", icon: "list.bullet.rectangle") {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Nog te besteden deze maand, besteedbaar nu en de uitgaven van deze maand staan er altijd op.")
+                Text("Nog over deze maand, vrij te besteden en de uitgaven van deze maand staan er altijd op.")
                     .font(.callout).foregroundStyle(.secondary)
                 optionToggle("Vaste posten van deze maand", \.showFixedItems)
-                optionToggle("Verloop van besteedbaar per maand", \.showTrend)
+                optionToggle("Verloop van vrij te besteden per maand", \.showTrend)
                 optionToggle("Saldo per rekening", \.showAccounts)
-                optionToggle("Potten", \.showPots)
+                optionToggle("Potjes", \.showPots)
             }
         }
     }
@@ -129,10 +129,10 @@ struct SettingsPhoneTab: View {
                 optionToggle("Potjes van de kinderen", \.showChildPots)
                 if settings.options.showChildPots {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Kies wiens potjes erop komen. Dit is de eigenaar die je bij een pot invult (Potten › pot bewerken).")
+                        Text("Kies wiens potjes erop komen. Dit is de eigenaar die je bij een potje invult (Potjes › potje bewerken).")
                             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         if ownerChoices.isEmpty {
-                            Text("Er zijn nog geen potten met een eigenaar.").font(.callout).foregroundStyle(.secondary)
+                            Text("Er zijn nog geen potjes met een eigenaar.").font(.callout).foregroundStyle(.secondary)
                         }
                         ForEach(ownerChoices, id: \.self) { owner in
                             Toggle(owner, isOn: ownerBinding(owner)).toggleStyle(.checkbox)
@@ -141,13 +141,13 @@ struct SettingsPhoneTab: View {
                     .padding(.leading, 20)
                 }
                 Divider()
-                optionToggle("Gezamenlijke spaarpot met vooruitblik", \.showSharedPot)
+                optionToggle("Gezamenlijke spaarpotje met vooruitblik", \.showSharedPot)
                 if settings.options.showSharedPot {
                     VStack(alignment: .leading, spacing: 6) {
-                        Picker("Pot", selection: Binding(
+                        Picker("Potje", selection: Binding(
                             get: { settings.options.sharedPotId },
                             set: { settings.options.sharedPotId = $0; save() })) {
-                            Text("Kies een pot").tag(Int64?.none)
+                            Text("Kies een potje").tag(Int64?.none)
                             ForEach(pots) { pot in
                                 // Potten van verschillende kinderen heten vaak hetzelfde; de eigenaar maakt ze uniek.
                                 Text(pot.owner.map { "\(pot.name) (\($0))" } ?? pot.name).tag(Int64?.some(pot.id))
@@ -162,7 +162,7 @@ struct SettingsPhoneTab: View {
                                 .monospacedDigit()
                         }
                         .help("Hoe ver je op de telefoon een eigen datum kunt kiezen; de stand per maand gaat even ver")
-                        Text("Met het saldo nu, de verwachte stand over 3, 6 en 12 maanden en de stand op een datum die je op de telefoon zelf kiest, berekend zoals de vooruitblik bij de pot. Het datumveld werkt als je de pagina in een browser opent; in de voorvertoning van Bestanden staat de stand per maand.")
+                        Text("Met het saldo nu, de verwachte stand over 3, 6 en 12 maanden en de stand op een datum die je op de telefoon zelf kiest, berekend zoals de vooruitblik bij het potje. Het datumveld werkt als je de pagina in een browser opent; in de voorvertoning van Bestanden staat de stand per maand.")
                             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.leading, 20)

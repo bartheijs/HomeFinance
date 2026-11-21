@@ -105,9 +105,9 @@ enum GridTotalLine: Int, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .fixed: "Vaste posten"
-        case .inDivers: "IN divers"
-        case .uitDivers: "UIT divers"
-        case .nettoDivers: "Netto divers"
+        case .inDivers: "IN overig"
+        case .uitDivers: "UIT overig"
+        case .nettoDivers: "Netto overig"
         case .result: "Resultaat"
         case .ruimte: "Ruimte t.o.v. maandbudget"
         }
@@ -118,10 +118,10 @@ enum GridTotalLine: Int, CaseIterable, Identifiable {
         case .fixed: "Alles wat op vaste posten is geboekt: inkomsten min uitgaven. De RES-regels tellen niet mee."
         case .inDivers: "Inkomsten die niet bij een vaste post horen. Klik op een maand voor de boekingen."
         case .uitDivers: "Uitgaven die niet bij een vaste post horen, zoals tanken of een cadeau. Klik op een maand voor de boekingen."
-        case .nettoDivers: "IN divers plus UIT divers."
+        case .nettoDivers: "IN overig plus UIT overig."
         case .result: "Alles wat er die maand bij kwam min alles wat er af ging."
         case .ruimte:
-            "Het plan van de vaste posten die deze maand verwacht worden (zonder RES-regels), plus IN divers en UIT divers. "
+            "Het plan van de vaste posten die deze maand verwacht worden (zonder RES-regels), plus IN overig en UIT overig. "
                 + "Positief: je blijft binnen je maandbudget. Negatief: je geeft meer uit dan er binnenkomt."
         }
     }
@@ -163,7 +163,7 @@ struct GridTarget: Identifiable, Equatable {
     var title: String {
         switch kind {
         case .item(let row): row.label
-        case .divers(let positive): positive ? "IN divers" : "UIT divers"
+        case .divers(let positive): positive ? "IN overig" : "UIT overig"
         }
     }
 }

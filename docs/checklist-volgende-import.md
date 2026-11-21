@@ -61,7 +61,7 @@ Vink af wat klopt. Klopt iets niet, maak dan een screenshot en noteer wat je zag
 
 ## 7. Afsluiten
 
-- [ ] Saldo betaalrekening, saldo spaarrekening en "nog te besteden" zijn gelijk aan je Excel, of het verschil is
+- [ ] Saldo betaalrekening, saldo spaarrekening en "nog over deze maand" (vroeger "nog te besteden") zijn gelijk aan je Excel, of het verschil is
       verklaard.
 - [ ] Maak een back-up.
 - [ ] Geef de afwijkingen door aan de orchestrator.

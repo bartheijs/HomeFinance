@@ -141,9 +141,9 @@ private struct DashboardHome: View {
                                              help: "Vaste posten zijn de inkomsten en uitgaven die elke maand, elk kwartaal of elk jaar terugkomen.") {
                             if fixed.lateCount > 0 {
                                 Text("\(fixed.lateCount) te laat").foregroundStyle(Theme.negative)
-                                    + Text(" · \(fixed.openCount) open").foregroundStyle(.secondary)
+                                    + Text(" · \(fixed.openCount) nog verwacht").foregroundStyle(.secondary)
                             } else {
-                                Text(fixed.openCount == 0 ? "Alles is binnen" : "\(fixed.openCount) open").foregroundStyle(.secondary)
+                                Text(fixed.openCount == 0 ? "Alles is binnen" : "\(fixed.openCount) nog verwacht").foregroundStyle(.secondary)
                             }
                         } action: { open(.fixedItems) }
                     }
@@ -164,7 +164,7 @@ private struct DashboardHome: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .help("Grafieken: besteedbaar per maand en IN en UIT per maand")
+                .help("Grafieken: vrij te besteden per maand en IN en UIT per maand")
             }
         }
         .padding(.top, 28)

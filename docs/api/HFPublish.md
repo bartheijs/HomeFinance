@@ -1,5 +1,11 @@
 # HFPublish — het dashboard voor de telefoon
 
+> **Namen in de interface (UX-stap C, november 2026).** De app gebruikt sinds stap C andere woorden dan deze
+> documentatie en de code: potje (pot), Automatisch sparen / vaste overboeking (vaste storting), overig (divers),
+> vrij te besteden (besteedbaar nu), nog over deze maand (nog te besteden deze maand), minimaal op je betaalrekening
+> (anti-rood), Nog overboeken (verrekenen met spaar), voorgeschoten (verrekenen per tag), banktransactie (bankregel).
+> De volledige lijst staat in `docs/ux/begrippen-voorstel.md`, sectie "Doorgevoerd". Identifiers zijn niet hernoemd.
+
 Maakt van de belangrijkste cijfers één los HTML-bestand dat je op een telefoon opent. Er is geen webserver: de
 Mac-app zet het bestand in een map die synchroniseert (iCloud Drive of Google Drive) en op de telefoon open je
 het met de app Bestanden of Drive.
@@ -74,7 +80,7 @@ Eén volledig HTML-document voor een telefoon:
 - Licht en donker via `prefers-color-scheme`; systeemlettertype.
 - Bovenaan "HomeFinance" en "Bijgewerkt op 15 mrt 2027 om 14:03". Zonder scripts kan de pagina niet zelf melden
   dat hij oud is; daarom staat de datum duidelijk bovenaan.
-- Volgorde: "Nog te besteden deze maand" (groot, zoals op het Dashboard van de Mac), daaronder "Besteedbaar nu",
+- Volgorde: "Nog over deze maand" (groot, zoals op het Dashboard van de Mac), daaronder "Vrij te besteden",
   eventueel "Komt nog terug: <tag>" (met de zin "Voorgeschoten geld dat nog terugkomt, telt al mee."),
   "tijdelijk geleend van spaar" en "nog over te boeken van spaar"; dan per kind een kaart met de potjes; de
   gezamenlijke spaarpot met "Over 3/6/12 maanden" en de maand eronder, een eigen datum en de stand per maand; uitgaven van de maand tegen plan, vaste

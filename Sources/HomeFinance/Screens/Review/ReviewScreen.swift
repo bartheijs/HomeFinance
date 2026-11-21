@@ -117,7 +117,7 @@ struct ReviewProgressLine: View {
                 Text(title(toCheck: toCheck, certain: certain))
                     .font(.system(.title2, design: .rounded).weight(.semibold))
                 Text(certain > 0
-                     ? "Zeker betekent: tegenpartij en bedrag kloppen met een regel of een vaste storting. Die boek je in één keer; daarna blijven alleen de twijfelgevallen over."
+                     ? "Zeker betekent: tegenpartij en bedrag kloppen met een regel of een vaste overboeking. Die boek je in één keer; daarna blijven alleen de twijfelgevallen over."
                      : "Loop ze één voor één langs: kies waar het bij hoort en druk op ⏎.")
                     .font(.callout).foregroundStyle(.secondary)
             }
@@ -167,7 +167,7 @@ struct ReviewBanner: View {
                 text: n == 1 ? "1 overboeking tussen je eigen rekeningen gevonden"
                              : "\(n) overboekingen tussen je eigen rekeningen gevonden") {
                 Button(n == 1 ? "Koppel" : "Koppel alle \(n)") { store.linkPairs(model) }
-                    .help("Boekt beide kanten met het voorstel en koppelt ze aan elkaar, zodat je ziet dat het geld bij jezelf blijft. Een storting die gelijk is aan de maandbedragen wordt over de reserveringspotten verdeeld.")
+                    .help("Boekt beide kanten met het voorstel en koppelt ze aan elkaar, zodat je ziet dat het geld bij jezelf blijft. Een overboeking die gelijk is aan de maandbedragen wordt over de reserveringspotjes verdeeld.")
             }
         }
     }

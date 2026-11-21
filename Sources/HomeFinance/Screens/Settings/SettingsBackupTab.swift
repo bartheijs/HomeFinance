@@ -183,7 +183,7 @@ struct SettingsBackupTab: View {
                 Text("Een back-up is je hele administratie om terug te kunnen zetten. Een export is om te lezen en door te rekenen.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 SettingsRow("\(String(model.year)) naar Excel",
-                            text: "Eén leesbaar bestand met het maandgrid, de transacties, de potten en de vaste stortingen.") {
+                            text: "Eén leesbaar bestand met het maandgrid, de transacties, de potjes en de vaste overboekingen.") {
                     Button("Exporteer \(String(model.year)) naar Excel…") { exportExcel() }
                 }
                 Divider()

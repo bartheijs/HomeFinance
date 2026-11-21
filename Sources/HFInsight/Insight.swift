@@ -21,7 +21,7 @@ public enum InsightError: Error, Equatable, Sendable, LocalizedError {
         switch self {
         case .yearNotFound(let y): return "Er is nog geen begroting voor het jaar \(y)."
         case .accountNotFound: return "De rekening bestaat niet (meer)."
-        case .potNotFound: return "De pot bestaat niet (meer)."
+        case .potNotFound: return "Het potje bestaat niet (meer)."
         }
     }
 }

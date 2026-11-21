@@ -94,7 +94,7 @@ struct SettingsYearTab: View {
             get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), presenting: deleteTarget) { item in
             let count = data.entryCounts[item.id ?? -1] ?? 0
             if count > 0 {
-                Button("Verwijder; boekingen worden divers", role: .destructive) { delete(item, convert: true) }
+                Button("Verwijder; boekingen worden overig", role: .destructive) { delete(item, convert: true) }
             } else {
                 Button("Verwijder", role: .destructive) { delete(item, convert: false) }
             }
@@ -102,7 +102,7 @@ struct SettingsYearTab: View {
         } message: { item in
             let count = data.entryCounts[item.id ?? -1] ?? 0
             Text(count > 0
-                 ? "Op deze post staan \(SettingsFormat.count(count, "boeking", "boekingen")). Die blijven bestaan en tellen daarna mee als divers."
+                 ? "Op deze post staan \(SettingsFormat.count(count, "boeking", "boekingen")). Die blijven bestaan en tellen daarna mee als overig."
                  : "Op deze post staan geen boekingen.")
         }
         .confirmationDialog("Van ‘wat als’ het nieuwe plan maken?", isPresented: $confirmApply) {
@@ -194,7 +194,7 @@ struct SettingsYearTab: View {
         switch direction {
         case .IN: "Geld dat binnenkomt: salaris, toeslagen en andere vaste inkomsten."
         case .UIT: "Vaste lasten die van de betaalrekening gaan, plus de regel RESERVERINGEN."
-        case .RES: data.buildup?.reserveLinesNote ?? "De onderdelen van de ene maandelijkse overboeking RESERVERINGEN naar de spaarrekening. Er wordt niet op geboekt; ze laten zien hoe dat bedrag is opgebouwd en welke pot ermee gevuld wordt."
+        case .RES: data.buildup?.reserveLinesNote ?? "De onderdelen van de ene maandelijkse overboeking RESERVERINGEN naar de spaarrekening. Er wordt niet op geboekt; ze laten zien hoe dat bedrag is opgebouwd en welk potje ermee gevuld wordt."
         }
     }
 
@@ -232,10 +232,10 @@ struct SettingsYearTab: View {
                     Divider()
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 10) {
-                            Text(data.buildup?.reserveLinesNote ?? "De verdeling over potten stel je voortaan in bij Vaste stortingen.")
+                            Text(data.buildup?.reserveLinesNote ?? "De verdeling over potjes stel je voortaan in bij Automatisch sparen.")
                                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                             Spacer()
-                            Button("Naar Vaste stortingen") { model.selection = .distributions }.controlSize(.small)
+                            Button("Naar Automatisch sparen") { model.selection = .distributions }.controlSize(.small)
                         }
                         if let warning = data.buildup?.warning {
                             Label(warning, systemImage: "exclamationmark.triangle.fill")
@@ -332,7 +332,7 @@ struct SettingsYearTab: View {
                             .font(.system(.title, design: .rounded).weight(.bold)).monospacedDigit()
                             .foregroundStyle(balance.plan.surplus.isNegative ? Theme.negative : Theme.positive)
                     }
-                    .help("Inkomsten min uitgaven per maand. Dit is de ruimte voor diverse uitgaven.")
+                    .help("Inkomsten min uitgaven per maand. Dit is de ruimte voor overige uitgaven.")
                     Spacer()
                 }
             }
@@ -384,7 +384,7 @@ struct SettingsYearTab: View {
         let skipped = data.items.filter { $0.scenarioAmount != nil && ($0.distributionId != nil || $0.isReserveTotal) }
         var text = "Elk ingevuld wat-als-bedrag wordt het planbedrag van die post. Daarna zijn de wat-als-velden weer leeg."
         if !skipped.isEmpty {
-            text += " Niet aangepast, omdat het plan een vaste storting volgt of berekend wordt: "
+            text += " Niet aangepast, omdat het plan een vaste overboeking volgt of berekend wordt: "
                 + skipped.map(\.label).joined(separator: ", ") + "."
         }
         return text
@@ -466,9 +466,9 @@ struct SettingsYearTab: View {
         resetToken += 1
         model.toast = "Nieuw plan: \(SettingsFormat.count(result.appliedCount, "post", "posten")) aangepast"
         if !result.skipped.isEmpty {
-            applyNote = "Deze posten zijn overgeslagen, omdat hun plan een vaste storting volgt of berekend wordt: "
+            applyNote = "Deze posten zijn overgeslagen, omdat hun plan een vaste overboeking volgt of berekend wordt: "
                 + result.skipped.map(\.label).joined(separator: ", ")
-                + ". Pas het bedrag aan bij Vaste stortingen."
+                + ". Pas het bedrag aan bij Automatisch sparen."
         }
     }
 
@@ -558,17 +558,17 @@ struct SettingsBuffersCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SettingsRow("Anti-rood", text: "Blijft altijd op de betaalrekening staan, zodat je nooit rood staat.") {
+            SettingsRow("Minimaal op je betaalrekening aan het eind van de maand", text: "Dit bedrag laat je altijd staan, zodat je niet rood komt.") {
                 field($antiRood, .antiRood)
             }
-            .help("Deze buffer telt niet mee als besteedbaar.")
+            .help("Deze buffer telt niet mee in vrij te besteden.")
             .padding(.horizontal, 18).padding(.vertical, 12)
             Divider().padding(.leading, 18)
             SettingsRow("Tijdelijk geleend van spaar",
                         text: "Haal je even extra geld van spaar? Markeer die overboeking bij Transacties als ‘Tijdelijk geleend van spaar’, en het terugboeken ook. De app houdt bij wat er nog uitstaat.") {
                 MoneyText(outstanding).foregroundStyle(outstanding.isZero ? .secondary : .primary)
             }
-            .help("Wat er uitstaat telt niet mee als besteedbaar. Je vult hier niets in; het volgt uit je transacties.")
+            .help("Wat er uitstaat telt niet mee in vrij te besteden. Je vult hier niets in; het volgt uit je transacties.")
             .padding(.horizontal, 18).padding(.vertical, 12)
         }
         .font(.title3)

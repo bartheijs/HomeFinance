@@ -1,5 +1,11 @@
 # HFRules — publieke API
 
+> **Namen in de interface (UX-stap C, november 2026).** De app gebruikt sinds stap C andere woorden dan deze
+> documentatie en de code: potje (pot), Automatisch sparen / vaste overboeking (vaste storting), overig (divers),
+> vrij te besteden (besteedbaar nu), nog over deze maand (nog te besteden deze maand), minimaal op je betaalrekening
+> (anti-rood), Nog overboeken (verrekenen met spaar), voorgeschoten (verrekenen per tag), banktransactie (bankregel).
+> De volledige lijst staat in `docs/ux/begrippen-voorstel.md`, sectie "Doorgevoerd". Identifiers zijn niet hernoemd.
+
 Regels toepassen op banktransacties, voorstellen met zekerheid, een regelconcept bij een boeking (alleen
 bewaard met toestemming van de gebruiker).
 De module **stelt alleen voor** en beheert regels; boeken (`Entry`) doet `HFBudget`.

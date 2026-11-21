@@ -227,11 +227,11 @@ public enum PotService {
     @discardableResult
     public static func update(_ db: Database, _ pot: Pot) throws -> Pot {
         try atomic(db) {
-            guard let id = pot.id else { throw BudgetError.validation("Deze pot is nog niet opgeslagen.") }
+            guard let id = pot.id else { throw BudgetError.validation("Dit potje is nog niet opgeslagen.") }
             let existing = try Check.pot(db, id)
             var pot = pot
             guard pot.accountId == existing.accountId else {
-                throw BudgetError.validation("Een pot kan niet naar een andere rekening verhuizen.")
+                throw BudgetError.validation("Een potje kan niet naar een andere rekening verhuizen.")
             }
             try validate(db, &pot)
             pot.sortOrder = existing.sortOrder
@@ -348,9 +348,9 @@ public enum PotService {
         try atomic(db) {
             let from = try Check.pot(db, fromPotId)
             let to = try Check.pot(db, toPotId)
-            guard fromPotId != toPotId else { throw BudgetError.validation("Kies twee verschillende potten.") }
+            guard fromPotId != toPotId else { throw BudgetError.validation("Kies twee verschillende potjes.") }
             guard from.accountId == to.accountId else {
-                throw BudgetError.validation("De potten \(from.name) en \(to.name) staan niet op dezelfde rekening.")
+                throw BudgetError.validation("De potjes \(from.name) en \(to.name) staan niet op dezelfde rekening.")
             }
             guard amount > .zero else { throw BudgetError.validation("Het te verplaatsen bedrag moet positief zijn.") }
             let out = try EntryService.create(db, EntryDraft(accountId: from.accountId, day: day, amount: -amount,
@@ -362,16 +362,16 @@ public enum PotService {
     }
 
     private static func validate(_ db: Database, _ pot: inout Pot) throws {
-        pot.name = try Check.nonEmpty(pot.name, "De naam van de pot")
+        pot.name = try Check.nonEmpty(pot.name, "De naam van het potje")
         let account = try Check.account(db, pot.accountId)
         guard account.kind == .spaar else {
-            throw BudgetError.validation("Een pot hoort bij een spaarrekening; \(account.name) is een betaalrekening.")
+            throw BudgetError.validation("Een potje hoort bij een spaarrekening; \(account.name) is een betaalrekening.")
         }
         guard !pot.monthlyAmount.isNegative else {
-            throw BudgetError.validation("Het maandbedrag van een pot mag niet negatief zijn.")
+            throw BudgetError.validation("Het maandbedrag van een potje mag niet negatief zijn.")
         }
         if let target = pot.targetAmount, target.isNegative {
-            throw BudgetError.validation("Het spaardoel van een pot mag niet negatief zijn.")
+            throw BudgetError.validation("Het spaardoel van een potje mag niet negatief zijn.")
         }
     }
 }

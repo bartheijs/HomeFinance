@@ -46,13 +46,13 @@ struct RulesScreen: View {
                     .padding(.horizontal, 24).padding(.vertical, 10)
                 } else {
                     ScreenHeader("Regels",
-                                 subtitle: "Een regel ontstaat als je in Nakijken ‘Onthoud als regel’ aanvinkt, of als je hem hier maakt.") {
+                                 subtitle: "Een regel ontstaat als je in Nakijken ‘Voortaan zo indelen’ aanvinkt, of als je hem hier maakt.") {
                         newRuleButton
                     }
                 }
                 if loaded && data.rules.isEmpty && !isNew {
                     EmptyState(title: "Nog geen regels",
-                               message: "Vink bij het boeken in Importeren en nakijken ‘Onthoud als regel’ aan, of maak hier zelf een regel.",
+                               message: "Vink bij het boeken in Importeren en nakijken ‘Voortaan zo indelen’ aan, of maak hier zelf een regel.",
                                icon: "wand.and.stars", actionTitle: "Nieuwe regel") { request(.new) }
                 } else {
                     VStack(spacing: 0) {

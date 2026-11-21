@@ -221,7 +221,7 @@ private struct HistorySavingsCard: View {
                 Text(summary).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if savings.totalsMatch {
                     if savings.stoppedAtRow != nil {
-                        Label("Saldi per pot kloppen met Excel", systemImage: "checkmark.circle.fill")
+                        Label("Saldi per potje kloppen met Excel", systemImage: "checkmark.circle.fill")
                             .font(.callout).foregroundStyle(Theme.positive)
                     }
                 } else {
@@ -248,14 +248,14 @@ private struct HistorySavingsCard: View {
                     }
                     .font(.caption).padding(.top, 4)
                 } label: {
-                    Text("Potten en meldingen").font(.callout).foregroundStyle(.secondary)
+                    Text("Potjes en meldingen").font(.callout).foregroundStyle(.secondary)
                 }
             }
         }
     }
 
     private var summary: String {
-        var text = "\(filledPots.count) potten · \(savings.movementCount) mutaties"
+        var text = "\(filledPots.count) potjes · \(savings.movementCount) mutaties"
         if let first = savings.firstDay, let last = savings.lastDay {
             text += " · \(first.short(withYear: true)) t/m \(last.short(withYear: true))"
         }
@@ -351,7 +351,7 @@ struct HistoryAccountStep: View {
                             .font(.callout).foregroundStyle(.secondary)
                     }
                     if !check.newPots.isEmpty {
-                        Text("Nieuwe potten (als reservering): \(check.newPots.joined(separator: ", ")).")
+                        Text("Nieuwe potjes (als reservering): \(check.newPots.joined(separator: ", ")).")
                             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     if let change = check.openingChange {
@@ -359,7 +359,7 @@ struct HistoryAccountStep: View {
                         if !change.difference.isZero {
                             Picker("Wat wil je met het saldo?", selection: $state.savingsOpening) {
                                 Text("Kies…").tag(HistoryOpeningDecision.stopIfDifferent)
-                                Text("Saldo op \(change.oldDate.dutch) blijft \(change.oldBalance.formatted()); de rest (\((-change.difference).formatted())) staat vanaf \(change.newDate.dutch) niet in een pot")
+                                Text("Saldo op \(change.oldDate.dutch) blijft \(change.oldBalance.formatted()); de rest (\((-change.difference).formatted())) staat vanaf \(change.newDate.dutch) niet in een potje")
                                     .tag(HistoryOpeningDecision.keepOldBalance)
                                 Text("Het saldo op \(change.oldDate.dutch) wordt \(change.balanceAtOldDate.formatted()) in plaats van \(change.oldBalance.formatted())")
                                     .tag(HistoryOpeningDecision.acceptNewBalance)
@@ -435,7 +435,7 @@ struct HistoryDoneStep: View {
             }
             if let result = state.savingsResult {
                 Card("Spaarhistorie", icon: "square.grid.3x3.topleft.filled") {
-                    Text("\(result.entryCount) mutaties" + (result.newPotCount > 0 ? " · \(result.newPotCount) nieuwe potten" : ""))
+                    Text("\(result.entryCount) mutaties" + (result.newPotCount > 0 ? " · \(result.newPotCount) nieuwe potjes" : ""))
                     if let change = result.openingChange {
                         Text("De rekening begint nu op \(change.newDate.dutch) met \(change.newBalance.formatted()).").foregroundStyle(.secondary)
                     }

@@ -40,7 +40,7 @@ import Testing
         let request = AnnualAmountRequest(name: "Wegenbelasting", yearlyAmount: c(50_400), pot: .new(name: "Wegenbelasting"),
                                           distribution: .existing(distributionId), year: 2027, forecastMonth: 5, today: today)
         let preview = try f.app.read { try AnnualAmountService.preview($0, request) }
-        #expect(preview.summary == "Er gaat elke maand € 42,00 naar potje Wegenbelasting via vaste storting Maandelijkse reserveringen; je begroting rekent met € 292,00 op post RESERVERINGEN. Let op: verhoog je overboeking bij de bank naar € 292,00.")
+        #expect(preview.summary == "Er gaat elke maand € 42,00 naar potje Wegenbelasting via Automatisch sparen: Maandelijkse reserveringen; je begroting rekent met € 292,00 op post RESERVERINGEN. Let op: verhoog je overboeking bij de bank naar € 292,00.")
         #expect(preview.potIsNew && !preview.distributionIsNew && !preview.itemIsNew)
         #expect(preview.addsReserveLine)
         #expect(preview.steps.count == 5)
@@ -84,7 +84,7 @@ import Testing
                                           distribution: .new(name: "Jaarrekeningen", accountId: f.spaar.id!),
                                           item: .new(label: "Jaarrekeningen"), year: 2027, today: today)
         let preview = try f.app.read { try AnnualAmountService.preview($0, request) }
-        #expect(preview.summary == "Er gaat elke maand € 20,00 naar potje Contributie via vaste storting Jaarrekeningen; je begroting rekent met € 20,00 op post Jaarrekeningen. Let op: maak bij de bank een maandelijkse overboeking van € 20,00 van je betaalrekening naar je spaarrekening.")
+        #expect(preview.summary == "Er gaat elke maand € 20,00 naar potje Contributie via Automatisch sparen: Jaarrekeningen; je begroting rekent met € 20,00 op post Jaarrekeningen. Let op: maak bij de bank een maandelijkse overboeking van € 20,00 van je betaalrekening naar je spaarrekening.")
         #expect(!preview.addsReserveLine)
         let result = try f.app.write { try AnnualAmountService.apply($0, request) }
         try f.app.read { db in

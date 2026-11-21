@@ -83,8 +83,8 @@ enum RulesText {
     static func target(_ r: Rule, _ data: RulesData) -> String {
         var text: String
         if let label = filled(r.targetItemLabel) { text = label }
-        else if let pot = data.potName(r.targetPotId), !r.reimburse { text = "pot \(pot)" }
-        else { text = "Divers" }
+        else if let pot = data.potName(r.targetPotId), !r.reimburse { text = "potje \(pot)" }
+        else { text = "Overig" }
         if r.reimburse {
             text += r.reimburseDirection == .both ? ", nog overboeken met spaar"
                                                   : ", nog overboeken met spaar bij \(r.reimburseDirection.title)"
@@ -137,7 +137,7 @@ struct RulesConfidenceHelp: View {
             row(.hoog, "De tegenpartij (naam of IBAN) én het bedrag kloppen. Dit kun je meestal in één keer boeken.")
             row(.midden, "De tegenpartij klopt maar het bedrag is anders of onbekend, of er staat een trefwoord in de omschrijving.")
             row(.laag, "Alleen het bedrag klopt. Altijd even nakijken.")
-            row(.geen, "Geen regel past. Je kiest zelf; met ‘Onthoud als regel’ wordt het de volgende keer voorgesteld.")
+            row(.geen, "Geen regel past. Je kiest zelf; met ‘Voortaan zo indelen’ wordt het de volgende keer voorgesteld.")
             Divider()
             Text("Passen er meer regels, dan wint de zekerste. Bij gelijke zekerheid wint de regel met de laagste prioriteit, daarna de regel met de meeste voorwaarden.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

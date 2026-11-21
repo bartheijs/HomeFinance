@@ -155,7 +155,7 @@ public enum SettlementService {
         try atomic(db) {
             var settlement = try Check.fetch(db, Settlement.self, settlementId, "Terugbetaling")
             guard !settlement.isOpening || depositEntryId == nil else {
-                throw BudgetError.depositInvalid("Aan een beginstand kan geen storting gekoppeld worden.")
+                throw BudgetError.depositInvalid("Aan een beginstand kan geen overboeking gekoppeld worden.")
             }
             var deposit: Entry?
             if let depositEntryId {

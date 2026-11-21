@@ -75,8 +75,8 @@ struct ReportsYearsTab: View {
                 ReportsColumnTitle("IN", help: "Alle inkomsten op de betaalrekening")
                 ReportsColumnTitle("UIT", help: "Alle uitgaven van de betaalrekening")
                 ReportsColumnTitle("Resultaat", help: "IN min UIT")
-                ReportsColumnTitle("IN divers", help: "Inkomsten zonder vaste post")
-                ReportsColumnTitle("UIT divers", help: "Uitgaven zonder vaste post")
+                ReportsColumnTitle("IN overig", help: "Inkomsten zonder vaste post")
+                ReportsColumnTitle("UIT overig", help: "Uitgaven zonder vaste post")
             }
             Divider()
             ForEach(years) { y in

@@ -152,7 +152,7 @@ extension DistributionService {
         guard let first = candidates.first else { return nil }
         guard candidates.count == 1 else {
             return DistributionMatch(distributions: candidates, side: side, exactAmount: false, difference: .zero,
-                                     allocations: [], warning: "Er passen \(candidates.count) vaste stortingen bij "
+                                     allocations: [], warning: "Er passen \(candidates.count) vaste overboekingen bij "
                                         + "deze transactie. Kies welke het is.")
         }
         if side == .destination, let total = context.totals[first.id!],
@@ -160,8 +160,8 @@ extension DistributionService {
             return DistributionMatch(distributions: [first], side: side, exactAmount: false,
                                      difference: transaction.amount - total, allocations: [],
                                      warning: "Dit lijkt een losse overboeking: \(transaction.amount.formatted()) is "
-                                        + "heel anders dan de vaste storting \(first.name) (\(total.formatted())). "
-                                        + "Kies één pot, of kies toch de vaste storting.",
+                                        + "heel anders dan Automatisch sparen: \(first.name) (\(total.formatted())). "
+                                        + "Kies één potje, of kies toch de vaste overboeking.",
                                      looksSeparate: true)
         }
         return try match(db, first, side: side, transaction: transaction)
@@ -175,7 +175,7 @@ extension DistributionService {
             return DistributionMatch(distributions: [distribution], side: side, exactAmount: proposal.isExact,
                                      difference: proposal.difference, allocations: proposal.allocations,
                                      warning: proposal.isExact ? nil : "Het bedrag wijkt "
-                                        + "\(proposal.difference.formatted(alwaysSign: true)) af van de vaste storting "
+                                        + "\(proposal.difference.formatted(alwaysSign: true)) af van Automatisch sparen: "
                                         + "\(distribution.name) (\(proposal.total.formatted())). Kies waar het verschil heen gaat.")
         case .source:
             let total = try self.total(db, distributionId: distribution.id!)
@@ -186,11 +186,11 @@ extension DistributionService {
                 """, arguments: [distribution.id, transaction.day.year])
             var warnings: [String] = []
             if itemId == nil {
-                warnings.append("Er is in \(transaction.day.year) geen post aan de vaste storting \(distribution.name) "
-                    + "gekoppeld; de boeking wordt divers.")
+                warnings.append("Er is in \(transaction.day.year) geen post aan Automatisch sparen: \(distribution.name) "
+                    + "gekoppeld; de boeking wordt overig.")
             }
             if !difference.isZero {
-                warnings.append("Het bedrag wijkt \(difference.formatted(alwaysSign: true)) af van de vaste storting "
+                warnings.append("Het bedrag wijkt \(difference.formatted(alwaysSign: true)) af van Automatisch sparen: "
                     + "(\(total.formatted())).")
             }
             return DistributionMatch(distributions: [distribution], side: side, exactAmount: difference.isZero,
@@ -264,7 +264,7 @@ public enum ForecastService {
                 let entry = try Check.entry(db, entryId)
                 let pot = try Check.pot(db, item.potId)
                 guard entry.accountId == pot.accountId else {
-                    throw BudgetError.validation("De boeking staat niet op de spaarrekening van de pot \(pot.name).")
+                    throw BudgetError.validation("De boeking staat niet op de spaarrekening van het potje \(pot.name).")
                 }
                 guard entry.amount.isNegative == item.amount.isNegative, !entry.amount.isZero else {
                     throw BudgetError.validation(item.amount.isNegative
@@ -330,7 +330,7 @@ public enum ForecastService {
     private static func validate(_ db: Database, _ item: inout ForecastItem) throws {
         let pot = try Check.pot(db, item.potId)
         guard !pot.archived else {
-            throw BudgetError.validation("De pot \(pot.name) is gearchiveerd; daar kan geen verwachting bij.")
+            throw BudgetError.validation("Het potje \(pot.name) is gearchiveerd; daar kan geen verwachting bij.")
         }
         guard !item.amount.isZero else { throw BudgetError.validation("Het verwachte bedrag mag niet nul zijn.") }
         item.label = item.label.trimmingCharacters(in: .whitespacesAndNewlines)

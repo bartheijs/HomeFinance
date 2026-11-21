@@ -185,7 +185,7 @@ struct SettingsAccountCard: View {
                         Text("Spaarrekening").tag(AccountKind.spaar)
                     }
                     .pickerStyle(.segmented).labelsHidden().fixedSize()
-                    .help("Betaalrekening: boekingen op vaste posten en divers. Spaarrekening: boekingen in potten.")
+                    .help("Betaalrekening: boekingen op vaste posten en overig. Spaarrekening: boekingen in potjes.")
                 }
                 GridRow {
                     Text("Beginsaldo").foregroundStyle(.secondary)
@@ -204,8 +204,8 @@ struct SettingsAccountCard: View {
                         Text("Verdeling").foregroundStyle(.secondary)
                         HStack(spacing: 10) {
                             Text(Self.splitText(split)).monospacedDigit()
-                                .help("Het beginsaldo van deze spaarrekening: het deel dat bij het begin over potten is verdeeld en het deel dat nog geen pot heeft.")
-                            Button("Naar Potten") { model.selection = .pots }.controlSize(.small)
+                                .help("Het beginsaldo van deze spaarrekening: het deel dat bij het begin over potjes is verdeeld en het deel dat nog geen potje heeft.")
+                            Button("Naar Potjes") { model.selection = .pots }.controlSize(.small)
                         }
                     }
                 }
@@ -233,7 +233,7 @@ struct SettingsAccountCard: View {
     private static func splitText(_ split: OpeningOverview) -> String {
         let pots = split.potTotal.formatted()
         let rest = split.unallocated.formatted()
-        return "potten \(pots) + niet toegewezen \(rest)"
+        return "potjes \(pots) + niet toegewezen \(rest)"
     }
 
     private var isDirty: Bool {

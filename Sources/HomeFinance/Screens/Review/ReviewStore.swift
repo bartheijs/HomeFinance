@@ -119,7 +119,7 @@ struct ReviewRuleOption: Equatable {
     var rule: Rule
     /// "Voortaan bij …: post …" (uit `RuleEngine.summary`).
     var summary: String
-    var title: String { isUpdate ? "Regel bijwerken met deze keuze" : "Onthoud als regel" }
+    var title: String { isUpdate ? "Regel bijwerken met deze keuze" : "Voortaan zo indelen" }
 }
 
 /// Melding onder de wachtrij, met de mogelijkheid om de laatste actie terug te draaien.
@@ -266,9 +266,9 @@ final class ReviewStore {
 
     func title(of target: ReviewTarget, kind: AccountKind) -> String {
         switch target {
-        case .none: kind == .betaal ? "Divers" : "Geen pot (divers)"
+        case .none: kind == .betaal ? "Overig" : "Geen potje (overig)"
         case .item(let id): itemsById[id]?.label ?? "Onbekende post"
-        case .pot(let id): potsById[id]?.name ?? "Onbekende pot"
+        case .pot(let id): potsById[id]?.name ?? "Onbekend potje"
         }
     }
 

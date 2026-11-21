@@ -17,7 +17,7 @@ extension ReportsData {
 
         case .spendable:
             let rows = spendable.map { [$0.day.dutch, p($0.balance), p($0.spendable)] }
-            return ReportsFormat.tsv(["Datum", "Op de rekening", "Besteedbaar"], rows)
+            return ReportsFormat.tsv(["Datum", "Op de rekening", "Vrij te besteden"], rows)
 
         case .tags:
             let header = ["Tag"] + Day.monthNamesShort + ["Dit jaar t/m nu", "Gemiddeld per maand", "Vorig jaar t/m zelfde datum", "Heel vorig jaar"]
@@ -46,9 +46,9 @@ extension ReportsData {
 
         case .divers:
             var rows = (divers?.buckets ?? []).map { [$0.name, String($0.count), p($0.total)] }
-            rows.append(["Totaal UIT divers", "", p(divers?.total ?? .zero)])
+            rows.append(["Totaal UIT overig", "", p(divers?.total ?? .zero)])
             rows.append([])
-            rows.append(["Grootste diverse uitgaven, \(ReportsFormat.period(year: year, month: diversMonth))"])
+            rows.append(["Grootste overige uitgaven, \(ReportsFormat.period(year: year, month: diversMonth))"])
             rows.append(["Datum", "Omschrijving", "Bedrag", "Tags"])
             rows += topDivers.map { [$0.day.dutch, $0.label, p($0.amount), $0.tags.map(\.name).joined(separator: ", ")] }
             return ReportsFormat.tsv(["Tag", "Aantal", "Bedrag"], rows)
@@ -57,7 +57,7 @@ extension ReportsData {
             let rows = years.map { y in
                 [String(y.year), p(y.income), p(y.expenses), p(y.result), p(y.inDivers), p(y.uitDivers), y.hasBudget ? "ja" : "nee"]
             }
-            return ReportsFormat.tsv(["Jaar", "IN", "UIT", "Resultaat", "IN divers", "UIT divers", "Begroting"], rows)
+            return ReportsFormat.tsv(["Jaar", "IN", "UIT", "Resultaat", "IN overig", "UIT overig", "Begroting"], rows)
         }
     }
 }

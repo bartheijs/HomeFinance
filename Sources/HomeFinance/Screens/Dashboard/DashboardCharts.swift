@@ -14,10 +14,10 @@ struct DashboardSpendableChartCard: View {
     }
 
     var body: some View {
-        DashboardCard("Verloop besteedbaar \(String(year))", icon: "chart.xyaxis.line",
-                      help: "Besteedbaar aan het eind van elke maand. De grijze lijn is het saldo van de betaalrekening; het verschil is gereserveerd geld en buffers.") {
+        DashboardCard("Verloop vrij te besteden \(String(year))", icon: "chart.xyaxis.line",
+                      help: "Vrij te besteden aan het eind van elke maand. De grijze lijn is het saldo van de betaalrekening; het verschil is gereserveerd geld en buffers.") {
             HStack(spacing: 12) {
-                legend("Besteedbaar", Theme.accent, dashed: false)
+                legend("Vrij te besteden", Theme.accent, dashed: false)
                 legend("Saldo", Color.secondary, dashed: true)
             }
         } content: {
@@ -37,7 +37,7 @@ struct DashboardSpendableChartCard: View {
                 .foregroundStyle(Color.secondary.opacity(0.4))
                 .lineStyle(StrokeStyle(lineWidth: 1))
             ForEach(points) { point in
-                AreaMark(x: .value("Maand", position(point.day)), y: .value("Besteedbaar", point.spendable.doubleValue))
+                AreaMark(x: .value("Maand", position(point.day)), y: .value("Vrij te besteden", point.spendable.doubleValue))
                     .interpolationMethod(.monotone)
                     .foregroundStyle(LinearGradient(colors: [Theme.accent.opacity(0.28), Theme.accent.opacity(0.02)],
                                                     startPoint: .top, endPoint: .bottom))
@@ -47,7 +47,7 @@ struct DashboardSpendableChartCard: View {
                     .foregroundStyle(Color.secondary.opacity(0.7))
                     .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
                 LineMark(x: .value("Maand", position(point.day)), y: .value("Bedrag", point.spendable.doubleValue),
-                         series: .value("Reeks", "Besteedbaar"))
+                         series: .value("Reeks", "Vrij te besteden"))
                     .interpolationMethod(.monotone)
                     .foregroundStyle(Theme.accent)
                     .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))

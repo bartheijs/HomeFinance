@@ -74,7 +74,7 @@ public struct AnnualAmountPreview: Equatable, Sendable {
     /// "Er gaat elke maand € 42,00 naar potje X via vaste storting Y; je begroting rekent met € … op post Z.
     /// Let op: verhoog je overboeking bij de bank naar € …."
     public var summary: String {
-        var text = "Er gaat elke maand \(monthly.formatted()) naar potje \(potName) via vaste storting \(distributionName)"
+        var text = "Er gaat elke maand \(monthly.formatted()) naar potje \(potName) via Automatisch sparen: \(distributionName)"
         if let itemLabel {
             text += "; je begroting rekent met \(totalAfter.formatted()) op post \(itemLabel)."
         } else {
@@ -93,14 +93,14 @@ public struct AnnualAmountPreview: Equatable, Sendable {
         var list: [String] = []
         list.append(potIsNew ? "Potje \(potName) wordt gemaakt (reservering)." : "Potje \(potName) bestaat al.")
         if distributionIsNew {
-            list.append("Vaste storting \(distributionName) wordt gemaakt met \(monthly.formatted()) voor \(potName).")
+            list.append("Automatisch sparen: \(distributionName) wordt gemaakt met \(monthly.formatted()) voor \(potName).")
         } else if potLineBefore.isZero {
-            list.append("\(monthly.formatted()) per maand erbij in vaste storting \(distributionName) (totaal \(totalBefore.formatted()) → \(totalAfter.formatted())).")
+            list.append("\(monthly.formatted()) per maand erbij in Automatisch sparen: \(distributionName) (totaal \(totalBefore.formatted()) → \(totalAfter.formatted())).")
         } else {
-            list.append("\(potName) krijgt in vaste storting \(distributionName) \(monthly.formatted()) per maand extra: \((potLineBefore + monthly).formatted()) (totaal \(totalBefore.formatted()) → \(totalAfter.formatted())).")
+            list.append("\(potName) krijgt in Automatisch sparen: \(distributionName) \(monthly.formatted()) per maand extra: \((potLineBefore + monthly).formatted()) (totaal \(totalBefore.formatted()) → \(totalAfter.formatted())).")
         }
         if let itemLabel {
-            list.append(itemIsNew ? "Post \(itemLabel) wordt gemaakt; het plan volgt de storting." : "Het plan van post \(itemLabel) volgt de storting: \(totalAfter.formatted()).")
+            list.append(itemIsNew ? "Post \(itemLabel) wordt gemaakt; het plan volgt de overboeking." : "Het plan van post \(itemLabel) volgt de overboeking: \(totalAfter.formatted()).")
         }
         if addsReserveLine { list.append("De RES-regel van \(potName) gaat \(monthly.formatted()) omhoog (of komt erbij), zodat het maandgrid meerekent.") }
         if let forecastDay {
@@ -111,7 +111,7 @@ public struct AnnualAmountPreview: Equatable, Sendable {
 
     /// Eén zin voor na afloop.
     public var afterwards: String {
-        "Komt de rekening, kies dan bij het nakijken ‘uit pot \(potName)’ en laat het onthouden."
+        "Komt de rekening, kies dan bij het nakijken ‘uit potje \(potName)’ en laat het onthouden."
     }
 }
 
@@ -222,12 +222,12 @@ public enum AnnualAmountService {
         switch r.distribution {
         case .existing(let id):
             let d = try DistributionService.fetch(db, id)
-            guard !d.archived else { throw BudgetError.validation("De vaste storting \(d.name) is gearchiveerd.") }
+            guard !d.archived else { throw BudgetError.validation("Automatisch sparen: \(d.name) is gearchiveerd.") }
             accountId = d.accountId; distributionName = d.name; distributionId = id
         case .new(let name, let account):
-            distributionName = try Check.nonEmpty(name, "De naam van de vaste storting")
+            distributionName = try Check.nonEmpty(name, "De naam van de vaste overboeking")
             guard try Check.account(db, account).kind == .spaar else {
-                throw BudgetError.validation("Een vaste storting hoort bij een spaarrekening.")
+                throw BudgetError.validation("Een vaste overboeking hoort bij een spaarrekening.")
             }
             accountId = account; distributionId = nil
         }
@@ -277,7 +277,7 @@ public enum AnnualAmountService {
                     }
                     if let other = item.distributionId, other != distributionId {
                         let name = try DistributionService.fetch(db, other).name
-                        throw BudgetError.validation("Post \(item.label) hoort al bij vaste storting \(name).")
+                        throw BudgetError.validation("Post \(item.label) hoort al bij Automatisch sparen: \(name).")
                     }
                     itemLabel = item.label; followsReserveTotal = item.isReserveTotal
                 case .new(let label):

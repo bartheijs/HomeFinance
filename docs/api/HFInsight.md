@@ -1,5 +1,11 @@
 # HFInsight — lezen en rekenen
 
+> **Namen in de interface (UX-stap C, november 2026).** De app gebruikt sinds stap C andere woorden dan deze
+> documentatie en de code: potje (pot), Automatisch sparen / vaste overboeking (vaste storting), overig (divers),
+> vrij te besteden (besteedbaar nu), nog over deze maand (nog te besteden deze maand), minimaal op je betaalrekening
+> (anti-rood), Nog overboeken (verrekenen met spaar), voorgeschoten (verrekenen per tag), banktransactie (bankregel).
+> De volledige lijst staat in `docs/ux/begrippen-voorstel.md`, sectie "Doorgevoerd". Identifiers zijn niet hernoemd.
+
 Alle alleen-lezen queries en berekeningen voor de schermen. Hangt alleen af van `HFCore` en GRDB; geen SwiftUI.
 
 - Alle functies staan in de naamruimte `Insight` en krijgen een GRDB `Database`. Ze werken dus in
@@ -377,9 +383,9 @@ blijft de som van de RES-regels (`PlanSet`), ook als er een storting met een and
 |---|---|
 | `chain(db, year:)` | `ChainOverview` van één begrotingsjaar: alle stortingen (`ChainDistribution`: naam, totaal, potnamen, gekoppelde posten van dat jaar), met `pot(_:)` → `PotChain`, `item(_:)` → `ItemChain` en `distribution(_:)` → `DistributionChain?` |
 
-De zinnen staan in de typen zelf: `PotChain.sentence` ("Krijgt € 42,00 per maand via vaste storting X (post Y)."; bij
-meer stortingen "… via 2 vaste stortingen:" met het lijstje in `lines[].line`), `ItemChain.sentence` ("Gaat via vaste
-storting X naar 28 potjes."), `DistributionChain.sentence` ("Telt in je begroting als: post Y."). Gearchiveerde
+De zinnen staan in de typen zelf: `PotChain.sentence` ("Krijgt € 42,00 per maand via Automatisch sparen: X (post Y)."; bij
+meer stortingen "… via 2 vaste overboekingen:" met het lijstje in `lines[].line`), `ItemChain.sentence` ("Gaat via
+Automatisch sparen: X naar 28 potjes."), `DistributionChain.sentence` ("Telt in je begroting als: post Y."). Gearchiveerde
 stortingen tellen niet mee bij een potje.
 
 ## Vooruitblik per pot

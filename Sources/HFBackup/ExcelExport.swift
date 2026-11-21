@@ -150,10 +150,10 @@ extension Backup {
             guard let firstItemRow else { return .money(.zero, bold: true) }
             return .formula("SUM(\(Xlsx.ref(m + 1, firstItemRow)):\(Xlsx.ref(m + 1, lastItemRow)))", fixed[m], bold: true)
         }, fixed)
-        let inRow = totalRow("IN divers", { .money(inDivers[$0], bold: true) }, inDivers)
-        let uitRow = totalRow("UIT divers", { .money(uitDivers[$0], bold: true) }, uitDivers)
+        let inRow = totalRow("IN overig", { .money(inDivers[$0], bold: true) }, inDivers)
+        let uitRow = totalRow("UIT overig", { .money(uitDivers[$0], bold: true) }, uitDivers)
         let netto = (0...12).map { inDivers[$0] + uitDivers[$0] }
-        let nettoRow = totalRow("Netto divers", { m in
+        let nettoRow = totalRow("Netto overig", { m in
             .formula("SUM(\(Xlsx.ref(m + 1, inRow)):\(Xlsx.ref(m + 1, uitRow)))", netto[m], bold: true)
         }, netto)
         let result = (0...12).map { fixed[$0] + netto[$0] }
@@ -187,9 +187,9 @@ extension Backup {
         sheet.add([.text("IN"), .money(try flow(">"))])
         sheet.add([.text("UIT"), .money(try flow("<"))])
         let balanceRow = sheet.add([.text("Op de rekening"), .money(balance)])
-        let antiRoodRow = sheet.add([.text("Anti-rood"), .money(budgetYear.antiRood)])
+        let antiRoodRow = sheet.add([.text("Minimaal aan het eind van de maand"), .money(budgetYear.antiRood)])
         let borrowedRow = sheet.add([.text("Tijdelijk geleend van spaar"), .money(borrowed)])
-        sheet.add([.text("Besteedbaar", bold: true),
+        sheet.add([.text("Vrij te besteden", bold: true),
                    .formula("\(Xlsx.ref(1, balanceRow))-\(Xlsx.ref(1, antiRoodRow))-\(Xlsx.ref(1, borrowedRow))",
                             balance - budgetYear.antiRood - borrowed, bold: true)])
         return sheet
@@ -200,7 +200,7 @@ extension Backup {
     private static func entriesSheet(_ db: Database, year: Int) throws -> XlsxSheet {
         var sheet = XlsxSheet(name: "Transacties", widths: [12, 11, 22, 34, 28, 8, 20, 13, 11, 11, 11, 30, 28, 40],
                               freezeColumns: 0, autoFilter: true)
-        sheet.add(["Datum", "Telt mee in", "Rekening", "Omschrijving", "Post of pot", "Divers", "Tags", "Bedrag",
+        sheet.add(["Datum", "Hoort bij maand", "Rekening", "Omschrijving", "Post of potje", "Overig", "Tags", "Bedrag",
                    "Nog overboeken met spaar", "Tijdelijk geleend van spaar", "Nagekeken", "Notitie", "Tegenpartij",
                    "Bankomschrijving"].map { .text($0, bold: true) })
         let rows = try Row.fetchCursor(db, sql: """
@@ -223,7 +223,7 @@ extension Backup {
             let item: String? = row["item"], pot: String? = row["pot"]
             let target: String
             switch (item, pot) {
-            case let (item?, pot?): target = "\(item) (pot: \(pot))"
+            case let (item?, pot?): target = "\(item) (potje: \(pot))"
             case let (item?, nil): target = item
             case let (nil, pot?): target = pot
             case (nil, nil): target = ""
@@ -242,8 +242,8 @@ extension Backup {
     // MARK: Potten
 
     private static func potsSheet(_ db: Database, year: Int, asOf: Day) throws -> XlsxSheet {
-        var sheet = XlsxSheet(name: "Potten", widths: [34, 14, 16, 16, 16, 16, 14, 13])
-        sheet.add(["Pot", "Soort", "Eigenaar", "Saldo op \(asOf.dutch)", "Gestort in \(year)", "Opgenomen in \(year)",
+        var sheet = XlsxSheet(name: "Potjes", widths: [34, 14, 16, 16, 16, 16, 14, 13])
+        sheet.add(["Potje", "Soort", "Eigenaar", "Saldo op \(asOf.dutch)", "Gestort in \(year)", "Opgenomen in \(year)",
                    "Doelbedrag", "Doeldatum"].map { .text($0, bold: true) })
         let yearStart = Day(year: year, month: 1, day: 1)!
         // Per pot: saldo t/m de peildag en wat er dit jaar bij kwam en af ging (op de rekening van de pot).
@@ -283,7 +283,7 @@ extension Backup {
                 guard let firstRow else { return .money(.zero, bold: true) }
                 return .formula("SUM(\(Xlsx.ref(column, firstRow)):\(Xlsx.ref(column, lastRow)))", value, bold: true)
             }
-            let totalRow = sheet.add([.text("Totaal potten", bold: true), .empty, .empty,
+            let totalRow = sheet.add([.text("Totaal potjes", bold: true), .empty, .empty,
                                       sum(3, total.balance), sum(4, total.deposited), sum(5, total.withdrawn)])
             let unassignedRow = sheet.add([.text("Niet toegewezen"), .empty, .empty, .money(accountBalance - total.balance)])
             sheet.add([.text("Saldo \(account.name)", bold: true), .empty, .empty,
@@ -296,8 +296,8 @@ extension Backup {
     // MARK: Vaste stortingen
 
     private static func distributionsSheet(_ db: Database) throws -> XlsxSheet {
-        var sheet = XlsxSheet(name: "Vaste stortingen", widths: [34, 34, 14])
-        sheet.add(["Storting", "Pot", "Bedrag"].map { .text($0, bold: true) })
+        var sheet = XlsxSheet(name: "Automatisch sparen", widths: [34, 34, 14])
+        sheet.add(["Automatisch sparen", "Potje", "Bedrag"].map { .text($0, bold: true) })
         let distributions = try Row.fetchAll(db, sql: """
             SELECT d.id, d.name, d.archived, a.name AS account FROM distribution d
             JOIN account a ON a.id = d.accountId ORDER BY d.archived, d.sortOrder, d.id

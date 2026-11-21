@@ -128,7 +128,7 @@ import Testing
             #expect(try target() == c(65_000))
             pot.targetAmount = nil
             #expect(try PotService.update(db, pot).targetAmount == nil)
-            #expect(throws: BudgetError.notFound(what: "Pot", id: 999)) { try PotService.setGoalParts(db, potId: 999, []) }
+            #expect(throws: BudgetError.notFound(what: "Potje", id: 999)) { try PotService.setGoalParts(db, potId: 999, []) }
         }
     }
 }

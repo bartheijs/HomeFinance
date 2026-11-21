@@ -26,16 +26,16 @@ administratie beginnen**. Je kunt later altijd wisselen via Instellingen › Ove
 ## Zo werk je ermee
 
 De zijbalk is ingedeeld naar wat je komt doen: **Vandaag** (Dashboard), **Bijwerken** (Importeren en nakijken,
-Transacties), **Begroting** (Maandgrid, Posten), **Sparen** (Potten, Vaste stortingen, Nog overboeken) en
+Transacties), **Begroting** (Maandgrid, Posten), **Sparen** (Potjes, Automatisch sparen, Nog overboeken) en
 **Inzicht** (Rapporten), met Instellingen onderaan. Jaar aanmaken en afsluiten doe je bij Posten; regels beheer je
 bij Instellingen › Regels.
 
 1. **Download bij je bank** de transacties als CSV. Je krijgt een zip-bestand met één CSV per rekening.
 2. **Sleep het zip-bestand** op het scherm *Importeren en nakijken*. De app controleert of het saldo klopt en
-   slaat regels over die er al in staan.
-3. **Kijk de voorstellen na.** Zekere voorstellen boek je in één keer; bij twijfel kies je zelf de post. De app
-   onthoudt je keuze als regel voor de volgende keer.
-4. **Maandgrid** toont je vertrouwde jaaroverzicht. **Dashboard** toont wat er te besteden is.
+   slaat banktransacties over die er al in staan.
+3. **Kijk de voorstellen na.** Zekere voorstellen boek je in één keer; bij twijfel kies je zelf de post. Met
+   "Voortaan zo indelen" stelt de app je keuze de volgende keer voor.
+4. **Maandgrid** toont je vertrouwde jaaroverzicht. **Dashboard** toont wat er deze maand nog over is.
 5. **Afstemmen** (Instellingen › Rekeningen): vul het saldo van je bank in; het verschil moet € 0,00 zijn.
 
 ## Demonstreren
@@ -49,17 +49,17 @@ geopend of veranderd.
 2. **Importeren en nakijken › Voorbeeldbestand importeren.** Een zip zoals de bank hem levert, met de betaal- en
    de spaarrekening van de laatste tien dagen. De import is foutloos en sluit op het saldo.
 3. **Nakijken** laat zien:
-   - zakgeld naar een kind, met "Nog overboeken" uit zijn zakgeldpot (regel "Kind 1 Voorbeeld");
+   - zakgeld naar een kind, met "Nog overboeken" uit zijn zakgeldpotje (regel "Kind 1 Voorbeeld");
    - geld dat van datzelfde kind terugkomt: twijfel, zonder "Nog overboeken" (de regel geldt alleen bij geld eruit);
    - "Oppas zaterdag": de eigen tekst van een overboeking als omschrijving;
    - "Frietkraam Demo": een nette naam bij een rommelige pinbetaling;
-   - "Extra voor de vakantie" aan de spaarkant: een losse overboeking, niet de vaste storting;
+   - "Extra voor de vakantie" aan de spaarkant: een losse overboeking, niet de vaste overboeking van Automatisch sparen;
    - de overboeking met spaar uit Nog overboeken, herkend aan beide kanten: "Afvinken en koppelen";
-   - "Onthoud als regel" bij een betaling zonder regel.
-4. **Potten:** per kind spaargeld, kleedgeld en zakgeld; de groep Kids met het spaardoel "Studie en rijbewijs"
-   uit onderdelen; "Buffer gezin" met een vooruitblik. Bij **Vaste stortingen** de maandelijkse reserveringen.
-5. **Dashboard:** "Nog te besteden deze maand" met "+ Komt nog terug: Tanken". Bij **Instellingen › Tags** staat
-   Tanken met een startbedrag en "Telt mee in nog te besteden".
+   - "Voortaan zo indelen" bij een betaling zonder regel.
+4. **Potjes:** per kind spaargeld, kleedgeld en zakgeld; de groep Kids met het spaardoel "Studie en rijbewijs"
+   uit onderdelen; "Buffer gezin" met een vooruitblik. Bij **Automatisch sparen** de maandelijkse reserveringen.
+5. **Dashboard:** "Nog over deze maand" met "+ Komt nog terug: Tanken". Bij **Instellingen › Tags** staat
+   Tanken met een startbedrag en "Reken mee als inkomen dat nog komt".
 6. **Instellingen › Telefoon:** bij "Voor het gezin" zijn de kinderen en Buffer gezin al gekozen. Kies een map
    om de pagina te maken.
 7. Klaar? **Instellingen › Over › Bekijk eigen administratie.**
@@ -68,22 +68,30 @@ Wat je in de voorbeelddata verandert, blijft staan tot de app een nieuwere versi
 
 ## Begrippen
 
+Sinds de UX-ronde (stap C) heten een aantal begrippen anders; de oude naam staat tussen haakjes.
+
 | Begrip | Betekenis |
 |---|---|
-| Vaste post | Een regel in je begroting die elke maand, elk kwartaal of elk jaar terugkomt. |
-| Divers | Alles wat geen vaste post is: losse inkomsten (IN divers) en uitgaven (UIT divers). |
-| Reserveringen | Wat je maandelijks opzijzet voor jaarlijkse of onregelmatige kosten. Eén overboeking naar spaar, verdeeld over potten. |
-| Pot | Een deel van het saldo op je spaarrekening met een eigen doel. |
-| Anti-rood | Buffer die altijd op de betaalrekening moet blijven staan. |
-| Besteedbaar | Saldo betaalrekening − anti-rood − wat je tijdelijk van spaar hebt geleend. Geld met een bestemming staat in potten op de spaarrekening. |
-| Tijdelijk geleend van spaar | Geld dat je even naar de betaalrekening haalt en later terugboekt. Je markeert beide overboekingen; de app houdt bij wat er uitstaat. |
-| Nog overboeken | Een uitgave die uit een pot hoort te komen, of geld dat binnenkomt en naar een pot moet. Je maakt het saldo in één keer over en vinkt het af. (Vroeger: verrekenen met spaar.) |
-| Voorgeschoten | Uitgaven met een tag (zoals Tanken) die je voorschiet en terugkrijgt; de app toont wat je nog terug te krijgen hebt. (Vroeger: verrekenen bij een tag.) |
-| Banktransactie | Een regel uit het bankbestand. (Vroeger ook: bankregel.) |
-| Vaste storting | Een bedrag dat regelmatig naar de spaarrekening gaat, met de verdeling over potten. |
-| Spaardoel | Doelbedrag en doeldatum bij een pot; de app rekent uit wat er per maand bij moet. |
-| Vooruitblik | Wat het saldo van een pot naar verwachting doet, met de bedragen die je nog verwacht. Telt nergens in mee. |
-| Telt mee in | De maand waarin een boeking voor de begroting meetelt, als dat een andere is dan de maand van de datum. |
+| Post (vaste post) | Een regel in je begroting met het bedrag dat je per maand, kwartaal of jaar verwacht. |
+| Overig (divers) | Boekingen die bij geen enkele post horen: losse inkomsten (IN overig) en uitgaven (UIT overig). |
+| Reserveringen | Wat je maandelijks opzijzet voor jaarlijkse of onregelmatige kosten. Eén overboeking naar spaar, verdeeld over potjes. |
+| Potje (pot) | Een deel van je spaargeld met een eigen bestemming. |
+| Automatisch sparen (vaste storting) | Vaste overboeking per maand, verdeeld over potjes. Elke maand gaat dit bedrag naar je spaarrekening en wordt het over deze potjes verdeeld. |
+| Telt in je begroting als (hoort bij post) | Op je betaalrekening is de overboeking van Automatisch sparen een uitgave op deze post. |
+| Minimaal op je betaalrekening aan het eind van de maand (anti-rood) | Dit bedrag laat je altijd staan, zodat je niet rood komt. |
+| Vrij te besteden (besteedbaar nu) | Wat er nu op je betaalrekening staat, min wat je wilt laten staan en wat je van spaar hebt geleend. |
+| Nog over deze maand (nog te besteden deze maand) | Wat je deze maand nog kunt uitgeven, na de vaste posten die nog komen. |
+| Tijdelijk geleend van spaar | Geld dat je even van je spaarrekening haalt en later terugzet. Je markeert beide overboekingen; de app houdt bij wat er uitstaat. |
+| Nog overboeken (verrekenen met spaar) | Je betaalde iets vanaf je betaalrekening, maar het hoort bij een potje (of andersom). Je zet het later in één overboeking recht en vinkt het af. |
+| Voorgeschoten (verrekenen bij een tag) | Uitgaven die je voorschiet en terugkrijgt, zoals tankkosten van je werk; de app toont wat je nog terug te krijgen hebt. |
+| Reken mee als inkomen dat nog komt (telt mee in nog te besteden) | Het bedrag dat je nog terugkrijgt, telt mee in wat je deze maand kunt uitgeven. |
+| Banktransactie (bankregel) | Een regel uit het bankbestand. |
+| Voortaan zo indelen (onthoud als regel) | Boekingen van deze tegenpartij krijgen voortaan deze post of dit potje voorgesteld. |
+| Indelen bij (toewijzen aan) | Een boeking bij een post of potje zetten. |
+| Hoort bij maand (telt mee in) | Deze boeking telt mee in een andere maand dan de datum, bijvoorbeeld loon dat op de 25e binnenkomt voor de maand erna. |
+| Klopt / Wijkt af (± € X) / Nog verwacht / Te laat | De status van een post in een maand. |
+| Spaardoel | Doelbedrag en doeldatum bij een potje; de app rekent uit wat er per maand bij moet. |
+| Vooruitblik | Wat het saldo van een potje naar verwachting doet, met de bedragen die je nog verwacht. Telt nergens in mee. |
 | Tag | Label om uitgaven te volgen (tanken, uit eten). Telt niet als extra uitgave. |
 
 ## Waar staan je gegevens?
@@ -140,7 +148,7 @@ Dat doet vier dingen en schrijft alles naar de map achter `--uit` (nooit in deze
    horizontaal buiten beeld, staat de titel op één regel en blijft de zijbalk zichtbaar. Op Transacties en Nakijken kijkt hij of de pot-kiezers geladen zijn met de
    potten per soort op alfabet (in het log alleen het aantal en "volgorde OK").
    Na hooguit 90 seconden stopt de app altijd.
-4. **Kerncijfers**: saldi per rekening, het saldo van elke pot, "besteedbaar nu", "nog te besteden deze maand"
+4. **Kerncijfers**: saldi per rekening, het saldo van elk potje, "vrij te besteden" (sleutel `besteedbaarNu`), "nog over deze maand"
    en een paar aantallen, in `kerncijfers-voorbeeld.json`.
 
 Met een **kopie** van je administratie (nooit het origineel; dat weigert het script) doet hij stap 3 en 4 ook op

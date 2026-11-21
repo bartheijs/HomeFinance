@@ -81,13 +81,13 @@ private struct Family {
         }
 
         let html = try family.page()
-        #expect(html.contains("<div class=\"label\">Nog te besteden deze maand</div>"))
+        #expect(html.contains("<div class=\"label\">Nog over deze maand</div>"))
         #expect(html.contains("€&nbsp;6.820<span class=\"cents\">,00</span>"))
-        #expect(html.contains("Besteedbaar nu <strong>€&nbsp;3.890,00</strong>"))
+        #expect(html.contains("Vrij te besteden <strong>€&nbsp;3.890,00</strong>"))
         #expect(html.contains("Komt nog terug: Tanken &lt;auto&gt;"))
         #expect(html.contains("Voorgeschoten geld dat nog terugkomt, telt al mee."))
         // Het hoofdgetal staat vóór besteedbaar nu.
-        #expect(html.range(of: "6.820")!.lowerBound < html.range(of: "Besteedbaar nu")!.lowerBound)
+        #expect(html.range(of: "6.820")!.lowerBound < html.range(of: "Vrij te besteden")!.lowerBound)
     }
 
     @Test func noReturningLineWithoutATagThatCounts() throws {

@@ -146,7 +146,7 @@ import Testing
             let af = try fx.tx(db, fx.betaal, "2027-01-27", -25_000, iban: Fixture.spaarIban)
             let match = try #require(try DistributionService.recognize(db, bankTransaction: af))
             #expect(match.exactAmount && match.allocations == [Allocation(amount: c(-25_000), label: "Vast sparen")])
-            #expect(match.warning?.contains("divers") == true)
+            #expect(match.warning?.contains("overig") == true)
 
             // De post telt alleen in het jaar van de transactie.
             try DistributionService.link(db, distributionId: vast.id!, budgetItemId: fx.boodschappen.id!)
@@ -170,7 +170,7 @@ import Testing
             #expect(throws: BudgetError.self) {
                 try ForecastService.create(db, potId: fx.potSpaar.id!, day: d("2027-05-15"), amount: .zero)
             }
-            #expect(throws: BudgetError.notFound(what: "Pot", id: 999)) {
+            #expect(throws: BudgetError.notFound(what: "Potje", id: 999)) {
                 try ForecastService.create(db, potId: 999, day: d("2027-05-15"), amount: c(1))
             }
             try PotService.archive(db, potId: fx.potVakantie.id!)

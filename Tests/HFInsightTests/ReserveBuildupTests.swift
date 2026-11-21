@@ -40,7 +40,7 @@ import Testing
         #expect(!b.isOutOfStep)
         #expect(b.warning == nil)
         #expect(b.reserveLinesNote == nil)
-        #expect(b.sentence == "RESERVERINGEN is nog niet aan een vaste storting gekoppeld. De opbouw komt uit de RES-regels hieronder.")
+        #expect(b.sentence == "RESERVERINGEN is nog niet aan een vaste overboeking gekoppeld. De opbouw komt uit de RES-regels hieronder.")
     }
 
     @Test func linkedDistributionIsTheBuildup() throws {
@@ -51,7 +51,7 @@ import Testing
         #expect(b.distributionTotal == eur(250))
         #expect(!b.isOutOfStep)
         #expect(b.warning == nil)
-        #expect(b.sentence == "De opbouw komt uit de vaste storting Maandelijkse storting (2 potjes, € 250,00 per maand). Je wijzigt de verdeling bij Vaste stortingen.")
+        #expect(b.sentence == "De opbouw komt uit Automatisch sparen: Maandelijkse storting (2 potjes, € 250,00 per maand). Je wijzigt de verdeling bij Automatisch sparen.")
         #expect(b.reserveLinesNote != nil)
         // Rijen voor het maandgrid: informatief, met negatieve id's.
         #expect(b.gridRows.map(\.label) == ["Auto", "Vakantie"])
@@ -63,7 +63,7 @@ import Testing
         try addDistribution(vakantie: 192)
         let b = try buildup()
         #expect(b.isOutOfStep)
-        #expect(b.warning == "Let op: de RES-regels tellen op tot € 250,00 per maand, de vaste storting Maandelijkse storting tot € 292,00. Het maandgrid en \"nog te besteden\" rekenen RESERVERINGEN nog met de RES-regels. Maak de RES-regels gelijk aan de storting om het verschil weg te werken.")
+        #expect(b.warning == "Let op: de RES-regels tellen op tot € 250,00 per maand, Automatisch sparen: Maandelijkse storting tot € 292,00. Het maandgrid en \"nog over deze maand\" rekenen RESERVERINGEN nog met de RES-regels. Maak de RES-regels gelijk aan de overboeking om het verschil weg te werken.")
     }
 
     /// De bevinding van B1, vastgelegd: het plan van RESERVERINGEN in het maandgrid is de som van de RES-regels,

@@ -115,6 +115,12 @@ private struct ReviewDetail: View {
                     .help(option.isUpdate
                           ? "Aan: de regel die dit voorstelde krijgt voortaan deze keuze. Uit: alleen deze boeking wijkt af; de regel blijft zoals hij is."
                           : "Aan: bij het boeken wordt een regel bewaard, zodat dit de volgende keer wordt voorgesteld. Uit: alleen boeken.")
+                if !option.isUpdate {
+                    Text("Boekingen van deze tegenpartij krijgen voortaan deze post of dit potje voorgesteld.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 20)
+                }
                 if option.isOn {
                     Text(option.summary)
                         .font(.callout).foregroundStyle(.secondary)
@@ -154,7 +160,7 @@ private struct ReviewDetail: View {
         } else if let first = s.warnings.first {
             first
         } else if store.kind == .betaal, !store.yearExists(row.tx.day.year) {
-            "Het jaar \(String(row.tx.day.year)) bestaat nog niet. Je kunt alleen als divers boeken."
+            "Het jaar \(String(row.tx.day.year)) bestaat nog niet. Je kunt alleen als overig boeken."
         } else { nil }
         if let text {
             Label(text, systemImage: "exclamationmark.triangle")
@@ -173,7 +179,7 @@ private struct ReviewDetail: View {
                 Label(store.title(of: transfer), systemImage: "arrow.left.arrow.right").fontWeight(.medium)
                 Text(transfer.done
                      ? "Dit is een overboeking met spaar die je bij Nog overboeken al hebt afgevinkt. De banktransactie wordt eraan gekoppeld; er komt geen boeking bij."
-                     : "Dit is een overboeking met spaar die je bij Nog overboeken nog niet hebt afgevinkt. Bij afvinken worden de potten en de betaalrekening geboekt op \(row.tx.day.short()); de banktransactie wordt eraan gekoppeld.")
+                     : "Dit is een overboeking met spaar die je bij Nog overboeken nog niet hebt afgevinkt. Bij afvinken worden de potjes en de betaalrekening geboekt op \(row.tx.day.short()); de banktransactie wordt eraan gekoppeld.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("Er passen meer overboekingen bij Nog overboeken bij deze banktransactie. Kies welke het is.")
@@ -186,7 +192,7 @@ private struct ReviewDetail: View {
                 }
             }
         }
-        .help("Nog overboeken: wat je van de betaalrekening betaalde maar uit een pot hoort te komen (of andersom) maak je in één keer over. Deze banktransactie is die overboeking.")
+        .help("Nog overboeken: wat je van de betaalrekening betaalde maar uit een potje hoort te komen (of andersom) maak je in één keer over. Deze banktransactie is die overboeking.")
     }
 
     // MARK: Waar hoort dit bij
@@ -195,25 +201,25 @@ private struct ReviewDetail: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Waar hoort dit bij?").font(.headline)
             if let match = row.match, match.isAmbiguous {
-                Text("Er passen meer vaste stortingen bij deze overboeking. Kies welke het is.")
+                Text("Er passen meer vaste overboekingen bij deze overboeking. Kies welke het is.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 ForEach(match.distributions) { distribution in
                     Button(distribution.name) { store.chooseDistribution(distribution, for: row, model) }
                 }
             }
             if let name = row.activeMatch?.distribution?.name, !store.isEdited(row) {
-                Label("Vaste storting: \(name)", systemImage: "arrow.triangle.branch").fontWeight(.medium)
-                    .help("Een vaste storting is een bedrag dat regelmatig van de betaalrekening naar de spaarrekening gaat en daar over potten wordt verdeeld.")
+                Label("Automatisch sparen: \(name)", systemImage: "arrow.triangle.branch").fontWeight(.medium)
+                    .help("Een vaste overboeking is een bedrag dat regelmatig van de betaalrekening naar de spaarrekening gaat en daar over potjes wordt verdeeld.")
             }
             if row.canSwitchDistribution, let name = row.match?.distribution?.name {
                 if row.usesDistribution {
-                    Button("Niet de vaste storting: één pot kiezen") { store.setUsesDistribution(false, for: row, model) }
+                    Button("Niet de vaste overboeking: één potje kiezen") { store.setUsesDistribution(false, for: row, model) }
                         .buttonStyle(.link)
-                        .help("Voor een losse overboeking naar spaar: het hele bedrag gaat naar één pot die je zelf kiest.")
+                        .help("Voor een losse overboeking naar spaar: het hele bedrag gaat naar één potje die je zelf kiest.")
                 } else {
-                    Button("Toch de vaste storting \(name)") { store.setUsesDistribution(true, for: row, model) }
+                    Button("Toch Automatisch sparen: \(name)") { store.setUsesDistribution(true, for: row, model) }
                         .buttonStyle(.link)
-                        .help("Verdeel het bedrag over de potten van de vaste storting.")
+                        .help("Verdeel het bedrag over de potjes van de vaste overboeking.")
                 }
             }
             if draft.wrappedValue.isSplit {
@@ -290,21 +296,26 @@ private struct ReviewDetail: View {
                     get: { draft.wrappedValue.lines.indices.contains(index) ? draft.wrappedValue.lines[index].target : .none },
                     set: { if draft.wrappedValue.lines.indices.contains(index) { draft.wrappedValue.lines[index].target = $0 } }))
             }
-            Text("De potten krijgen hun vaste bedrag. Kies een pot voor het verschil, of laat het niet toegewezen.")
+            Text("De potjes krijgen hun vaste bedrag. Kies een potje voor het verschil, of laat het niet toegewezen.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 
     /// In welke maand telt deze boeking mee voor de begroting?
     private var periodChoice: some View {
-        HStack(spacing: 6) {
-            Text("Telt mee in").foregroundStyle(.secondary)
-            Picker("Telt mee in", selection: draft.period) {
-                ForEach(store.periodChoices(for: row), id: \.period) { choice in
-                    Text(choice.title).tag(choice.period)
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text("Hoort bij maand").foregroundStyle(.secondary)
+                Picker("Hoort bij maand", selection: draft.period) {
+                    ForEach(store.periodChoices(for: row), id: \.period) { choice in
+                        Text(choice.title).tag(choice.period)
+                    }
                 }
+                .labelsHidden().fixedSize()
             }
-            .labelsHidden().fixedSize()
+            Text(TransactionsFormat.periodExplanation)
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .font(.callout).controlSize(.small)
         .help("Voor iets dat eind van de maand is betaald maar bij de volgende maand hoort.")
@@ -313,11 +324,11 @@ private struct ReviewDetail: View {
     private var hint: String {
         if store.isEdited(row) { return "Je eigen keuze." }
         if row.match != nil, !row.usesDistribution {
-            return "Niet de vaste storting: kies de pot waar dit geld heen gaat."
+            return "Niet de vaste overboeking: kies het potje waar dit geld heen gaat."
         }
         if let match = row.activeMatch, match.distribution != nil {
-            return match.exactAmount ? "Herkend aan de rekeningen en het bedrag van de vaste storting."
-                                     : "Herkend aan de rekeningen; het bedrag wijkt \(match.difference.formatted(alwaysSign: true)) af van de vaste storting."
+            return match.exactAmount ? "Herkend aan de rekeningen en het bedrag van de vaste overboeking."
+                                     : "Herkend aan de rekeningen; het bedrag wijkt \(match.difference.formatted(alwaysSign: true)) af van de vaste overboeking."
         }
         if row.pair != nil, draft.wrappedValue.target == .none { return "Dit lijkt een overboeking tussen je eigen rekeningen." }
         switch row.suggestion.confidence {
@@ -340,7 +351,7 @@ private struct ReviewDetail: View {
             if store.kind == .betaal, !draft.wrappedValue.isSplit {
                 VStack(alignment: .leading, spacing: 4) {
                     Toggle("Tijdelijk geleend van spaar", isOn: draft.temporaryLoan)
-                        .help("Geld dat je even van spaar haalt en later terugboekt. Het telt niet mee als besteedbaar zolang het uitstaat. Markeer ook de terugboeking.")
+                        .help("Geld dat je even van spaar haalt en later terugboekt. Het telt niet mee in vrij te besteden zolang het uitstaat. Markeer ook de terugboeking.")
                     if store.looksLikeLoanReturn(row) {
                         Text("Er staat \(store.loanOutstanding.formatted()) uit; dit lijkt de terugboeking.")
                             .font(.callout).foregroundStyle(.secondary)
@@ -349,7 +360,7 @@ private struct ReviewDetail: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Splitsen over meer posten", isOn: splitBinding)
-                    .help("Verdeel deze transactie over meer posten of potten, bijvoorbeeld boodschappen en een cadeau op één bon.")
+                    .help("Verdeel deze transactie over meer posten of potjes, bijvoorbeeld boodschappen en een cadeau op één bon.")
                 if draft.wrappedValue.isSplit { ReviewSplitEditor(row: row, draft: draft) }
             }
             TextField("Notitie", text: draft.note, axis: .vertical).textFieldStyle(.roundedBorder).lineLimit(1...3)
@@ -499,18 +510,18 @@ struct ReviewTargetPicker: View {
                 let reserve = store.pots(kind: .reservering, accountId: store.accountId)
                 let saving = store.pots(kind: .spaar, accountId: store.accountId)
                 if !reserve.isEmpty {
-                    Section("Reserveringspotten") { ForEach(reserve) { Text($0.name).tag(ReviewTarget.pot($0.id ?? 0)) } }
+                    Section("Reserveringspotjes") { ForEach(reserve) { Text($0.name).tag(ReviewTarget.pot($0.id ?? 0)) } }
                 }
                 if !saving.isEmpty {
-                    Section("Spaarpotten") { ForEach(saving) { Text($0.name).tag(ReviewTarget.pot($0.id ?? 0)) } }
+                    Section("Spaarpotjes") { ForEach(saving) { Text($0.name).tag(ReviewTarget.pot($0.id ?? 0)) } }
                 }
             }
         }
         .labelsHidden()
         .frame(maxWidth: .infinity, alignment: .leading)
         .help(store.kind == .betaal
-              ? "Een vaste post is een rij in het maandgrid (salaris, huur). Divers is alles wat geen vaste post is."
-              : "Een pot is een deel van het saldo van de spaarrekening. Geen pot (divers) telt wel mee in het saldo, maar hoort bij geen pot.")
+              ? "Een vaste post is een rij in het maandgrid (salaris, huur). Overig is alles wat geen vaste post is."
+              : "Een potje is een deel van het saldo van de spaarrekening. Geen potje (overig) telt wel mee in het saldo, maar hoort bij geen potje.")
     }
 }
 
@@ -657,24 +668,24 @@ struct ReviewSettlePicker: View {
     var body: some View {
         let reserve = store.pots(kind: .reservering), saving = store.pots(kind: .spaar)
         HStack(spacing: 6) {
-            Text(selection == nil ? "Nog overboeken met spaar" : (isExpense ? "Nog overboeken met spaar · komt uit pot" : "Nog overboeken met spaar · gaat naar pot"))
+            Text(selection == nil ? "Nog overboeken met spaar" : (isExpense ? "Nog overboeken met spaar · komt uit potje" : "Nog overboeken met spaar · gaat naar potje"))
                 .foregroundStyle(.secondary).lineLimit(1)
             Picker("Nog overboeken met spaar", selection: $selection) {
                 Text("Nee").tag(Int64?.none)
                 if allowsWithoutPot, selection == Self.withoutPot {
-                    Text("Ja, pot nog kiezen").tag(Int64?.some(Self.withoutPot))
+                    Text("Ja, potje nog kiezen").tag(Int64?.some(Self.withoutPot))
                 }
                 if !reserve.isEmpty {
-                    Section("Reserveringspotten") { ForEach(reserve) { Text($0.name).tag($0.id) } }
+                    Section("Reserveringspotjes") { ForEach(reserve) { Text($0.name).tag($0.id) } }
                 }
                 if !saving.isEmpty {
-                    Section("Spaarpotten") { ForEach(saving) { Text($0.name).tag($0.id) } }
+                    Section("Spaarpotjes") { ForEach(saving) { Text($0.name).tag($0.id) } }
                 }
             }
             .labelsHidden().fixedSize()
         }
         .font(.callout).controlSize(.small)
-        .help("Voor iets dat je van de betaalrekening hebt betaald maar uit een pot hoort te komen, of geld dat binnenkomt en door moet naar een pot. Je maakt het later in één keer over bij Nog overboeken.")
+        .help("Voor iets dat je van de betaalrekening hebt betaald maar uit een potje hoort te komen, of geld dat binnenkomt en door moet naar een potje. Je maakt het later in één keer over bij Nog overboeken.")
     }
 }
 

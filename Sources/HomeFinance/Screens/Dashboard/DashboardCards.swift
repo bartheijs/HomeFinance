@@ -67,13 +67,13 @@ private struct DashboardAttentionLook {
         switch item {
         case .newBankTransactions:
             icon = "tray.full"; tint = .secondary; action = "Boeken"; target = .review
-            help = "Ga naar Importeren en nakijken om deze banktransacties een post of pot te geven."
+            help = "Ga naar Importeren en nakijken om deze banktransacties een post of potje te geven."
         case .unreviewedEntries:
             icon = "eye"; tint = .secondary; action = "Nakijken"; target = .transactions
             help = "Ga naar Transacties om de automatisch geboekte regels te controleren."
         case .openReimbursements:
             icon = "arrow.left.arrow.right"; tint = .secondary; action = "Overboeken"; target = .reimbursements
-            help = "Uitgaven die je van de betaalrekening hebt betaald maar die uit een spaarpot horen te komen."
+            help = "Uitgaven die je van de betaalrekening hebt betaald maar die uit een spaarpotje horen te komen."
         case .reconciliationDiffers:
             icon = "exclamationmark.triangle.fill"; tint = Theme.negative; action = "Afstemmen"; target = .settings
             settingsTab = "rekeningen"
@@ -90,7 +90,7 @@ private struct DashboardAttentionLook {
             help = "Je hebt deze overboeking met spaar afgevinkt, maar hij is nog niet in een bankbestand gezien. Controleer of je hem hebt overgemaakt, of importeer een nieuw bankbestand."
         case .temporaryLoanOutstanding:
             icon = "arrow.uturn.backward.circle"; tint = Theme.warning; action = "Bekijk"; target = .transactions
-            help = "Dit bedrag heb je tijdelijk van spaar naar de betaalrekening gehaald. Het telt niet mee als besteedbaar tot je het terugboekt en die boeking ook markeert als tijdelijk geleend."
+            help = "Dit bedrag heb je tijdelijk van spaar naar de betaalrekening gehaald. Het telt niet mee in vrij te besteden tot je het terugboekt en die boeking ook markeert als tijdelijk geleend."
         case .yearMissing:
             icon = "calendar.badge.plus"; tint = .secondary; action = "Aanmaken"; target = .budget
             help = "Maak het begrotingsjaar aan bij Posten."
@@ -153,7 +153,7 @@ struct DashboardFixedItemsCard: View {
             HStack(spacing: 12) {
                 legend(overview.paidCount, "voldaan", Theme.positive, "Geboekt: betaald of ontvangen.")
                 legend(overview.lateCount, "te laat", Theme.negative, "De verwachte dag is voorbij en er is nog niets geboekt.")
-                legend(overview.openCount, "open", Color.secondary.opacity(0.5), "Wordt later deze maand verwacht.")
+                legend(overview.openCount, "nog verwacht", Color.secondary.opacity(0.5), "Wordt later deze maand verwacht.")
                 Spacer(minLength: 0)
             }
         }
@@ -258,7 +258,7 @@ struct DashboardMonthCard: View {
                 Text(title).font(.callout)
                 if over {
                     Pill("boven plan", color: Theme.warning)
-                        .help("Er is meer uitgegeven dan de vaste posten van deze maand. Dat komt meestal door diverse uitgaven.")
+                        .help("Er is meer uitgegeven dan de vaste posten van deze maand. Dat komt meestal door overige uitgaven.")
                 }
                 Spacer()
                 Text(actual.magnitude.formatted()).font(.callout.weight(.semibold)).monospacedDigit()
@@ -485,7 +485,7 @@ private struct DashboardRecentRow: View {
     @State private var hovering = false
 
     private var category: String {
-        entry.itemLabel ?? entry.potName ?? (entry.amount.isNegative ? "UIT divers" : "IN divers")
+        entry.itemLabel ?? entry.potName ?? (entry.amount.isNegative ? "UIT overig" : "IN overig")
     }
 
     var body: some View {

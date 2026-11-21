@@ -112,9 +112,9 @@ struct TransactionsDistributionSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Vaste storting").font(.headline)
+            Text("Automatisch sparen").font(.headline)
             if match.isAmbiguous {
-                Text("Dit past bij meer vaste stortingen. Kies welke het is.")
+                Text("Dit past bij meer vaste overboekingen. Kies welke het is.")
                     .font(.callout).foregroundStyle(.secondary)
                 ForEach(match.distributions) { distribution in
                     Button(distribution.name) {
@@ -123,7 +123,7 @@ struct TransactionsDistributionSection: View {
                 }
             } else if let distribution = match.distribution {
                 Text(match.side == .destination
-                     ? "‘\(distribution.name)’: verdeeld over \(match.allocations.count) potten"
+                     ? "‘\(distribution.name)’: verdeeld over \(match.allocations.count) potjes"
                      : "‘\(distribution.name)’: de overboeking naar de spaarrekening")
                     .font(.callout)
                 VStack(spacing: 2) {
@@ -151,7 +151,7 @@ struct TransactionsDistributionSection: View {
                                 TransactionsPotPicker(pots: store.lookups.pots(accountId: pending.transaction.accountId),
                                                       noneTitle: "Niet toegewezen", selection: $store.differencePotId)
                             }
-                            .help("Het verschil wordt een extra regel van \(rest.formatted()) op deze pot, of blijft niet toegewezen.")
+                            .help("Het verschil wordt een extra regel van \(rest.formatted()) op dit potje, of blijft niet toegewezen.")
                         }
                     }
                 }
@@ -162,7 +162,7 @@ struct TransactionsDistributionSection: View {
             }
             Button("Toch zelf kiezen") { store.matchChoice = nil }
                 .buttonStyle(.link).font(.caption)
-                .help("Negeer de vaste storting en kies zelf waar deze transactie bij hoort")
+                .help("Negeer de vaste overboeking en kies zelf waar deze transactie bij hoort")
         }
     }
 
@@ -341,12 +341,12 @@ struct TransactionsSettleSheet: View {
                 Text("\(s.day.short(withYear: true)) · \(s.amount.formatted())").monospacedDigit()
                 Text(s.isOpening ? "Beginstand" :
                         (detail.startAmount.isZero ? "" : "startbedrag \(detail.startAmount.formatted()) + ")
-                        + "\(TransactionsFormat.entries(detail.entries.count)) · " + (detail.deposit.map { "storting \($0.amount.formatted()) op \($0.day.short())" } ?? "nog geen storting gekoppeld"))
+                        + "\(TransactionsFormat.entries(detail.entries.count)) · " + (detail.deposit.map { "overboeking \($0.amount.formatted()) op \($0.day.short())" } ?? "nog geen overboeking gekoppeld"))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             if let d = target.deposit, detail.deposit == nil, !s.isOpening, let id = s.id {
-                Button("Koppel deze storting") { store.linkDeposit(model, settlementId: id, depositEntryId: d.id) }
+                Button("Koppel deze overboeking") { store.linkDeposit(model, settlementId: id, depositEntryId: d.id) }
                     .help("Koppelt de bijschrijving van \(d.amount.formatted()) als terugbetaling")
             }
             if !s.isOpening, let id = s.id {

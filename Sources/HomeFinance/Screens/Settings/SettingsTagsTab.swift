@@ -38,7 +38,7 @@ struct SettingsTagsTab: View {
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Text("**Voorgeschoten** is voor uitgaven die je voorschiet en terugkrijgt, zoals tankkosten van je werk. De app houdt bij wat je nog terugkrijgt.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Text("Stond er bij de start van de app al iets open, zet dat dan als **startbedrag** bij de tag. Met **telt mee in nog te besteden** reken je het openstaande bedrag alvast mee als geld dat terugkomt.")
+                Text("Stond er bij de start van de app al iets open, zet dat dan als **startbedrag** bij de tag. Zet je **reken mee als inkomen dat nog komt** aan, dan telt het bedrag dat je nog terugkrijgt alvast mee in wat je deze maand kunt uitgeven.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Card(padding: 0) {
                     VStack(spacing: 0) {
@@ -143,8 +143,8 @@ struct SettingsTagsTab: View {
     /// "Telt mee in nog te besteden" aan of uit.
     private func setCounts(_ tag: Tag, _ on: Bool) {
         guard let id = tag.id else { return }
-        let text = on ? "Openstaand bij ‘\(tag.name)’ telt mee in nog te besteden"
-            : "Openstaand bij ‘\(tag.name)’ telt niet meer mee in nog te besteden"
+        let text = on ? "Openstaand bij ‘\(tag.name)’ reken mee als inkomen dat nog komt"
+            : "Openstaand bij ‘\(tag.name)’ telt niet meer mee als inkomen dat nog komt"
         _ = write(text) { db in _ = try TagService.setCountsInSpendable(db, tagId: id, on) }
     }
 
@@ -309,9 +309,9 @@ struct SettingsTagRow: View {
     /// Schakelaar "Telt mee in nog te besteden".
     private var countsLine: some View {
         HStack(spacing: 8) {
-            Toggle("Telt mee in nog te besteden", isOn: Binding(get: { tag.countsInSpendable }, set: { onCounts($0) }))
+            Toggle("Reken mee als inkomen dat nog komt", isOn: Binding(get: { tag.countsInSpendable }, set: { onCounts($0) }))
                 .toggleStyle(.switch).controlSize(.mini)
-                .help("Rekent het openstaande bedrag alvast mee als geld dat terugkomt, in ‘besteedbaar nu’ en ‘nog te besteden deze maand’.")
+                .help("Rekent het openstaande bedrag alvast mee als geld dat terugkomt, in ‘vrij te besteden’ en ‘nog over deze maand’.")
             Spacer(minLength: 0)
         }
         .font(.callout)

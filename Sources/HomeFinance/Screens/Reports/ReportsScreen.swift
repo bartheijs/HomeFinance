@@ -10,18 +10,18 @@ enum ReportsTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .overview: "Overzicht"
-        case .spendable: "Besteedbaar"
+        case .spendable: "Vrij te besteden"
         case .tags: "Categorieën"
         case .labels: "Per omschrijving"
         case .budget: "Budget tegen werkelijk"
-        case .divers: "Diverse uitgaven"
+        case .divers: "Overige uitgaven"
         case .years: "Jaar op jaar"
         }
     }
 
     var help: String {
         switch self {
-        case .overview: "Inkomsten, uitgaven en besteedbaar per maand"
+        case .overview: "Inkomsten, uitgaven en vrij te besteden per maand"
         case .spendable: "Wat je vrij kunt uitgeven, door het jaar heen"
         case .tags: "Wat je per maand uitgeeft aan een categorie (tag), zoals tanken of uit eten"
         case .labels: "Losse boekingen met dezelfde omschrijving opgeteld, zoals zakgeld"
@@ -168,7 +168,7 @@ struct ReportsScreen: View {
                     scroll { ReportsSpendableTab(summary: summary, points: data.spendable) }
                 } else {
                     EmptyState(title: "Geen begroting voor \(String(model.year))",
-                               message: "Besteedbaar is het saldo min de buffers. Daarvoor is een begroting voor dit jaar nodig.",
+                               message: "Vrij te besteden is het saldo min de buffers. Daarvoor is een begroting voor dit jaar nodig.",
                                icon: "wallet.bifold", actionTitle: "Naar Instellingen") { model.selection = .settings }
                 }
             case .tags:

@@ -84,19 +84,19 @@ struct ReimbOpenRow: View {
             }
             if entry.potId != nil {
                 Divider()
-                Button("Geen pot") { setPot(nil) }
+                Button("Geen potje") { setPot(nil) }
             }
         } label: {
             if let name = entry.potName {
-                Text(incoming ? "naar pot \(name)" : "uit pot \(name)").foregroundStyle(.secondary)
+                Text(incoming ? "naar potje \(name)" : "uit potje \(name)").foregroundStyle(.secondary)
             } else {
-                Label("Kies een pot…", systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
+                Label("Kies een potje…", systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
             }
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help(incoming ? "De pot op de spaarrekening waar dit bedrag naartoe gaat."
-              : "De pot op de spaarrekening die deze uitgave betaalt.")
+        .help(incoming ? "Het potje op de spaarrekening waar dit bedrag naartoe gaat."
+              : "Het potje op de spaarrekening die deze uitgave betaalt.")
     }
 }
 
@@ -109,7 +109,7 @@ struct ReimbPerPotList: View {
             ForEach(Array(shares.enumerated()), id: \.element.id) { index, share in
                 if index > 0 { Divider().padding(.leading, 18) }
                 HStack(spacing: 12) {
-                    Text(share.potName ?? "Nog geen pot gekozen")
+                    Text(share.potName ?? "Nog geen potje gekozen")
                         .foregroundStyle(share.potId == nil ? Theme.warning : Color.primary)
                         .lineLimit(1)
                     Spacer(minLength: 12)
@@ -188,7 +188,7 @@ struct ReimbHistoryRow: View {
     @ViewBuilder private var status: some View {
         if transfer.direction == .none {
             Text("geen overboeking nodig").font(.callout).foregroundStyle(.secondary)
-                .help("Per saldo hoefde er niets overgemaakt te worden; alleen de potten zijn bijgewerkt.")
+                .help("Per saldo hoefde er niets overgemaakt te worden; alleen de potjes zijn bijgewerkt.")
         } else if transfer.bankConfirmed {
             Label("gezien in de bank", systemImage: "checkmark").font(.callout).foregroundStyle(.secondary)
                 .help("De overboeking is aan beide kanten in een bankbestand herkend.")
@@ -215,13 +215,13 @@ struct ReimbHistoryRow: View {
             Text("Overgeboekte boekingen").font(.callout.weight(.medium)).foregroundStyle(.secondary).padding(.bottom, 2)
             ForEach(transfer.entries) { entry in
                 line(entry.day, entry.label.isEmpty ? "Zonder omschrijving" : entry.label,
-                     entry.potName.map { entry.amount > .zero ? "naar pot \($0)" : "uit pot \($0)" } ?? "geen pot", entry.amount)
+                     entry.potName.map { entry.amount > .zero ? "naar potje \($0)" : "uit potje \($0)" } ?? "geen potje", entry.amount)
             }
             if !transfer.potEntries.isEmpty {
                 Text("Geboekt op de spaarrekening").font(.callout.weight(.medium)).foregroundStyle(.secondary)
                     .padding(.top, 10).padding(.bottom, 2)
                 ForEach(transfer.potEntries) { entry in
-                    line(entry.day, entry.potName ?? "Zonder pot", entry.label, entry.amount)
+                    line(entry.day, entry.potName ?? "Zonder potje", entry.label, entry.amount)
                 }
             }
             if !transfer.note.isEmpty {

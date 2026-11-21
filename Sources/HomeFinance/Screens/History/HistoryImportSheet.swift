@@ -86,7 +86,7 @@ struct HistoryImportSheet: View {
             HistoryFileRow(title: "Begrotingswerkmap", detail: "Het bestand met één blad per jaar (.xlsx).",
                            icon: "tablecells", file: state.budgetFile,
                            choose: { picking = .budget }, clear: { state.budgetFile = nil })
-            HistoryFileRow(title: "Spaarwerkmap (als je wilt)", detail: "Het bestand met het blad RES: de mutaties per pot (.xlsx).",
+            HistoryFileRow(title: "Spaarwerkmap (als je wilt)", detail: "Het bestand met het blad RES: de mutaties per potje (.xlsx).",
                            icon: "square.grid.3x3.topleft.filled", file: state.savingsFile,
                            choose: { picking = .savings }, clear: { state.savingsFile = nil })
 

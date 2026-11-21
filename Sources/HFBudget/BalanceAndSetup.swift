@@ -370,7 +370,7 @@ public enum YearService {
 
     private static func validateBuffers(_ antiRood: Money, _ tijdelijk: Money) throws {
         guard !antiRood.isNegative, !tijdelijk.isNegative else {
-            throw BudgetError.validation("De buffers (anti-rood) mogen niet negatief zijn.")
+            throw BudgetError.validation("De buffers (minimaal op je betaalrekening) mogen niet negatief zijn.")
         }
     }
 
@@ -392,7 +392,7 @@ public enum YearService {
         }
         if let distributionId = item.distributionId {
             guard item.direction == .UIT else {
-                throw BudgetError.validation("Alleen een UIT-post kan aan een vaste storting gekoppeld zijn.")
+                throw BudgetError.validation("Alleen een UIT-post kan aan een vaste overboeking gekoppeld zijn.")
             }
             // Het plan van een gekoppelde post volgt de storting; een zelf ingevuld plan wordt overschreven.
             item.planAmount = -(try DistributionService.total(db, distributionId: distributionId))
@@ -463,7 +463,7 @@ public enum AccountService {
             var account = account
             try validate(db, &account)
             if account.kind != existing.kind, try usage(db, id, tables: ["entry", "pot"]) > 0 {
-                throw BudgetError.validation("Het soort rekening kan niet meer wijzigen: \(existing.name) heeft al boekingen of potten.")
+                throw BudgetError.validation("Het soort rekening kan niet meer wijzigen: \(existing.name) heeft al boekingen of potjes.")
             }
             let earlier = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entry WHERE accountId = ? AND day < ?",
                                            arguments: [id, account.openingDate]) ?? 0

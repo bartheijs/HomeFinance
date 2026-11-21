@@ -138,7 +138,7 @@ enum ReimbFormat {
         switch direction {
         case .fromSavings: "van spaar naar betaal"
         case .toSavings: "van betaal naar spaar"
-        case .none: "alleen tussen potten"
+        case .none: "alleen tussen potjes"
         }
     }
 }
