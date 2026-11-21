@@ -478,7 +478,7 @@ struct PotsOpeningBlock: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(showName ? "Beginstand \(opening.accountName)" : "Beginstand").font(.callout).foregroundStyle(.secondary)
                     HStack(spacing: 6) {
-                        Text("potten").foregroundStyle(.secondary)
+                        Text("potjes").foregroundStyle(.secondary)
                         Text(opening.potTotal.formatted()).monospacedDigit()
                         Text("+ niet toegewezen").foregroundStyle(.secondary)
                         Text(opening.unallocated.formatted()).monospacedDigit()

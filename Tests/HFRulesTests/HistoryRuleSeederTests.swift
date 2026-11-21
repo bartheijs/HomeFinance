@@ -55,7 +55,7 @@ import HFCore
             #expect(p.rule.amount == nil)
             #expect(!p.rule.reimburse)
             #expect(p.matchCount == 2)
-            #expect(p.explanation == "2 keer gekoppeld aan divers")
+            #expect(p.explanation == "2 keer gekoppeld aan overig")
             #expect(p.examples == [SeedExample(day: Day(iso: "2026-03-07")!, amount: Money(cents: -450), historyLabel: "Brood"),
                                    SeedExample(day: Day(iso: "2026-04-11")!, amount: Money(cents: -520), historyLabel: "Brood")])
         }
@@ -269,7 +269,7 @@ import HFCore
             #expect(r.mixedCount == 1)
             #expect(r.mixed.first?.counterparty == "Sportvereniging Voorbeeld")
             #expect(r.mixed.first?.matchCount == 2)
-            #expect(r.mixed.first?.detail == "Verdeeld over meer doelen: 1 × post Sportclub, 1 × divers.")
+            #expect(r.mixed.first?.detail == "Verdeeld over meer doelen: 1 × post Sportclub, 1 × overig.")
         }
     }
 

@@ -66,7 +66,37 @@ Aandachtspunten voor de test door de gebruiker:
   verschijnt; zo ja, dan weet je waarom "nog te besteden" anders is dan verwacht.
 - Het hulpje rekent met het lopende jaar. Een nieuwe vaste storting krijgt de eerste betaalrekening als herkomst.
 
-Volgende stappen (apart, later): indeling zijbalk, nieuwe namen, één plek om te boeken, scherm "Nog rechtzetten".
+### Stap C: indeling en namen (gebouwd, nog niet getest door de gebruiker)
+
+Vier commits, elk apart terug te draaien met `git revert <commit>`; de gebruiker kiest per begrip. Volledige lijst
+oud → nieuw en wat bewust niet veranderd is: `docs/ux/begrippen-voorstel.md`, sectie "Doorgevoerd".
+
+| Commit | Wat de gebruiker ziet | Top 10 |
+|---|---|---|
+| `1ae3c73` C1 | Zijbalk in groepen naar wat je komt doen: **Vandaag** (Dashboard), **Bijwerken** (Importeren en nakijken, Transacties), **Begroting** (Maandgrid, Posten), **Sparen** (Potten, Vaste stortingen, Verrekenen met spaar), **Inzicht** (Rapporten), Instellingen onderaan. Posten is een eigen scherm (was Instellingen › Jaar en posten, met jaar aanmaken en afsluiten); Vaste stortingen is een eigen scherm (was een knop op Potten); Regels is een tabblad van Instellingen. Alle "Naar …"-links wijzen naar de nieuwe plek. | #1 |
+| `58df987` C2 | Botsingen weg: **banktransactie** (was bankregel), **Nog overboeken** (was Verrekenen met spaar; scherm, schakelaar en knoppen), **Voorgeschoten** met "nog terug te krijgen: € X" (was verrekenen bij een tag), overal **Tijdelijk geleend van spaar**. | — |
+| `1e2025c` C3 | Nieuwe namen: potje, Automatisch sparen, overig, Telt in je begroting als, Hoort bij maand, Voortaan zo indelen, Indelen bij, Vrij te besteden, Nog over deze maand, Minimaal op je betaalrekening aan het eind van de maand, nog verwacht. Eén grijze uitlegzin op de eerste plek (Dashboard, Potjes, Automatisch sparen, Nog overboeken, Hoort bij maand, Voortaan zo indelen, Posten, Rapporten). Ook telefoonpagina, Excel-export, foutmeldingen, README en docs. | — |
+| C4 | Controle met grep op achtergebleven oude woorden: één los "potten" (Potjes, beginstand) en de samenvatting van regels uit de Excel-historie ("overig"). De meldingen van de Excel-historie-import zeggen nog "pot": de eerste testronde van C4 faalde daarop (3 tests) en dat deel is teruggedraaid. Dit overzicht en de sectie "Doorgevoerd". | — |
+
+Techniek: de zijbalk staat in één lijst (`SidebarGroup.all`) die de echte `NavigationSplitView` en de
+snapshot-zijbalk allebei lezen. De zelftest controleert per groep de rijen, in SwiftUI en zoals AppKit ze echt
+tekent (meetpunten `zijbalk-rij-…` en `zijbalk-kop-…`, alleen geteld waar een zichtbare rij met inhoud staat), in
+de gewone en de kleinste venstermaat; aangetoond dat hij faalt bij een andere volgorde. De namen zijn alleen in
+tekst veranderd (script dat alleen de tekst in string-literals aanpast, daarna met de hand nagelezen). Elke
+testronde GESLAAGD (zelftest 189 OK, 0 FOUT, beide venstermaten; 604 tests); kerncijfers voorbeelddata gelijk aan
+`3034290` (peildag 21-11-2026).
+
+Aandachtspunten voor de test door de gebruiker:
+- Niet getest met een kopie van de eigen administratie en niet in de geïnstalleerde app; alleen met voorbeelddata,
+  de zelftest en schermafdrukken (Dashboard, Posten, Automatisch sparen).
+- **Zijbalk:** controleer na het starten van de echte app dat de vijf groepen met hun regels zichtbaar zijn.
+- Het scherm "Nog rechtzetten" is niet gebouwd; Vandaag heeft alleen het Dashboard.
+- "Geleend uit andere potten" heet nu "In de min, gedekt door andere potjes" (ander begrip dan tijdelijk geleend).
+- Opgeslagen omschrijvingen ("Verrekening spaar", notitie "Verrekening #id") en de sleutels van de kerncijfers zijn
+  bewust niet veranderd.
+- Teksten met een naam erin lezen soms stijf ("Automatisch sparen: Maandelijkse reserveringen"); oordeel per begrip.
+
+Volgende stappen (apart, later): één plek om te boeken, scherm "Nog rechtzetten".
 
 ## Terug naar de code van 16 november (21 november 2026)
 

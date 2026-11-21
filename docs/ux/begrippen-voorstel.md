@@ -70,6 +70,70 @@ De app laat elke koppeling zien op beide plekken, met dezelfde woorden:
 
 Telkens: alleen teksten en weergave, geen wijziging in de berekeningen; testronde zoals gewoonlijk.
 
+## Doorgevoerd (UX-stap C, 21 november 2026)
+
+Gebouwd op de tak `ux-ronde`, in vier commits die elk apart terug te draaien zijn (`git revert <commit>`):
+C1 indeling, C2 botsingen, C3 overige namen, C4 controle. Alleen teksten, indeling en weergave; geen rekenregel,
+geen migratie, geen hernoemde identifiers of databasekolommen. De gebruiker beoordeelt de namen nog en kiest per
+begrip; een naam terugzetten is een tekstwijziging.
+
+### Zijbalk (C1)
+
+| Groep | Schermen |
+|---|---|
+| Vandaag | Dashboard |
+| Bijwerken | Importeren en nakijken · Transacties |
+| Begroting | Maandgrid · Posten (was Instellingen › Jaar en posten; jaar aanmaken en afsluiten gaan mee) |
+| Sparen | Potjes · Automatisch sparen (was een knop op Potten) · Nog overboeken |
+| Inzicht | Rapporten |
+| *(onderaan)* | Instellingen (Rekeningen, Regels, Tags, Back-up, Telefoon, Over) |
+
+Het geplande scherm "Nog rechtzetten" (journeys-review #2) is **niet** gebouwd; de groep Vandaag heeft nu alleen
+het Dashboard.
+
+### Woorden
+
+| Oud | Nieuw | Stap | Uitlegzin (grijs, op de eerste plek) |
+|---|---|---|---|
+| bankregel | banktransactie ("koppelen aan de banktransactie") | C2 | — |
+| Verrekenen met spaar (scherm, schakelaar, acties) | Nog overboeken; schakelaar "Nog overboeken met spaar"; een vastgelegde overboeking heet "overboeking met spaar", afgerond = "overgeboekt" | C2 | Nog overboeken: "Je betaalde dit vanaf je betaalrekening, maar het hoort bij een potje (of het kwam binnen en moet naar een potje). Zet het later in één overboeking recht." |
+| Verrekenen (bij een tag), te verrekenen, terugstorting | Voorgeschoten, "nog terug te krijgen: € X", terugbetaling, knop "Het geld is terug…" | C2 | Instellingen › Tags: "Voorgeschoten is voor uitgaven die je voorschiet en terugkrijgt, zoals tankkosten van je werk." |
+| Tijdelijk geleend / Geleend uit andere potten | Tijdelijk geleend van spaar (overal voluit); het cijfer voor potjes in de min heet "In de min, gedekt door andere potjes" (in C2 nog "potten") | C2 | (bestond al bij Posten) |
+| Divers / IN divers / UIT divers | Overig / IN overig / UIT overig | C3 | Rapporten › Overige uitgaven: "Overig: boekingen die bij geen enkele post horen." |
+| Pot / Potten (en samenstellingen) | Potje / Potjes | C3 | Potjes: "Een potje is een deel van je spaargeld met een eigen bestemming." |
+| Vaste storting / Vaste stortingen | Automatisch sparen (zijbalk en scherm); een losse storting heet "vaste overboeking"; met naam "Automatisch sparen: X" | C3 | Subregel: "Vaste overboeking per maand, verdeeld over potjes. Elke maand gaat dit bedrag naar je spaarrekening en wordt het over deze potjes verdeeld." |
+| Hoort bij post (bij een vaste storting) | Telt in je begroting als | C3 | "Op je betaalrekening is deze overboeking een uitgave op deze post." |
+| Telt mee in (maand) | Hoort bij maand | C3 | "Deze boeking telt mee in een andere maand dan de datum, bijvoorbeeld loon dat op de 25e binnenkomt voor de maand erna." |
+| Onthoud als regel | Voortaan zo indelen | C3 | "Boekingen van deze tegenpartij krijgen voortaan deze post of dit potje voorgesteld." |
+| Toewijzen aan post… / pot… | Indelen bij post… / potje… | C3 | — |
+| Besteedbaar nu / besteedbaar | Vrij te besteden | C3 | Dashboard: "Wat er nu op je betaalrekening staat, min wat je wilt laten staan en wat je van spaar hebt geleend." |
+| Nog te besteden deze maand | Nog over deze maand | C3 | Dashboard: "Wat je deze maand nog kunt uitgeven, na de vaste posten die nog komen." |
+| Telt mee in nog te besteden (tag) | Reken mee als inkomen dat nog komt | C3 | (zin bij Instellingen › Tags) |
+| Anti-rood | Minimaal op je betaalrekening aan het eind van de maand (kort: "Minimaal aan het eind van de maand") | C3 | Posten: "Dit bedrag laat je altijd staan, zodat je niet rood komt." |
+| Status open (Dashboard, telefoon) | Nog verwacht (naast Klopt / Wijkt af / Te laat uit stap A2) | C3 | (legenda bestond al) |
+
+Ook bijgewerkt: telefoonpagina, Excel-export (bladen "Potjes" en "Automatisch sparen", kolomkoppen "Hoort bij
+maand", "Post of potje", "Overig", "Nog overboeken met spaar", "Tijdelijk geleend van spaar"; rijen "IN/UIT/Netto
+overig", "Minimaal aan het eind van de maand", "Vrij te besteden"), foutmeldingen, README, docs/api (met een
+kader "Namen in de interface") en de importchecklist.
+
+### Bewust niet veranderd
+
+- Identifiers, enum-waarden, databasekolommen en de sleutels van de kerncijfers (`besteedbaarNu`,
+  `verrekeningen.*`), zodat de testronde dezelfde basis kan blijven gebruiken.
+- Opgeslagen gegevens: de omschrijving "Verrekening spaar" en de notitie "Verrekening #id" van boekingen die bij het
+  afvinken worden gemaakt, en namen in de voorbeelddata. Bestaande boekingen hebben die tekst al; een andere tekst
+  voor nieuwe boekingen zou twee namen voor hetzelfde geven. Apart te beslissen.
+- De CSV-export: dat is een ruwe kopie van de tabellen, met de kolomnamen uit de database.
+- De import van de Excel-historie (`HFHistory`): de herkenning leest de Excel-woorden zoals ze zijn, en ook de
+  meldingen en de samenvatting zeggen nog "pot"/"potten". Een eerste poging om die mee te nemen brak drie tests
+  (testronde C4 NIET GESLAAGD) en is teruggedraaid; apart op te pakken.
+- "Geleend uit andere potten" is niet "Tijdelijk geleend van spaar" genoemd: het is een ander getal (potjes in de
+  min binnen de spaarrekening). Het heet nu "In de min, gedekt door andere potjes", zodat "geleend" alleen nog voor
+  geld van spaar naar betaal staat.
+- De groepen "Reserveringspotten" en "Spaarpotten" in de kiezers heten nu "Reserveringspotjes" en "Spaarpotjes"
+  (niet "Reserveren" en "Sparen" uit de tabel hierboven).
+
 ## Bronnen
 
 - YNAB Glossary: https://support.ynab.com/en_us/ynab-glossary-a-guide-BJd80SORq.md

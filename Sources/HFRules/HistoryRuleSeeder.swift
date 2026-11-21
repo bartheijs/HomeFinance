@@ -142,7 +142,7 @@ public enum HistoryRuleSeeder {
             if majority.count * 3 < links.count * 2 {
                 let parts = targetOrder.map { k -> String in
                     let label = byTarget[k]?.first?.hist.entry.budgetItemId.flatMap { items[$0]?.label }
-                    return "\(byTarget[k]?.count ?? 0) × \(label.map { "post \($0)" } ?? "divers")"
+                    return "\(byTarget[k]?.count ?? 0) × \(label.map { "post \($0)" } ?? "overig")"
                 }
                 result.mixed.append(SeedNote(counterparty: name, matchCount: links.count,
                                              detail: "Verdeeld over meer doelen: " + parts.joined(separator: ", ") + "."))
@@ -177,7 +177,7 @@ public enum HistoryRuleSeeder {
             for l in majority { for tag in l.hist.tags { tagCount[tag, default: 0] += 1 } }
             rule.tagIdList = tagCount.filter { $0.value * 3 >= majority.count * 2 }.keys.sorted()
 
-            let target = item.map { "post \($0.label)" } ?? "divers"
+            let target = item.map { "post \($0.label)" } ?? "overig"
             var explanation = "\(majority.count) keer gekoppeld aan \(target)"
             if equalsPlan { explanation += " (bedrag gelijk aan het plan)" }
             if majority.count < links.count { explanation += "; \(links.count - majority.count) keer aan iets anders" }
