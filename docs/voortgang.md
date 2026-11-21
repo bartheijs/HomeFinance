@@ -30,6 +30,42 @@ Aandachtspunten voor de test door de gebruiker:
 - De voortgangsregel staat in het detail van Transacties, niet in Nakijken (daar is de boeking nog niet gedaan).
 - Nog niet getest met een kopie van de eigen administratie en niet in de geïnstalleerde app.
 
+### Stap B: de keten post ↔ vaste storting ↔ pot (gebouwd, nog niet getest door de gebruiker)
+
+| Commit | Wat de gebruiker ziet | Top 10 |
+|---|---|---|
+| `0c8b80a` B1 | Maandgrid: de uitgeklapte opbouw van RESERVERINGEN toont de regels van de gekoppelde vaste storting (potje en bedrag, label "potje"), niet meer de RES-regels; de keuze heet "Toon opbouw van RESERVERINGEN". Jaar en posten: de opengeklapte post RESERVERINGEN toont die opbouw alleen-lezen met "Verdeling wijzigen bij Vaste stortingen"; de groep RES-regels heet "RES-regels (oude opbouw)" en toont haar som per maand. Lopen RES-regels en storting uit elkaar, dan staat er een waarschuwing (grid, begroting, vaste storting). | #5 |
+| `55d39be` B2 | Een vak met de koppeling en een klik naar de andere kant: bij een potje "Krijgt € … per maand via vaste storting X (post Y)" (bij meer stortingen een lijstje), bij een vaste storting "Telt in je begroting als: post Y", bij een post (Jaar en posten, en het celvenster van het maandgrid) "Gaat via vaste storting X naar n potjes". | #4 |
+| `f9832c7` B3 | Potten en sparen › **Nieuw jaarbedrag…**: naam, bedrag per jaar ("dat is € … per maand"), nieuw of bestaand potje, vaste storting (of een nieuwe), de post (volgt vanzelf, of nieuw/bestaand kiezen), en optioneel de rekening als verwachting in het potje. Vóór het opslaan de samenvatting "Er gaat elke maand € … naar potje X via vaste storting Y; je begroting rekent met € … op post Z. Let op: verhoog je overboeking bij de bank naar € …", plus de losse stappen. | #6 |
+
+**Bevinding RES-regels (B1).** Nagegaan waar ze nog voor gebruikt worden:
+- **Rekenen (kan niet zonder):** in HFInsight is het plan van RESERVERINGEN altijd de som van de RES-regels
+  (`PlanSet`), ook als RESERVERINGEN aan een vaste storting hangt. Dat plan telt mee in het maandgrid (status en
+  ruimte), "nog te besteden deze maand" (kerncijfer), rapport plan/werkelijk en de maandbalans. Het opgeslagen plan
+  van de post zelf volgt wél de storting (`syncReserveTotal`/`syncLinkedPlans`); zonder koppeling is het de som van
+  de RES-regels.
+- Export naar Excel: kolom Plan van RESERVERINGEN = som van de RES-regels; de RES-regels staan als ingesprongen rijen.
+- Jaar kopiëren: RES-regels gaan mee. Historie-import (Excel): RES-regels bepalen alleen het plan van RESERVERINGEN,
+  worden zelf niet aangemaakt. CSV-export, spaardoelen, vooruitblik en potbedragen per maand: gebruiken de vaste
+  stortingen, niet de RES-regels.
+- Gevolg: RES-regels zijn inhoudelijk ongemoeid gelaten en blijven te wijzigen; B1 is alleen weergave. Het hulpje
+  (B3) verhoogt de RES-regel van het potje mee als de post RESERVERINGEN is en er RES-regels zijn, zodat het grid
+  meegaat. **Let op voor de eigen administratie:** als RES-regels en storting nu al uit elkaar lopen (bv. na het
+  toevoegen van een potje aan de storting), rekent "nog te besteden" met de RES-regels. De app waarschuwt daar nu
+  voor. Eén bron ook in het rekenen (plan = storting) is een rekenregelwijziging en vraagt een eigen besluit en een
+  testronde op een kopie.
+
+Techniek: zinnen en lijstjes uit HFInsight (`Chain.swift`: `Insight.chain`, `Insight.reserveBuildup`), het hulpje
+in HFBudget (`AnnualAmountService`), met tests. Elke testronde GESLAAGD (zelftest 154 OK, 0 FOUT, beide
+venstermaten); kerncijfers voorbeelddata gelijk aan die vóór stap B.
+
+Aandachtspunten voor de test door de gebruiker:
+- Niet doorgeklikt in de echte app: de knoppen in de keten (naar storting / naar post) en het hulpje zijn alleen
+  gebouwd, getest met unittests, de zelftest en schermafdrukken van Jaar en posten en het lege hulpje.
+- Met een kopie van de eigen administratie nagaan of er een waarschuwing "RES-regels en storting lopen uit elkaar"
+  verschijnt; zo ja, dan weet je waarom "nog te besteden" anders is dan verwacht.
+- Het hulpje rekent met het lopende jaar. Een nieuwe vaste storting krijgt de eerste betaalrekening als herkomst.
+
 Volgende stappen (apart, later): indeling zijbalk, nieuwe namen, één plek om te boeken, scherm "Nog rechtzetten".
 
 ## Terug naar de code van 16 november (21 november 2026)
