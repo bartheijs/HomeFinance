@@ -118,6 +118,7 @@ struct ScreenHeader<Trailing: View>: View {
             trailing
         }
         .padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 12)
+        .selfTestProbe("scherm-kop")
     }
 }
 

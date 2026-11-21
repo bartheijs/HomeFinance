@@ -67,6 +67,12 @@ struct ReportsScreen: View {
     @State private var showAllBudget = false
     /// De tabel van "Per omschrijving", bijgehouden door dat tabblad zelf.
     @State private var labelsTable = ""
+    /// De breedte die het scherm van het venster krijgt; bepaalt of de tabbladen naast elkaar passen.
+    @State private var width: CGFloat = 0
+
+    /// Vanaf deze schermbreedte passen de zeven tabbladen naast elkaar (samen ongeveer 1135 punten, plus de marges).
+    /// Daaronder worden ze een keuzemenu, zodat het scherm nooit breder wordt dan het venster.
+    static let segmentedMinWidth: CGFloat = 1200
 
     private struct LoadKey: Hashable {
         let revision: Int, year: Int, today: Day, tagId: Int64?, tagMonth: Int?, diversMonth: Int?
@@ -79,20 +85,22 @@ struct ReportsScreen: View {
                     .keyboardShortcut("c", modifiers: [.command, .shift])
                     .help("Zet de cijfers van dit rapport op het klembord, om in Excel te plakken (⇧⌘C)")
             }
-            HStack(spacing: 12) {
-                Picker("Rapport", selection: $tab) {
-                    ForEach(ReportsTab.allCases) { Text($0.title).tag($0).help($0.help) }
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-                Spacer(minLength: 8)
+            // De knoppen van het gekozen rapport staan onder de tabbladen, zodat de rij nooit te breed wordt.
+            VStack(alignment: .leading, spacing: 8) {
+                tabPicker
                 tabControls
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 24).padding(.bottom, 12)
             .background { tabShortcuts }
             Divider()
             content
         }
         .background(Theme.background)
+        // Meet de breedte die het venster geeft (minWidth 0: niet wat de inhoud zou willen).
+        .frame(minWidth: 0, maxWidth: .infinity)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .selfTestTabRequests($tab)
         .onChange(of: model.year) {
             tagMonth = nil
             diversMonth = nil
@@ -106,6 +114,19 @@ struct ReportsScreen: View {
         if tab == .years { return "Alle jaren naast elkaar" }
         guard let summary = data.summary else { return "Trends en waar het geld naartoe ging in \(String(model.year))" }
         return "Cijfers van \(String(model.year)) t/m \(summary.asOf.short())"
+    }
+
+    /// Tabbladen naast elkaar als er ruimte is, anders een keuzemenu (vaste keuze op de breedte).
+    @ViewBuilder private var tabPicker: some View {
+        let picker = Picker("Rapport", selection: $tab) {
+            ForEach(ReportsTab.allCases) { Text($0.title).tag($0).help($0.help) }
+        }
+        .labelsHidden()
+        if width >= Self.segmentedMinWidth {
+            picker.pickerStyle(.segmented).fixedSize()
+        } else {
+            picker.pickerStyle(.menu).fixedSize()
+        }
     }
 
     @ViewBuilder private var tabControls: some View {

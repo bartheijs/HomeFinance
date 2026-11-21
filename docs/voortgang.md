@@ -38,6 +38,10 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
   (in SwiftUI én als getekende rijen in AppKit, ook nog na de ronde), elk scherm binnen 5 s, geen
   `errorMessage`, geen fouten in `model.read`/`perform`. Harde limiet 90 s op een eigen thread.
   Aangetoond: met het Regels-scherm tijdelijk weggehaald faalt hij (exitcode 1, "FOUT scherm rules").
+  Sinds ronde 17 (6k-3) ook per scherm, en per tabblad van Rapporten en Instellingen, in de gewone én de
+  kleinste venstermaat (1100 × 700): kop zichtbaar, scherm schuift niet horizontaal buiten beeld, zijbalk
+  zichtbaar (meetpunten `scherm`, `scherm-ruimte`, `scherm-kop`; Rapporten kiest zijn tabblad via
+  `.selfTestTabRequests`).
 - **Kerncijfers** (`--kerncijfers <json> [--dag]`, `Insight.keyFigures`): platte, gesorteerde lijst met saldo per
   rekening (en saldo volgens de app tegen het eindsaldo van de laatste import), saldo per pot, besteedbaar nu,
   nog te besteden deze maand, aantallen boekingen en banktransacties per status, open verrekeningen netto en
@@ -304,7 +308,20 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
       nul), Rapporten › Per omschrijving (aantallen "12×"), Maandgrid (kleine pictogrammen en bijschrift in de
       cel), Tags ("niet gebruikt", startbedrag "geen"). Geen layout-wijzigingen.
    3. Rapporten in een smal venster. Eerst de zelftest uitbreiden: elk scherm in gewone én kleinste
-      venstermaat, zijbalk na elke stap zichtbaar.
+      venstermaat, zijbalk na elke stap zichtbaar. — **klaar** (21 november, ronde 17).
+      - Zelftest: per scherm (Rapporten en Instellingen per tabblad, samen 20 haltes) op beide maten drie
+        controles: kop zichtbaar, schuift niet buiten beeld, zijbalk zichtbaar. Plus: het venster blijft op de
+        kleinste maat. Op de stand van ronde 16 gedraaid: alle andere schermen OK, maar Rapporten FOUT op alle
+        tabbladen in de kleinste maat en op "Budget tegen werkelijk" en "Diverse uitgaven" ook in de gewone maat
+        (het scherm werd tot 1390 punten breed en duwde de zijbalk links buiten beeld). De controle "titel op één
+        regel" (Instellingen) zat er toen ook in en faalde op alle tabbladen van Instellingen in de kleinste maat;
+        die komt pas mee in ronde 18.
+      - Oorzaak: de zeven tabbladen zijn als segmentknop samen ongeveer 1135 punten breed (even brede vakjes).
+      - Oplossing (geen `ViewThatFits`): de knoppen van het rapport (maandkeuze, "Toon alle posten") staan nu
+        altijd onder de tabbladen. Het scherm meet de breedte die het krijgt; vanaf 1200 punten staan de
+        tabbladen naast elkaar, daaronder zijn ze een keuzemenu. In het standaardvenster (1440 breed) blijven het
+        dus tabbladen; in het kleinste venster en met een brede zijbalk een menu. Bekeken in snapshots op beide
+        maten.
    4. Instellingen in een smal venster.
    Volgorde van de rondes: 6c (test), 6j, 6h, 6g, 6k-1 t/m 6k-4. Daarna nog te vragen: telefoondashboard
    met "Nog te besteden deze maand", voorbeelddata versie 2.

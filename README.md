@@ -125,7 +125,9 @@ Dat doet vier dingen en schrijft alles naar de map achter `--uit` (nooit in deze
    klikt zelf alle schermen in de zijbalk langs. Per controle staat er OK of FOUT in `zelftest-voorbeeld.log`:
    verscheen de zijbalk met alle regels, verscheen elk scherm binnen 5 seconden, kwam er geen foutmelding.
    Op Transacties kijkt hij ook, op de gewone en de kleinste venstermaat, of de kop zichtbaar blijft en het
-   downloadblok eronder staat. Op Transacties en Nakijken kijkt hij of de pot-kiezers geladen zijn met de
+   downloadblok eronder staat. Daarna loopt hij elk scherm (en elk tabblad van Rapporten en Instellingen)
+   nog eens langs op de gewone en de kleinste venstermaat: is de kop zichtbaar, schuift het scherm niet
+   horizontaal buiten beeld en blijft de zijbalk zichtbaar. Op Transacties en Nakijken kijkt hij of de pot-kiezers geladen zijn met de
    potten per soort op alfabet (in het log alleen het aantal en "volgorde OK").
    Na hooguit 90 seconden stopt de app altijd.
 4. **Kerncijfers**: saldi per rekening, het saldo van elke pot, "besteedbaar nu", "nog te besteden deze maand"

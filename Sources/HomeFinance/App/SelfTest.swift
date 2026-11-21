@@ -149,6 +149,10 @@ enum SelfTest {
         // 3b. Transacties: de kop blijft zichtbaar en het downloadblok (6a) staat eronder, ook in het kleinste venster.
         await checkTransactionsHeader(model: model)
 
+        // 3c. Elk scherm (en elk tabblad van Rapporten en Instellingen) in de gewone en de kleinste venstermaat:
+        // kop zichtbaar, niets horizontaal buiten beeld, zijbalk zichtbaar (6k-3).
+        await checkLayout(model: model, expectedRows: expected.count)
+
         // 4. De zijbalk staat er na de ronde nog (een zijbalk die later leeg wordt, valt hier op).
         let rowsAfter = visibleSidebarRowCount()
         check(rowsAfter >= expected.count,
@@ -185,6 +189,111 @@ enum SelfTest {
         }
         window.setFrame(original, display: true)
         try? await Task.sleep(for: .milliseconds(300))
+    }
+
+    /// Eén halte van de ronde langs de schermen: een scherm, of een tabblad van een scherm met tabbladen.
+    private struct Stop {
+        let screen: Screen
+        /// Tabblad van Rapporten (`ReportsTab`) of Instellingen (`SettingsTab`), anders nil.
+        let tab: String?
+        let title: String
+    }
+
+    private static var stops: [Stop] {
+        Screen.allCases.flatMap { screen -> [Stop] in
+            switch screen {
+            case .reports: ReportsTab.allCases.map { Stop(screen: screen, tab: $0.rawValue, title: "\(screen.title) › \($0.title)") }
+            case .settings: SettingsTab.allCases.map { Stop(screen: screen, tab: $0.rawValue, title: "\(screen.title) › \($0.title)") }
+            default: [Stop(screen: screen, tab: nil, title: screen.title)]
+            }
+        }
+    }
+
+    /// Vraagt een scherm met `.selfTestTabRequests(_:)` om een ander tabblad (object: de rawValue).
+    static let tabRequest = Notification.Name("HomeFinanceSelfTestTabRequest")
+
+    private static func checkLayout(model: AppModel, expectedRows: Int) async {
+        guard let window = mainWindow() else { return }
+        let original = window.frame
+        let originalSettingsTab = model.settingsTab
+        let sizes: [(String, NSSize?)] = [("gewone venstermaat", nil), ("kleinste venstermaat", NSSize(width: 1100, height: 700))]
+        for (label, size) in sizes {
+            if let size {
+                window.setContentSize(size)
+                try? await Task.sleep(for: .milliseconds(500))
+                let width = window.contentView?.bounds.width ?? 0
+                check(abs(width - size.width) <= 1, "venster blijft op de \(label) (\(Int(width)) breed, gevraagd \(Int(size.width)))")
+            }
+            // Begin elke maat op een ander scherm, zodat het eerste scherm vers verschijnt.
+            model.selection = .dashboard
+            try? await Task.sleep(for: .milliseconds(300))
+            var current: Screen? = nil
+            for stop in stops {
+                if stop.screen == .settings, let tab = stop.tab { model.settingsTab = tab }
+                if current != stop.screen {
+                    // Alleen de kop hoort bij het scherm; "scherm" en "scherm-ruimte" zitten om alle schermen heen
+                    // en melden zich pas opnieuw als hun plek verandert.
+                    probeFrames["scherm-kop"] = nil; probeFrames["scherm-titel"] = nil
+                    let before = screenAppearances[stop.screen, default: 0]
+                    if model.selection != stop.screen {
+                        model.selection = stop.screen
+                        _ = await wait(screenTimeout) { screenAppearances[stop.screen, default: 0] > before }
+                    }
+                    current = stop.screen
+                }
+                if stop.screen == .reports, let tab = stop.tab {
+                    NotificationCenter.default.post(name: tabRequest, object: tab)
+                }
+                try? await Task.sleep(for: .milliseconds(450))
+                checkStop(stop, label: label, window: window, expectedRows: expectedRows)
+            }
+        }
+        model.settingsTab = originalSettingsTab
+        window.setFrame(original, display: true)
+        try? await Task.sleep(for: .milliseconds(300))
+    }
+
+    private static func checkStop(_ stop: Stop, label: String, window: NSWindow, expectedRows: Int) {
+        let where_ = "\(stop.title) (\(label))"
+        let height = window.contentView?.bounds.height ?? 0
+        let width = window.contentView?.bounds.width ?? 0
+        let top = max(0, height - window.contentLayoutRect.maxY)
+        let sidebar = sidebarFrame()
+        let sidebarRight = sidebar?.maxX ?? 0
+        let area = probeFrames["scherm-ruimte"]
+        let left = max(sidebarRight, area?.minX ?? sidebarRight)
+        let right = min(width, area?.maxX ?? width)
+        let fmt: (CGRect) -> String = { "x \(Int($0.minX))–\(Int($0.maxX)), y \(Int($0.minY))–\(Int($0.maxY))" }
+
+        // Kop: binnen het venster, onder de werkbalk, tussen zijbalk en rechterrand.
+        let header = probeFrames["scherm-kop"]
+        let headerOK = header.map { $0.width > 0 && $0.height > 0 && $0.minY >= top - 0.5 && $0.maxY <= height + 0.5
+            && $0.minX >= left - 1 && $0.maxX <= right + 1 } ?? false
+        check(headerOK, "kop zichtbaar: \(where_)"
+              + (header.map { " kop \(fmt($0))" } ?? ", kop niet gezien")
+              + (headerOK ? "" : ", ruimte x \(Int(left))–\(Int(right)) y \(Int(top))–\(Int(height))"))
+
+        // Niet horizontaal buiten beeld: het scherm past in de ruimte naast de zijbalk.
+        let screen = probeFrames["scherm"]
+        let fits = screen.map { $0.width > 0 && $0.minX >= left - 1 && $0.maxX <= right + 1 } ?? false
+        check(fits, "schuift niet buiten beeld: \(where_)"
+              + (screen.map { fits ? "" : " scherm \(fmt($0)), ruimte x \(Int(left))–\(Int(right))" } ?? ", scherm niet gemeten"))
+
+        // Zijbalk: links in beeld, breed genoeg, met alle rijen.
+        let rows = visibleSidebarRowCount()
+        let sidebarOK = (sidebar.map { $0.minX >= -0.5 && $0.width >= 150 } ?? false) && rows >= expectedRows
+        check(sidebarOK, "zijbalk zichtbaar: \(where_)"
+              + (sidebarOK ? "" : " (\(sidebar.map { "x \(Int($0.minX))–\(Int($0.maxX))" } ?? "niet gevonden"), \(rows) rijen)"))
+    }
+
+    /// Plek van de zijbalk (de scrollweergave om de meest linkse tabel) in venstercoördinaten.
+    private static func sidebarFrame() -> CGRect? {
+        guard let content = mainWindow()?.contentView else { return nil }
+        let tables = allSubviews(of: content).compactMap { $0 as? NSTableView }
+        guard let table = tables.min(by: { $0.convert($0.bounds, to: nil).minX < $1.convert($1.bounds, to: nil).minX }),
+              let scroll = table.enclosingScrollView, !scroll.isHiddenOrHasHiddenAncestor
+        else { return nil }
+        return scroll.convert(scroll.bounds, to: nil)
     }
 
     private static func finish() {
@@ -250,6 +359,18 @@ enum SelfTest {
 // MARK: - Meetpunt voor de zelftest
 
 extension View {
+    /// Laat de zelftest het tabblad van dit scherm kiezen (`SelfTest.tabRequest`). Buiten de zelftest verandert er
+    /// niets.
+    @ViewBuilder func selfTestTabRequests<T: RawRepresentable>(_ tab: Binding<T>) -> some View where T.RawValue == String {
+        if SelfTest.isOn {
+            onReceive(NotificationCenter.default.publisher(for: SelfTest.tabRequest)) { note in
+                if let raw = note.object as? String, let value = T(rawValue: raw) { tab.wrappedValue = value }
+            }
+        } else {
+            self
+        }
+    }
+
     /// Meldt in de zelftest waar deze view in het venster staat. Buiten de zelftest verandert er niets.
     @ViewBuilder func selfTestProbe(_ name: String) -> some View {
         if SelfTest.isOn {

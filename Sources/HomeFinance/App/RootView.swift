@@ -25,7 +25,9 @@ struct RootView: View {
                     VStack(spacing: 0) {
                         if model.isDemo { DemoBanner() }
                         detail
+                            .selfTestProbe("scherm")
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .selfTestProbe("scherm-ruimte")
                             .background(Theme.background)
                     }
                 }
