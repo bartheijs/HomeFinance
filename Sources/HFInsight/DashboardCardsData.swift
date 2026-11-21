@@ -61,3 +61,43 @@ extension Insight {
         return ("e.accountId IN \(Q.betaal) AND e.budgetItemId IS NULL AND \(p.sql)", p.args)
     }
 }
+
+/// De pagina Incidentele transacties van één maand: totalen, uitgaven per tag, de grootste uitgaven en alle
+/// transacties zonder vaste post op de betaalrekening(en).
+public struct IncidentalMonth: Equatable, Sendable {
+    public let summary: IncidentalSummary
+    /// Uitgaven per tag (alle tags met een bedrag, plus "Zonder tag"); grootste uitgave eerst.
+    public let expensesByTag: DiversBreakdown
+    /// Alle transacties van de maand, nieuwste eerst.
+    public let entries: [EntryRow]
+
+    /// De lijst gefilterd op in of uit (nil = alles) en gesorteerd.
+    public func list(sign: AmountSign?, sort: EntrySort) -> [EntryRow] {
+        let filtered = entries.filter { entry in
+            switch sign {
+            case nil: true
+            case .positive?: entry.amount > .zero
+            case .negative?: entry.amount < .zero
+            }
+        }
+        return filtered.sorted { a, b in
+            switch sort {
+            case .dayAscending: (a.day, a.id) < (b.day, b.id)
+            case .dayDescending: (a.day, a.id) > (b.day, b.id)
+            case .amountAscending: (a.amount, a.id) < (b.amount, b.id)
+            case .amountDescending: a.amount != b.amount ? a.amount > b.amount : a.id < b.id
+            case .label: (a.label.lowercased(), a.id) < (b.label.lowercased(), b.id)
+            }
+        }
+    }
+}
+
+extension Insight {
+    /// Alles voor de pagina Incidentele transacties van één begrotingsmaand.
+    public static func incidentalMonth(_ db: Database, year: Int, month: Int) throws -> IncidentalMonth {
+        let p = inPeriodDivers(year, month)
+        return IncidentalMonth(summary: try incidentalSummary(db, year: year, month: month, largest: 5),
+                               expensesByTag: try diversByTag(db, year: year, month: month),
+                               entries: try entryRows(db, where: p.sql, arguments: p.args, order: "e.day DESC, e.id DESC"))
+    }
+}

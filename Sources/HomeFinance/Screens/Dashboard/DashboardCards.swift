@@ -256,201 +256,113 @@ struct DashboardFixedItemsPage: View {
     }
 }
 
-// MARK: - Deze maand
+// MARK: - Incidentele transacties
 
-/// Inkomsten en uitgaven van deze maand tegen het plan.
-struct DashboardMonthCard: View {
-    let dashboard: Dashboard
-    /// Resultaat van de lopende maand (IN + UIT), als het bekend is.
-    let result: Money?
+/// De pagina achter het kaartje Incidentele transacties: drie kaartjes (totalen, uitgaven per tag, de vijf
+/// grootste uitgaven) en daaronder alle transacties, te sorteren en te filteren. Geen links naar andere pagina's.
+struct DashboardIncidentalPage: View {
+    let month: IncidentalMonth
+    let width: CGFloat
+    @State private var filter: DashboardInOutFilter = .alles
+    @State private var sort: EntrySort = .dayDescending
 
-    private var monthProgress: Double {
-        Double(dashboard.today.day) / Double(DashboardFormat.daysInMonth(dashboard.today))
-    }
+    private static let sorts: [(EntrySort, String)] = [
+        (.dayDescending, "Datum, nieuwste eerst"), (.dayAscending, "Datum, oudste eerst"),
+        (.amountAscending, "Bedrag, oplopend"), (.amountDescending, "Bedrag, aflopend"),
+    ]
 
-    var body: some View {
-        DashboardCard("Deze maand", icon: "calendar",
-                      help: "Alles wat deze maand op de betaalrekening is geboekt, vergeleken met het plan van de vaste posten die deze maand verwacht worden.") {
-            Text("dag \(dashboard.today.day) van \(DashboardFormat.daysInMonth(dashboard.today))")
-                .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-        } content: {
-            VStack(alignment: .leading, spacing: 16) {
-                bar("Inkomsten", actual: dashboard.monthIncome, plan: dashboard.planIncome, color: Theme.positive, isExpense: false)
-                bar("Uitgaven", actual: dashboard.monthExpenses, plan: dashboard.planExpenses, color: Theme.negative, isExpense: true)
-                if let result {
-                    Divider()
-                    HStack {
-                        Text("Resultaat tot nu toe").font(.callout)
-                        Spacer()
-                        MoneyText(result, colored: true, alwaysSign: true).font(.callout.weight(.semibold))
-                    }
-                    .help("Inkomsten min uitgaven van deze maand tot en met vandaag.")
-                }
-                Spacer(minLength: 0)
-            }
+    private var sign: AmountSign? {
+        switch filter {
+        case .alles: nil
+        case .inkomsten: .positive
+        case .uitgaven: .negative
         }
     }
 
-    private func bar(_ title: String, actual: Money, plan: Money, color: Color, isExpense: Bool) -> some View {
-        // De balk loopt tot het grootste van plan en werkelijk; een streepje geeft het plan aan.
-        let scale = max(actual.magnitude, plan.magnitude)
-        let over = isExpense && actual.magnitude > plan.magnitude && !plan.isZero
-        return VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title).font(.callout)
-                if over {
-                    Pill("boven plan", color: Theme.warning)
-                        .help("Er is meer uitgegeven dan de vaste posten van deze maand. Dat komt meestal door overige uitgaven.")
-                }
-                Spacer()
-                Text(actual.magnitude.formatted()).font(.callout.weight(.semibold)).monospacedDigit()
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.secondary.opacity(0.15))
-                    Capsule().fill(color)
-                        .frame(width: actual.isZero ? 0 : max(6, geo.size.width * DashboardFormat.fraction(actual, of: scale)))
-                    if !plan.isZero {
-                        RoundedRectangle(cornerRadius: 1).fill(Color.primary.opacity(0.75))
-                            .frame(width: 2, height: 16)
-                            .offset(x: min(geo.size.width - 2, geo.size.width * DashboardFormat.fraction(plan, of: scale)))
-                            .help("Plan: \(plan.magnitude.formatted())")
-                    }
-                }
-                .frame(height: 16)
-            }
-            .frame(height: 16)
-            HStack {
-                Text(plan.isZero ? "geen plan deze maand" : "plan \(plan.magnitude.formatted())")
-                Spacer()
-                if !plan.isZero {
-                    Text("\(Int((actual.magnitude.doubleValue / plan.magnitude.doubleValue * 100).rounded())) % van plan")
-                }
-            }
-            .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-        }
-    }
-}
-
-// MARK: - Top-tags
-
-/// De grootste tags van deze maand.
-struct DashboardTopTagsCard: View {
-    @Environment(AppModel.self) private var model
-    let tags: [TagAmount]
-    let month: Int
-
-    private var largest: Money { tags.map(\.total.magnitude).max() ?? .zero }
-
     var body: some View {
-        DashboardCard("Top-tags deze maand", icon: "tag",
-                      help: "Tags zijn labels op boekingen, zoals tanken of uit eten, om uitgaven te volgen die door meerdere posten heen lopen.") {
-            Button { model.selection = .reports } label: { Image(systemName: "arrow.up.right") }
-                .buttonStyle(.borderless)
-                .help("Open Rapporten")
-        } content: {
-            if tags.isEmpty {
-                DashboardQuietState(icon: "tag", title: "Nog geen tags in \(Day.monthNames[month - 1])",
-                                    message: "Geef boekingen een tag bij het nakijken om hier je grootste uitgaven te zien.")
+        VStack(alignment: .leading, spacing: Theme.spacing) {
+            if width >= 900 {
+                HStack(alignment: .top, spacing: Theme.spacing) { totals; byTag; largest }
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
-                VStack(spacing: 10) {
-                    ForEach(tags) { tag in
-                        VStack(spacing: 4) {
-                            HStack(spacing: 6) {
-                                Circle().fill(Color(hex: tag.color)).frame(width: 8, height: 8)
-                                Text(tag.name).font(.callout).lineLimit(1)
-                                Text("\(tag.count)×").font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                                Spacer(minLength: 4)
-                                MoneyText(tag.total).font(.callout)
-                            }
-                            GeometryReader { geo in
-                                ZStack(alignment: .leading) {
-                                    Capsule().fill(Color.secondary.opacity(0.12))
-                                    Capsule().fill(Color(hex: tag.color).opacity(0.85))
-                                        .frame(width: max(4, geo.size.width * DashboardFormat.fraction(tag.total, of: largest)))
-                                }
-                            }
-                            .frame(height: 5)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                }
+                totals; byTag; largest
             }
+            list
         }
     }
-}
 
-// MARK: - Recente boekingen
+    private var totals: some View {
+        DashboardCard("Totalen", icon: "sum") {
+            VStack(alignment: .leading, spacing: 6) {
+                DashboardCardRow("In") { MoneyText(month.summary.income) }
+                DashboardCardRow("Uit") { MoneyText(month.summary.expenses.magnitude) }
+                Divider()
+                DashboardCardRow("Saldo") { MoneyText(month.summary.net, colored: true, alwaysSign: true).fontWeight(.semibold) }
+            }
+            .font(.callout)
+        }
+    }
 
-/// De laatste boekingen; een klik opent Transacties.
-struct DashboardRecentCard: View {
-    @Environment(AppModel.self) private var model
-    let entries: [EntryRow]
-    let showAccount: Bool
+    private var byTag: some View {
+        DashboardCard("Uitgaven per tag", icon: "tag") {
+            VStack(alignment: .leading, spacing: 6) {
+                if month.expensesByTag.buckets.isEmpty { Text("Geen uitgaven") }
+                ForEach(month.expensesByTag.buckets) { bucket in
+                    HStack(spacing: 6) {
+                        Circle().fill(bucket.color.map { Color(hex: $0) } ?? Color.secondary.opacity(0.4))
+                            .frame(width: 8, height: 8)
+                        DashboardCardRow(bucket.name) { MoneyText(bucket.total.magnitude) }
+                    }
+                }
+            }
+            .font(.callout)
+        }
+    }
 
-    var body: some View {
-        DashboardCard("Recente boekingen", icon: "clock") {
-            Button("Alle transacties") { model.selection = .transactions }
-                .buttonStyle(.borderless)
-                .font(.callout)
+    private var largest: some View {
+        DashboardCard("5 grootste uitgaven", icon: "arrow.up.circle") {
+            VStack(alignment: .leading, spacing: 6) {
+                if month.summary.largestExpenses.isEmpty { Text("Geen uitgaven") }
+                ForEach(month.summary.largestExpenses) { entry in
+                    DashboardCardRow(DashboardFormat.entryTitle(entry)) { MoneyText(entry.amount.magnitude) }
+                }
+            }
+            .font(.callout)
+        }
+    }
+
+    private var list: some View {
+        let rows = month.list(sign: sign, sort: sort)
+        return DashboardCard("Alle transacties", icon: "list.bullet") {
+            HStack(spacing: 10) {
+                Picker("Toon", selection: $filter) {
+                    ForEach(DashboardInOutFilter.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(width: 200)
+                Picker("Sorteer", selection: $sort) {
+                    ForEach(Self.sorts, id: \.0) { Text($0.1).tag($0.0) }
+                }
+                .labelsHidden().frame(width: 190)
+            }
         } content: {
-            if entries.isEmpty {
-                DashboardQuietState(icon: "tray", title: "Nog geen boekingen",
-                                    message: "Importeer een bankbestand om te beginnen.")
+            if rows.isEmpty {
+                DashboardQuietState(icon: "tray", title: "Geen transacties")
             } else {
                 VStack(spacing: 0) {
-                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, entry in
                         if index > 0 { Divider() }
-                        DashboardRecentRow(entry: entry, showAccount: showAccount)
+                        HStack(spacing: 10) {
+                            Text(entry.day.short()).monospacedDigit().frame(width: 52, alignment: .leading)
+                            Text(DashboardFormat.entryTitle(entry)).lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            ForEach(entry.tags.prefix(2)) { Pill($0.name, color: Color(hex: $0.color)) }
+                            MoneyText(entry.amount, colored: true).frame(width: 100, alignment: .trailing)
+                        }
+                        .font(.callout)
+                        .padding(.vertical, 5)
                     }
-                    Spacer(minLength: 0)
                 }
             }
         }
-    }
-}
-
-private struct DashboardRecentRow: View {
-    @Environment(AppModel.self) private var model
-    let entry: EntryRow
-    let showAccount: Bool
-    @State private var hovering = false
-
-    private var category: String {
-        entry.itemLabel ?? entry.potName ?? (entry.amount.isNegative ? "UIT overig" : "IN overig")
-    }
-
-    var body: some View {
-        Button { model.selection = .transactions } label: {
-            HStack(spacing: 10) {
-                Text(entry.day.short()).font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                    .frame(width: 44, alignment: .leading)
-                Text(entry.label.isEmpty ? category : entry.label).font(.callout).lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if !entry.reviewed {
-                    Image(systemName: "eye").font(.caption).foregroundStyle(Theme.info)
-                        .help("Automatisch geboekt en nog niet door jou gecontroleerd.")
-                }
-                ForEach(entry.tags.prefix(showAccount ? 2 : 1)) { tag in
-                    Pill(tag.name, color: Color(hex: tag.color))
-                }
-                Text(category == entry.label ? "Vaste post" : category).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    .frame(width: showAccount ? 150 : 100, alignment: .leading)
-                if showAccount {
-                    Text(entry.accountName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        .frame(width: 110, alignment: .leading)
-                }
-                MoneyText(entry.amount, colored: true).font(.callout)
-                    .frame(width: 92, alignment: .trailing)
-            }
-            .padding(.vertical, 5)
-            .padding(.horizontal, 6)
-            .background(hovering ? Color.primary.opacity(0.05) : .clear, in: RoundedRectangle(cornerRadius: 6))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, -6)
-        .onHover { hovering = $0 }
-        .help("Open Transacties")
     }
 }

@@ -10,17 +10,19 @@ struct DashboardData: Equatable {
     var chartYear: Int
     var spendableSeries: [SpendablePoint]
     var monthlyResults: [MonthResult]
+    /// De pagina Incidentele transacties van de lopende maand.
+    var incidental: IncidentalMonth
 }
 
 /// Wat er achter een klik op het dashboard zit.
 enum DashboardDetail: String, Identifiable {
-    case fixedItems, month, year
+    case fixedItems, incidental, year
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .fixedItems: "Vaste posten"
-        case .month: "Deze maand"
+        case .incidental: "Incidentele transacties"
         case .year: "Verloop van het jaar"
         }
     }
@@ -92,7 +94,9 @@ struct DashboardScreen: View {
             // Een jaar zonder begroting heeft geen besteedbaar; de grafiek toont dan een uitleg.
             let series = (try? Insight.spendableSeries(db, year: year, today: today)) ?? []
             let months = try Insight.monthlyResults(db, year: year)
-            return DashboardData(dashboard: dashboard, chartYear: year, spendableSeries: series, monthlyResults: months)
+            let incidental = try Insight.incidentalMonth(db, year: today.year, month: today.month)
+            return DashboardData(dashboard: dashboard, chartYear: year, spendableSeries: series, monthlyResults: months,
+                                 incidental: incidental)
         }
     }
 }
@@ -123,7 +127,7 @@ private struct DashboardHome: View {
                     if let fixed = d.fixedItems {
                         DashboardPeriodicCard(overview: fixed) { open(.fixedItems) }
                     }
-                    DashboardIncidentalCard(summary: d.incidental) { open(.month) }
+                    DashboardIncidentalCard(summary: d.incidental) { open(.incidental) }
                     DashboardBalanceCard(dashboard: d)
                 }
                 .fixedSize(horizontal: false, vertical: true)
@@ -171,14 +175,8 @@ private struct DashboardDetailView: View {
                 } else {
                     DashboardYearMissingCard(year: d.today.year)
                 }
-            case .month:
-                row {
-                    DashboardMonthCard(dashboard: d, result: data.chartYear == d.today.year
-                                       ? data.monthlyResults.first { $0.month == d.today.month }?.result : nil)
-                        .frame(width: half)
-                    DashboardTopTagsCard(tags: d.topTags, month: d.today.month).frame(width: half)
-                }
-                DashboardRecentCard(entries: d.recentEntries, showAccount: width >= 900)
+            case .incidental:
+                DashboardIncidentalPage(month: data.incidental, width: width)
             case .year:
                 DashboardSpendableChartCard(year: data.chartYear, points: data.spendableSeries)
                 DashboardInOutChartCard(year: data.chartYear, months: data.monthlyResults)
@@ -275,7 +273,7 @@ struct DashboardIncidentalCard: View {
             if !summary.largestExpenses.isEmpty {
                 Divider()
                 ForEach(summary.largestExpenses) { entry in
-                    DashboardCardRow(entry.label.isEmpty ? (entry.bank?.counterpartyName ?? "Uitgave") : entry.label) {
+                    DashboardCardRow(DashboardFormat.entryTitle(entry)) {
                         MoneyText(entry.amount.magnitude)
                     }
                 }
@@ -398,6 +396,11 @@ enum DashboardFormat {
     static func percent(_ part: Money, of whole: Money) -> Int {
         guard !whole.isZero else { return 0 }
         return Int((part.magnitude.doubleValue / whole.magnitude.doubleValue * 100).rounded())
+    }
+
+    /// De omschrijving van een boeking, of de tegenpartij als die leeg is.
+    static func entryTitle(_ entry: EntryRow) -> String {
+        entry.label.isEmpty ? (entry.bank?.counterpartyName ?? "Zonder omschrijving") : entry.label
     }
 
     static func daysInMonth(_ day: Day) -> Int {
