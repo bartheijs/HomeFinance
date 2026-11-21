@@ -81,6 +81,10 @@ private struct ReviewDetail: View {
                         }
                     } else {
                         warning
+                        if let p = row.proposal {
+                            WaitingExtras(proposal: p, onDeposit: { store.bookAsDeposit($0, row: row, model) },
+                                          onShowOther: { store.showOtherHalf(of: row, model) })
+                        }
                         target
                         DisclosureGroup(isExpanded: moreBinding) {
                             more.padding(.top, 14)
@@ -190,7 +194,11 @@ private struct ReviewDetail: View {
                     .help("Een vaste overboeking is een bedrag dat regelmatig van de betaalrekening naar de spaarrekening gaat en daar over potjes wordt verdeeld.")
             }
             if row.canSwitchDistribution, let name = row.match?.distribution?.name {
-                if row.usesDistribution {
+                if row.usesDistribution, let match = row.match, !match.exactAmount {
+                    LooseTransferOffer(distributionName: name, difference: match.difference) {
+                        store.setUsesDistribution(false, for: row, model)
+                    }
+                } else if row.usesDistribution {
                     Button("Niet de vaste overboeking: één potje kiezen") { store.setUsesDistribution(false, for: row, model) }
                         .buttonStyle(.link)
                         .help("Voor een losse overboeking naar spaar: het hele bedrag gaat naar één potje die je zelf kiest.")

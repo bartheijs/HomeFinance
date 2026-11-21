@@ -147,6 +147,53 @@ public enum SettlementService {
                              suggestionTolerance, tagId, amount])
     }
 
+    /// Een wachtende bijschrijving die bij het openstaande bedrag van een voorgeschoten tag past (UX-stap D2).
+    public struct DepositCandidate: Equatable, Sendable {
+        public var tagId: Int64
+        public var tagName: String
+        /// Wat er voor deze tag openstaat (positief = nog terug te krijgen).
+        public var outstanding: Money
+        /// Het bedrag van de bijschrijving is precies het openstaande bedrag.
+        public var exact: Bool
+    }
+
+    /// Tags waarvan deze nog niet geboekte bijschrijving de terugbetaling lijkt: een positief bedrag op een
+    /// betaalrekening dat gelijk is aan het openstaande bedrag van de tag, of er hoogstens
+    /// `suggestionTolerance` van afwijkt (dezelfde grens als `suggestDeposit`). Exact eerst, dan op naam.
+    public static func depositCandidates(_ db: Database, bankTransaction: BankTransaction) throws -> [DepositCandidate] {
+        guard bankTransaction.amount > .zero,
+              try Check.account(db, bankTransaction.accountId).kind == .betaal else { return [] }
+        var result: [DepositCandidate] = []
+        for tag in try Tag.fetchAll(db, sql: "SELECT * FROM tag WHERE settles = 1 ORDER BY sortOrder, id") {
+            guard let id = tag.id else { continue }
+            let outstanding = try open(db, tagId: id).amount
+            guard outstanding > .zero,
+                  (bankTransaction.amount - outstanding).magnitude <= suggestionTolerance else { continue }
+            result.append(DepositCandidate(tagId: id, tagName: tag.name, outstanding: outstanding,
+                                           exact: bankTransaction.amount == outstanding))
+        }
+        return result.sorted { ($0.exact ? 0 : 1, $0.tagName) < ($1.exact ? 0 : 1, $1.tagName) }
+    }
+
+    /// "Is dit je geld van Tanken terug?" met één klik: boekt de wachtende bijschrijving als overig (zonder tag)
+    /// en legt in dezelfde transactie de terugbetaling vast voor alle openstaande boekingen van de tag (en het
+    /// openstaande startbedrag), met deze bijschrijving gekoppeld. Gebruikt `BookingService.book` en `settle`.
+    @discardableResult
+    public static func bookAsDeposit(_ db: Database, bankTransactionId: Int64, tagId: Int64, label: String,
+                                     reviewed: Bool = true) throws -> SettlementResult {
+        try atomic(db) {
+            let transaction = try Check.bankTransaction(db, bankTransactionId)
+            let open = try open(db, tagId: tagId)
+            guard open.amount > .zero else {
+                throw BudgetError.validation("Er staat voor deze tag niets open om terug te krijgen.")
+            }
+            let entries = try BookingService.book(db, bankTransactionId: bankTransactionId, allocations: [
+                Allocation(amount: transaction.amount, label: label, reviewed: reviewed)])
+            return try settle(db, tagId: tagId, entryIds: open.entries.compactMap(\.id), includeStart: !open.start.isZero,
+                              day: transaction.day, depositEntryId: entries.first?.id)
+        }
+    }
+
     /// Koppelt een bijschrijving als terugstorting aan een verrekening (vervangt een eerdere koppeling);
     /// `nil` ontkoppelt. De storting is een positief bedrag op een betaalrekening, zonder de tag, en hoort bij
     /// hoogstens één verrekening.

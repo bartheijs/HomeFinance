@@ -70,6 +70,15 @@ enum SelfTest {
         waitingCounts[screen] = (accountId, total, certain)
     }
 
+    /// Hoeveel wachtende banktransacties een terugbetaling van voorgeschoten geld of een andere helft tonen (D2).
+    private static var waitingExtras: [Screen: (deposits: Int, otherHalves: Int)] = [:]
+
+    static func waitingExtrasLoaded(_ screen: Screen, _ proposals: [WaitingProposal]) {
+        guard isOn else { return }
+        waitingExtras[screen] = (proposals.filter { !$0.depositCandidates.isEmpty }.count,
+                                 proposals.filter { $0.otherHalf != nil }.count)
+    }
+
     /// Laatst gemeten plek (in venstercoördinaten, oorsprong linksboven) van views met `.selfTestProbe(_:)`.
     private static var probeFrames: [String: CGRect] = [:]
 
@@ -182,6 +191,13 @@ enum SelfTest {
         } else {
             check(false, "Nakijken en Transacties tonen dezelfde aantallen (niet te vergelijken: \(review == nil || transactions == nil ? "niet geladen" : "andere rekening"))")
         }
+
+        // 3a3. Dezelfde extra herkenning op beide plekken (D2). Hoeveel er zijn hangt van de datum en de gegevens af.
+        let rx = waitingExtras[.review], tx = waitingExtras[.transactions]
+        write("     extra herkenning nakijken: \(rx.map { "\($0.deposits) terugbetaling, \($0.otherHalves) andere helft" } ?? "niet geladen")"
+              + " · transacties: \(tx.map { "\($0.deposits) terugbetaling, \($0.otherHalves) andere helft" } ?? "niet geladen")")
+        check(rx != nil && rx?.deposits == tx?.deposits && rx?.otherHalves == tx?.otherHalves,
+              "Nakijken en Transacties tonen dezelfde terugbetalingen en andere helften (D2)")
 
         // 3b. Transacties: de kop blijft zichtbaar en het downloadblok (6a) staat eronder, ook in het kleinste venster.
         await checkTransactionsHeader(model: model)

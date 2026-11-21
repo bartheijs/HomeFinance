@@ -74,6 +74,12 @@ private struct TransactionsSingleDetail: View {
                     } else {
                         if let row, let forecast = store.forecast { forecastBox(forecast, row: row) }
                         if let progress = store.extra.progress { progressBox(progress) }
+                        // Dezelfde extra herkenning als in Nakijken (D2).
+                        if let p = pending, let proposal = p.proposal {
+                            WaitingExtras(proposal: proposal, onDeposit: { store.bookAsDeposit(model, p, $0) },
+                                          onShowOther: { store.showOtherHalf(model, of: p) })
+                                .disabled(locked)
+                        }
                         Group {
                             actionRow
                             if let p = pending, let match = store.matchChoice {

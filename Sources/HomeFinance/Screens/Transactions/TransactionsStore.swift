@@ -462,6 +462,7 @@ final class TransactionsStore {
             }
         }
         SelfTest.waitingCountsLoaded(.transactions, accountId: accountId, total: pendingAll.count, certain: certainPending.count)
+        SelfTest.waitingExtrasLoaded(.transactions, pendingAll.compactMap(\.proposal))
         loadSummary(model, accountId: accountId)
         rebuild(model)
         hasLoaded = true
@@ -1118,6 +1119,36 @@ final class TransactionsStore {
         if selection.contains(.bank(p.id)) { reselectBankId = nil }
         run(model, { count == 1 ? "Geboekt op ‘\(distribution.name)’" : "‘\(distribution.name)’ geboekt, verdeeld over \(count) regels" }) { db in
             try BookingService.book(db, bankTransactionId: p.id, allocations: allocations)
+        }
+    }
+
+    // MARK: Extra herkenning (D2)
+
+    /// "Is dit je € … van Tanken terug?": boekt deze bijschrijving en legt de terugbetaling meteen vast.
+    func bookAsDeposit(_ model: AppModel, _ p: TransactionsPending, _ candidate: SettlementService.DepositCandidate) {
+        let label = p.proposal?.proposedLabel ?? (p.suggestion.label.isEmpty ? "Terugbetaling \(candidate.tagName)" : p.suggestion.label)
+        if selection.contains(.bank(p.id)) { reselectBankId = p.id }
+        var result: SettlementResult?
+        run(model, {
+            var text = "Terugbetaling van \(candidate.tagName) vastgelegd: \((result?.settlement.amount ?? candidate.outstanding).formatted())"
+            if let difference = result?.difference, !difference.isZero {
+                text += difference > .zero ? " (\(difference.formatted()) te veel terug)" : " (\(difference.magnitude.formatted()) te weinig terug)"
+            }
+            return text
+        }) { db in
+            result = try SettlementService.bookAsDeposit(db, bankTransactionId: p.id, tagId: candidate.tagId, label: label)
+        }
+    }
+
+    /// Gaat naar de andere helft van een eigen overboeking (op de andere rekening), als die nog wacht.
+    func showOtherHalf(_ model: AppModel, of p: TransactionsPending) {
+        guard let other = p.proposal?.otherHalf, other.isWaiting, let id = other.transaction.id else { return }
+        selectAccount(other.transaction.accountId)
+        reload(model)
+        if items.contains(where: { $0.id == .bank(id) }) {
+            selection = [.bank(id)]
+            showDetail = true
+            selectionChanged(model)
         }
     }
 

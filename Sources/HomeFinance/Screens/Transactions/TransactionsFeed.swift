@@ -200,6 +200,21 @@ private struct TransactionsFeedRow: View {
             }
             .buttonStyle(.plain)
             .help("Dit is een overboeking met spaar die je bij Nog overboeken hebt vastgelegd. Hij wordt niet opnieuw geboekt, maar eraan gekoppeld.")
+        } else if let candidate = p.proposal?.depositCandidates.first, p.suggestion.budgetItemId == nil {
+            // Lijkt de terugbetaling van voorgeschoten geld (D2): het paneel vraagt het met één klik.
+            Button {
+                store.selection = [item.id]
+                store.showDetail = true
+            } label: {
+                Text("Terug van \(candidate.tagName)?")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 9).padding(.vertical, 3)
+                    .background(Theme.accent.opacity(0.15), in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("Dit bedrag is \(candidate.exact ? "precies" : "bijna") wat je voor \(candidate.tagName) nog terugkrijgt (\(candidate.outstanding.formatted())). Klik om het als terugbetaling vast te leggen.")
         } else if let match = p.match, p.bookableMatch == nil {
             // Vaste storting herkend, maar er valt nog iets te kiezen: het detail laat de verdeling zien.
             Button {

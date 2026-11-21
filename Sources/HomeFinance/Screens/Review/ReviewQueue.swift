@@ -115,11 +115,14 @@ struct ReviewQueueRow: View {
             if let distribution = match.distribution {
                 label(match.exactAmount ? distribution.name : "\(distribution.name) · ander bedrag", attention: !match.exactAmount)
                     .help(match.exactAmount ? "Herkend als vaste overboeking."
-                                            : "Herkend als vaste overboeking, maar het bedrag wijkt \(match.difference.formatted(alwaysSign: true)) af.")
+                                            : "Herkend als vaste overboeking, maar het bedrag wijkt \(match.difference.formatted(alwaysSign: true)) af. Een losse overboeking? Rechts kies je één potje.")
             } else {
                 label("Kies vaste overboeking", attention: true)
                     .help("Er passen meer vaste overboekingen bij deze overboeking.")
             }
+        } else if let candidate = row.proposal?.depositCandidates.first, !store.isEdited(row), draft.target == .none {
+            label("Terug van \(candidate.tagName)?", attention: true)
+                .help("Dit bedrag is \(candidate.exact ? "precies" : "bijna") wat je voor \(candidate.tagName) nog terugkrijgt (\(candidate.outstanding.formatted())). Rechts leg je het met één klik vast als terugbetaling.")
         } else if draft.isSplit {
             label("Gesplitst in \(draft.lines.count)")
         } else if draft.target == .none, row.pair != nil {

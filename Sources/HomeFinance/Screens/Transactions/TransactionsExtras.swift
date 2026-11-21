@@ -146,6 +146,7 @@ struct TransactionsDistributionSection: View {
                             .font(.callout).foregroundStyle(Theme.warning)
                             .fixedSize(horizontal: false, vertical: true)
                         if match.side == .destination {
+                            LooseTransferOffer(distributionName: distribution.name, difference: rest) { store.matchChoice = nil }
                             HStack(spacing: 8) {
                                 Text("Verschil naar").font(.callout).foregroundStyle(.secondary)
                                 TransactionsPotPicker(pots: store.lookups.pots(accountId: pending.transaction.accountId),

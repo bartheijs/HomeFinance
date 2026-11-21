@@ -382,6 +382,7 @@ final class ReviewStore {
         if cursor == nil || !selection.contains(cursor!) { cursor = rows.first { selection.contains($0.id) }?.id }
         SelfTest.potPickerLoaded(.review, kinds: pots.map(\.kind), names: pots.map(\.name))
         SelfTest.waitingCountsLoaded(.review, accountId: accountId, total: rows.count, certain: certainRows.count)
+        SelfTest.waitingExtrasLoaded(.review, rows.compactMap(\.proposal))
     }
 
     // MARK: Voorstel en concept
@@ -717,6 +718,42 @@ final class ReviewStore {
         if allocations.contains(where: \.reimburse) { text += " · \(settlementBalanceText(model))" }
         announce(model, text, unbook: [row.id], learned: changedRules)
         finish(model, handled: [row.id])
+    }
+
+    /// "Is dit je € … van Tanken terug?": boekt deze bijschrijving en legt de terugbetaling meteen vast (D2).
+    func bookAsDeposit(_ candidate: SettlementService.DepositCandidate, row: ReviewRow, _ model: AppModel) {
+        let label = draft(for: row).label.trimmingCharacters(in: .whitespaces)
+        var result: SettlementResult?
+        let ok = model.perform {
+            try model.db.write { db in
+                result = try SettlementService.bookAsDeposit(db, bankTransactionId: row.id, tagId: candidate.tagId,
+                                                             label: label.isEmpty ? row.cleanLabel : label)
+            }
+        }
+        guard ok else { return }
+        var text = "Terugbetaling van \(candidate.tagName) vastgelegd: \((result?.settlement.amount ?? candidate.outstanding).formatted())"
+        if let difference = result?.difference, !difference.isZero {
+            text += difference > .zero ? " (\(difference.formatted()) te veel terug)" : " (\(difference.magnitude.formatted()) te weinig terug)"
+        }
+        model.toast = text
+        let settlementId = result?.settlement.id
+        notice = ReviewNotice(text: text) { [weak self] model in
+            let done = model.perform("Ongedaan gemaakt") {
+                try model.db.write { db in
+                    if let settlementId { try SettlementService.delete(db, settlementId: settlementId) }
+                    try BookingService.unbook(db, bankTransactionId: row.id)
+                }
+            }
+            if done { self?.notice = nil; self?.load(model) }
+        }
+        finish(model, handled: [row.id])
+    }
+
+    /// Gaat naar de andere helft van een eigen overboeking, als die nog wacht (D2).
+    func showOtherHalf(of row: ReviewRow, _ model: AppModel) {
+        guard let other = row.proposal?.otherHalf, other.isWaiting, let id = other.transaction.id else { return }
+        model.reviewJump = ReviewJump(accountId: other.transaction.accountId, transactionId: id)
+        load(model)
     }
 
     /// Boekt alle zekere transacties in één keer. Ze staan daarna als "nog niet gecontroleerd" in Transacties.

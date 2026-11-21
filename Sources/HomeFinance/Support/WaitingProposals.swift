@@ -26,6 +26,11 @@ struct WaitingProposal: Equatable {
     /// De betaalkant van een overboeking naar een eigen rekening terwijl er nog tijdelijk geleend geld uitstaat:
     /// dit lijkt de terugboeking.
     let looksLikeLoanReturn: Bool
+    /// Voorgeschoten tags waarvan deze bijschrijving de terugbetaling lijkt (exact eerst), D2.
+    var depositCandidates: [SettlementService.DepositCandidate] = []
+    /// De andere helft van een overboeking tussen eigen rekeningen (betaal ↔ spaar), ook als die als automatisch
+    /// sparen herkend is of al geboekt is, D2.
+    var otherHalf: WaitingOtherHalf?
 
     var id: Int64 { item.id }
     var transaction: BankTransaction { item.transaction }
@@ -55,6 +60,20 @@ struct WaitingProposal: Equatable {
     }
 }
 
+/// De andere helft van een eigen overboeking, om in het paneel te tonen.
+struct WaitingOtherHalf: Equatable {
+    let transaction: BankTransaction
+    let accountName: String
+    /// Die helft wacht nog (status nieuw); anders is hij al geboekt.
+    var isWaiting: Bool { transaction.status == .nieuw }
+
+    /// "De andere helft: + € 250,00 op Spaarrekening, 11 jun · wacht nog op een plek".
+    var text: String {
+        "De andere helft: \(transaction.amount.formatted(alwaysSign: true)) op \(accountName), \(transaction.day.short())"
+            + (isWaiting ? " · wacht nog op een plek" : " · al geboekt")
+    }
+}
+
 enum WaitingProposals {
     /// De wachtende banktransacties van één rekening met hun voorstel, in de volgorde van de wachtrij (datum, id).
     /// `pairs`: de eigen overboekingen waarvan een kant wacht, zonder die al als overboeking met spaar of
@@ -77,10 +96,15 @@ enum WaitingProposals {
             return true
         }
         let loanOutstanding = try Insight.temporaryLoanOutstanding(db, on: today)
+        // Alle paren, ook die als automatisch sparen of overboeking met spaar herkend zijn: voor "de andere helft".
+        let allPairs = try TransferService.findTransferPairs(db)
+        let names = Dictionary(uniqueKeysWithValues: try Account.fetchAll(db).compactMap { a in a.id.map { ($0, a.name) } })
         let proposals = try queue.map { item in
             let tx = item.transaction
             let pair = pairs.first { $0.from.id == tx.id || $0.to.id == tx.id }
             let settlement = settlements[item.id]
+            let other = allPairs.first { $0.from.id == tx.id || $0.to.id == tx.id }
+                .map { $0.from.id == tx.id ? $0.to : $0.from }
             return WaitingProposal(
                 item: item,
                 suggestion: try suggestions[item.id] ?? RuleEngine.suggest(for: tx, db),
@@ -88,7 +112,9 @@ enum WaitingProposals {
                 settlement: settlement,
                 match: settlement == nil ? matches[item.id] : nil,
                 pair: pair,
-                looksLikeLoanReturn: account.kind == .betaal && pair != nil && tx.amount.isNegative && loanOutstanding > .zero)
+                looksLikeLoanReturn: account.kind == .betaal && pair != nil && tx.amount.isNegative && loanOutstanding > .zero,
+                depositCandidates: settlement == nil ? try SettlementService.depositCandidates(db, bankTransaction: tx) : [],
+                otherHalf: other.map { WaitingOtherHalf(transaction: $0, accountName: names[$0.accountId] ?? "andere rekening") })
         }
         return (proposals, pairs)
     }
