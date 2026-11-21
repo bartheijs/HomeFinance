@@ -61,6 +61,15 @@ enum SelfTest {
         potPickers[screen] = (names.count, ordered)
     }
 
+    /// Laatst getoonde aantallen wachtende banktransacties per scherm (D1): rekening, totaal en zeker. Geen namen.
+    private static var waitingCounts: [Screen: (accountId: Int64, total: Int, certain: Int)] = [:]
+
+    /// Nakijken en Transacties melden na het laden hoeveel banktransacties er wachten en hoeveel zeker zijn.
+    static func waitingCountsLoaded(_ screen: Screen, accountId: Int64?, total: Int, certain: Int) {
+        guard isOn, let accountId else { return }
+        waitingCounts[screen] = (accountId, total, certain)
+    }
+
     /// Laatst gemeten plek (in venstercoördinaten, oorsprong linksboven) van views met `.selfTestProbe(_:)`.
     private static var probeFrames: [String: CGRect] = [:]
 
@@ -161,6 +170,17 @@ enum SelfTest {
             write("     pot-kiezer \(screen.rawValue): \(picker.map { "\($0.count) potten, volgorde \($0.ordered ? "OK" : "FOUT")" } ?? "niet geladen")")
             check(picker.map { $0.count > 0 && $0.ordered } ?? false,
                   "pot-kiezer \(screen.rawValue) verscheen met potten per soort op alfabet")
+        }
+
+        // 3a2. Nakijken en Transacties tonen dezelfde aantallen zeker / na te kijken (één bron, D1).
+        let review = waitingCounts[.review], transactions = waitingCounts[.transactions]
+        write("     wachtend nakijken: \(review.map { "\($0.total) totaal, \($0.certain) zeker" } ?? "niet geladen")"
+              + " · transacties: \(transactions.map { "\($0.total) totaal, \($0.certain) zeker" } ?? "niet geladen")")
+        if let review, let transactions, review.accountId == transactions.accountId {
+            check(review.total == transactions.total && review.certain == transactions.certain,
+                  "Nakijken en Transacties tonen dezelfde aantallen wachtend en zeker (D1)")
+        } else {
+            check(false, "Nakijken en Transacties tonen dezelfde aantallen (niet te vergelijken: \(review == nil || transactions == nil ? "niet geladen" : "andere rekening"))")
         }
 
         // 3b. Transacties: de kop blijft zichtbaar en het downloadblok (6a) staat eronder, ook in het kleinste venster.

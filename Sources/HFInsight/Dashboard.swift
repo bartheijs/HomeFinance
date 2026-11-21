@@ -33,7 +33,7 @@ public enum AttentionItem: Equatable, Sendable {
         case .newBankTransactions(let n):
             return n == 1 ? "1 banktransactie moet nog geboekt worden." : "\(n) banktransacties moeten nog geboekt worden."
         case .unreviewedEntries(let n):
-            return n == 1 ? "1 boeking moet nog nagekeken worden." : "\(n) boekingen moeten nog nagekeken worden."
+            return n == 1 ? "1 automatische boeking is nog niet gecontroleerd." : "\(n) automatische boekingen zijn nog niet gecontroleerd."
         case .openReimbursements(let amount, let n, let direction):
             let count = "\(n) \(n == 1 ? "boeking" : "boekingen")"
             switch direction {

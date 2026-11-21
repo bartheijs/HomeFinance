@@ -167,10 +167,15 @@ struct TransactionsScreen: View {
             Circle().fill(Theme.info).frame(width: 7, height: 7)
             Text("\(TransactionsFormat.number(count)) nieuwe \(count == 1 ? "transactie" : "transacties")")
                 .fontWeight(.medium)
+            // Dezelfde aantallen als in Nakijken (één bron, UX-stap D1).
+            Text(Insight.waitingCountsLine(toCheck: count - certain, certain: certain))
+                .foregroundStyle(.secondary)
+                .help("Zeker betekent: tegenpartij en bedrag kloppen met een regel of een vaste overboeking. Nakijken telt precies hetzelfde.")
+                .selfTestProbe("transacties-aantallen")
             if certain > 0 {
                 Button(certain == count ? "Boek alle \(certain)" : "Boek de \(certain) zekere") { store.bookAllCertain(model) }
                     .buttonStyle(.link)
-                    .help("Boekt in één keer de nieuwe transacties waarbij tegenpartij en bedrag precies bij een regel passen")
+                    .help("Boekt in één keer de nieuwe transacties waarbij tegenpartij en bedrag precies bij een regel of een vaste overboeking passen")
             }
             Spacer(minLength: 0)
             if store.criteria.status != .newOnly {

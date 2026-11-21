@@ -69,7 +69,7 @@ private struct DashboardAttentionLook {
             icon = "tray.full"; tint = .secondary; action = "Boeken"; target = .review
             help = "Ga naar Importeren en nakijken om deze banktransacties een post of potje te geven."
         case .unreviewedEntries:
-            icon = "eye"; tint = .secondary; action = "Nakijken"; target = .transactions
+            icon = "eye"; tint = .secondary; action = "Controleren"; target = .transactions
             help = "Ga naar Transacties om de automatisch geboekte regels te controleren."
         case .openReimbursements:
             icon = "arrow.left.arrow.right"; tint = .secondary; action = "Overboeken"; target = .reimbursements
@@ -497,7 +497,7 @@ private struct DashboardRecentRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if !entry.reviewed {
                     Image(systemName: "eye").font(.caption).foregroundStyle(Theme.info)
-                        .help("Deze boeking moet nog nagekeken worden.")
+                        .help("Automatisch geboekt en nog niet door jou gecontroleerd.")
                 }
                 ForEach(entry.tags.prefix(showAccount ? 2 : 1)) { tag in
                     Pill(tag.name, color: Color(hex: tag.color))

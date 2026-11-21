@@ -31,7 +31,7 @@ struct ReviewInspector: View {
                 Image(systemName: "checklist").font(.system(size: 34)).foregroundStyle(Theme.accent)
                 Text("\(rows.count) transacties geselecteerd").font(.title3.weight(.semibold))
                 MoneyText(rows.map(\.tx.amount).sum(), colored: true).font(.title3)
-                Text("Elke transactie wordt geboekt met het voorstel dat erbij staat. Wat je niet zelf hebt aangepast, blijft in Transacties staan als 'nog na te kijken'.")
+                Text("Elke transactie wordt geboekt met het voorstel dat erbij staat. Wat je niet zelf hebt aangepast, staat in Transacties als 'nog niet gecontroleerd'.")
                     .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
             .padding(24).frame(maxHeight: .infinity)
@@ -106,33 +106,11 @@ private struct ReviewDetail: View {
 
     // MARK: Regel onthouden (alleen met toestemming)
 
-    /// Klein blok onder de keuze: standaard uit. Aan = de samenvatting van de regel en "Aanpassen…".
+    /// Klein blok onder de keuze: standaard uit. Hetzelfde blok staat in Transacties (UX-stap D1).
     @ViewBuilder private var ruleChoice: some View {
         if let option = store.ruleOption(for: row, model) {
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle(option.title, isOn: Binding(get: { option.isOn }, set: { store.setRemember($0, for: row) }))
-                    .toggleStyle(.checkbox)
-                    .help(option.isUpdate
-                          ? "Aan: de regel die dit voorstelde krijgt voortaan deze keuze. Uit: alleen deze boeking wijkt af; de regel blijft zoals hij is."
-                          : "Aan: bij het boeken wordt een regel bewaard, zodat dit de volgende keer wordt voorgesteld. Uit: alleen boeken.")
-                if !option.isUpdate {
-                    Text("Boekingen van deze tegenpartij krijgen voortaan deze post of dit potje voorgesteld.")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.leading, 20)
-                }
-                if option.isOn {
-                    Text(option.summary)
-                        .font(.callout).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.leading, 20)
-                    Button("Aanpassen…") {
-                        editing = ReviewRuleEdit(kind: .concept, rule: option.rule)
-                    }
-                    .buttonStyle(.link).font(.callout).padding(.leading, 20)
-                    .help("Open de regel in de regeleditor: voorwaarden en wat hij doet. Hij wordt bewaard als je boekt.")
-                }
-            }
+            RuleConsentChoice(option: option, setOn: { store.setRemember($0, for: row) },
+                              edit: { editing = ReviewRuleEdit(kind: .concept, rule: $0) })
         }
     }
 

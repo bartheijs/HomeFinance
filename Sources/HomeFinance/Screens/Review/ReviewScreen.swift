@@ -1,4 +1,5 @@
 import SwiftUI
+import HFInsight
 import UniformTypeIdentifiers
 import HFCore
 import HFBudget
@@ -128,17 +129,14 @@ struct ReviewProgressLine: View {
                 }
                 .buttonStyle(.borderedProminent).controlSize(.large)
                 .keyboardShortcut(.return, modifiers: [.command, .shift])
-                .help("Boekt alle zekere transacties in één keer (⇧⌘⏎). In Transacties blijven ze gemarkeerd als 'nog na te kijken'.")
+                .help("Boekt alle zekere transacties in één keer (⇧⌘⏎). In Transacties staan ze daarna als 'nog niet gecontroleerd'.")
             }
         }
     }
 
+    /// Dezelfde regel als in Transacties (één bron, UX-stap D1).
     private func title(toCheck: Int, certain: Int) -> String {
-        switch (toCheck, certain) {
-        case (0, let c): "\(c) zeker · niets na te kijken"
-        case (let t, 0): "Nog \(t) na te kijken"
-        case (let t, let c): "Nog \(t) na te kijken · \(c) zeker"
-        }
+        Insight.waitingCountsLine(toCheck: toCheck, certain: certain)
     }
 }
 

@@ -98,7 +98,7 @@ private struct TransactionsFeedRow: View {
 
     private var dotHelp: String {
         if item.pending != nil { return "Nieuw: deze transactie van de bank is nog niet geboekt" }
-        if let row = item.entry, !row.reviewed { return "Nog nakijken: automatisch geboekt en nog niet door jou gecontroleerd" }
+        if let row = item.entry, !row.reviewed { return "Nog niet gecontroleerd: automatisch geboekt en nog niet door jou bekeken" }
         return ""
     }
 
@@ -156,7 +156,7 @@ private struct TransactionsFeedRow: View {
         if row.temporaryLoan { parts.append(row.amount.isNegative ? "terug naar spaar" : "tijdelijk geleend van spaar") }
         if let bank = row.bank, bank.amount != row.amount { parts.append("gesplitst") }
         if row.bankTransactionId == nil { parts.append("handinvoer") }
-        if !row.reviewed { parts.append("nog nakijken") }
+        if !row.reviewed { parts.append("nog niet gecontroleerd") }
         return parts.joined(separator: " · ")
     }
 
@@ -243,7 +243,7 @@ private struct TransactionsFeedRow: View {
             .buttonStyle(.bordered)
             .controlSize(.mini)
             .fixedSize()
-            .help(p.suggestion.warnings.isEmpty ? "Geen regel herkent deze transactie. Kies waar hij bij hoort. Een regel maak je in Nakijken (‘Voortaan zo indelen’) of bij Instellingen › Regels."
+            .help(p.suggestion.warnings.isEmpty ? "Geen regel herkent deze transactie. Kies waar hij bij hoort. Klik hem aan en vink in het paneel rechts ‘Voortaan zo indelen’ aan om een regel te maken."
                                                 : p.suggestion.warnings.joined(separator: "\n"))
         }
     }
@@ -307,7 +307,7 @@ private struct TransactionsFeedRow: View {
                         }
                         .help(TransactionsFormat.loanHelp)
                     }
-                    Button(row.reviewed ? "Zet terug op nakijken" : "Nagekeken", systemImage: row.reviewed ? "circle.dotted" : "checkmark.circle") {
+                    Button(row.reviewed ? "Zet terug op niet gecontroleerd" : "Gecontroleerd", systemImage: row.reviewed ? "circle.dotted" : "checkmark.circle") {
                         store.setReviewed(model, ids: [item.id], !row.reviewed)
                     }
                 }
@@ -468,10 +468,10 @@ struct TransactionsContextMenu: View {
             }
             Divider()
             if rows.contains(where: { !$0.reviewed }) {
-                Button("Nagekeken", systemImage: "checkmark.circle") { store.setReviewed(model, ids: ids, true) }
+                Button("Gecontroleerd", systemImage: "checkmark.circle") { store.setReviewed(model, ids: ids, true) }
             }
             if rows.contains(where: \.reviewed) {
-                Button("Zet terug op nakijken", systemImage: "circle.dotted") { store.setReviewed(model, ids: ids, false) }
+                Button("Zet terug op niet gecontroleerd", systemImage: "circle.dotted") { store.setReviewed(model, ids: ids, false) }
             }
             if !news.isEmpty {
                 Button(news.count > 1 ? "Sla over (\(news.count))" : "Sla over", systemImage: "forward.end") {

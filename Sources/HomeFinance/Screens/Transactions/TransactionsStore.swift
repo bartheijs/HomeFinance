@@ -22,8 +22,12 @@ struct TransactionsPending: Equatable {
     /// De verrekening met spaar waarvan dit de bankregel is (gaat vóór alles). Zo'n transactie wordt niet
     /// geboekt maar aan de verrekening gehangen.
     var transferMatch: SavingsTransferMatch? = nil
+    /// Het gedeelde voorstel (zelfde bron als Nakijken).
+    var proposal: WaitingProposal? = nil
 
     var id: Int64 { transaction.id ?? 0 }
+    /// Zeker, waarschijnlijk of twijfel: dezelfde indeling als in Nakijken.
+    var group: WaitingGroup { proposal?.group() ?? .doubt }
     /// Herkende vaste storting waarvan de regels precies het bankbedrag zijn: zo te boeken.
     var bookableMatch: DistributionMatch? {
         guard let match, match.distribution != nil, !match.allocations.isEmpty,
@@ -35,10 +39,8 @@ struct TransactionsPending: Equatable {
         if transferMatch != nil { return false }
         return match == nil ? suggestion.confidence != .geen && suggestion.warnings.isEmpty : bookableMatch != nil
     }
-    var isCertain: Bool {
-        if transferMatch != nil { return false }
-        return match == nil ? suggestion.confidence == .hoog && suggestion.warnings.isEmpty : bookableMatch != nil
-    }
+    /// Zeker volgens de gedeelde indeling (en dan ook zonder kiezen te boeken).
+    var isCertain: Bool { group == .certain && hasSuggestion }
     /// De regels om mee te boeken volgens het voorstel (nagekeken, want de gebruiker klikt zelf).
     func suggestedAllocations(kind: AccountKind) -> [Allocation] {
         if let bookableMatch {
@@ -90,7 +92,7 @@ enum TransactionsStatusFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: "Alles"
         case .newOnly: "Alleen nieuw"
-        case .unreviewed: "Na te kijken"
+        case .unreviewed: "Niet gecontroleerd"
         }
     }
 }
@@ -243,7 +245,7 @@ struct TransactionsDraft: Equatable {
 
     init(pending p: TransactionsPending, kind: AccountKind) {
         let s = p.suggestion, t = p.transaction
-        label = s.label; day = t.day
+        label = p.proposal?.proposedLabel ?? s.label; day = t.day
         isIncome = !t.amount.isNegative; magnitude = t.amount.magnitude
         tagIds = kind == .betaal ? Set(s.tagIds) : []   // tags alleen op de betaalrekening
         switch kind {
@@ -251,6 +253,7 @@ struct TransactionsDraft: Equatable {
             itemId = s.budgetItemId
             reimburse = s.reimburse && !t.amount.isZero
             potId = reimburse ? s.potId : nil
+            temporaryLoan = p.proposal?.looksLikeLoanReturn ?? false
         case .spaar:
             potId = s.potId
         }
@@ -428,21 +431,12 @@ final class TransactionsStore {
 
         attachSettlements(model, accountId: accountId)
         pendingAll = model.read([]) { db in
-            // Volgorde van herkennen: verrekeningen met spaar, vaste stortingen, regels.
-            let transfers = try SavingsTransferService.recognizeAll(db, accountId: accountId)
-            let suggestions = try RuleEngine.suggestAll(db, accountId: accountId)
-            // Vaste stortingen worden vóór de regels herkend.
-            let matches = try DistributionService.recognizeAll(db, accountId: accountId)
-            var list: [TransactionsPending] = []
-            for item in try Insight.reviewQueue(db, accountId: accountId) {
-                guard let id = item.transaction.id else { continue }
-                let suggestion = try suggestions[id] ?? RuleEngine.suggest(for: item.transaction, db)
-                let transfer = transfers[id]
-                list.append(TransactionsPending(transaction: item.transaction, suggestion: suggestion,
-                                                match: transfer == nil ? matches[id].flatMap { $0.looksSeparate ? nil : $0 } : nil,
-                                                transferMatch: transfer))
+            // Eén bron met Nakijken (UX-stap D1): dezelfde voorstellen en dezelfde indeling zeker / twijfel.
+            try WaitingProposals.load(db, accountId: accountId, today: model.today).proposals.map { p in
+                TransactionsPending(transaction: p.transaction, suggestion: p.suggestion,
+                                    match: p.match.flatMap { $0.looksSeparate ? nil : $0 },
+                                    transferMatch: p.settlement, proposal: p)
             }
-            return list
         }
         loanOutstanding = model.read(Money.zero) { try Insight.temporaryLoanOutstanding($0, on: model.today) }
         openReimbursements = model.read(nil as HFInsight.OpenReimbursements?) { try Insight.openReimbursements($0) }
@@ -467,6 +461,7 @@ final class TransactionsStore {
                 foundSum = result.totalSum
             }
         }
+        SelfTest.waitingCountsLoaded(.transactions, accountId: accountId, total: pendingAll.count, certain: certainPending.count)
         loadSummary(model, accountId: accountId)
         rebuild(model)
         hasLoaded = true
@@ -596,6 +591,69 @@ final class TransactionsStore {
         draftVersion += 1
         matchChoice = single?.pending?.match
         differencePotId = nil
+        rememberRule = false
+        customRule = nil
+    }
+
+    // MARK: Voortaan zo indelen (regel alleen met toestemming, zoals in Nakijken)
+
+    /// "Voortaan zo indelen" / "Regel bijwerken met deze keuze" staat aan voor de gekozen nieuwe transactie.
+    var rememberRule = false
+    /// Het regelconcept zoals de gebruiker het in de editor aanpaste, met de keuze waarbij dat gebeurde.
+    private(set) var customRule: (correction: Correction, rule: Rule)?
+    @ObservationIgnored private var proposalCache: (correction: Correction, proposal: RuleProposal)?
+    @ObservationIgnored private var summaryCache: (rule: Rule, text: String)?
+
+    /// Wat de regels met de huidige keuze zouden doen (HFRules; schrijft niets). Niet bij automatisch sparen of
+    /// een overboeking met spaar, net als in Nakijken.
+    private func ruleProposal(for p: TransactionsPending, _ model: AppModel) -> RuleProposal? {
+        guard matchChoice == nil, p.transferMatch == nil else { return nil }
+        let correction = correction(p.transaction, draft, suggestedLabel: p.suggestion.label)
+        if let cached = proposalCache, cached.correction == correction { return cached.proposal }
+        let proposal: RuleProposal? = model.read(nil) { try RuleEngine.ruleProposal(for: correction, $0) }
+        if let proposal { proposalCache = (correction, proposal) }
+        return proposal
+    }
+
+    private func shownRule(for p: TransactionsPending, _ proposal: RuleProposal) -> Rule? {
+        if let custom = customRule {
+            let correction = correction(p.transaction, draft, suggestedLabel: p.suggestion.label)
+            return custom.correction == correction ? custom.rule : RuleEngine.applyChoice(correction, to: custom.rule)
+        }
+        return proposal.draft
+    }
+
+    /// Hetzelfde vinkje als in Nakijken, of nil als er niets aan te bieden is.
+    func ruleOption(for p: TransactionsPending, _ model: AppModel) -> ReviewRuleOption? {
+        guard let proposal = ruleProposal(for: p, model), proposal.offersChoice,
+              let rule = shownRule(for: p, proposal) else { return nil }
+        let summary: String
+        if let cached = summaryCache, cached.rule == rule {
+            summary = cached.text
+        } else {
+            summary = model.read("") { try RuleEngine.summary(of: rule, $0) }
+            summaryCache = (rule, summary)
+        }
+        return ReviewRuleOption(isUpdate: proposal.isUpdate, isOn: rememberRule, rule: rule, summary: summary)
+    }
+
+    func setRemember(_ on: Bool) {
+        rememberRule = on
+        if !on { customRule = nil }
+    }
+
+    /// De gebruiker paste het concept aan in de editor. Geeft een foutmelding, of nil als het goed is.
+    func setCustomRule(_ rule: Rule, for p: TransactionsPending) -> String? {
+        do { try RuleEngine.validate(rule) } catch { return error.localizedDescription }
+        customRule = (correction(p.transaction, draft, suggestedLabel: p.suggestion.label), rule)
+        rememberRule = true
+        return nil
+    }
+
+    /// De regel die bij het boeken bewaard wordt: alleen als het vinkje aan staat.
+    private func ruleToRemember(for p: TransactionsPending, _ model: AppModel) -> Rule? {
+        guard rememberRule, let proposal = ruleProposal(for: p, model), proposal.offersChoice else { return nil }
+        return shownRule(for: p, proposal)
     }
 
     func closeDetail() {
@@ -677,9 +735,11 @@ final class TransactionsStore {
 
     func bookAllCertain(_ model: AppModel) { bookSuggested(model, certainPending) }
 
-    /// Boekt één nieuwe transactie met de eigen keuzes. Er wordt geen regel gemaakt of gewijzigd (6i); deed een
-    /// regel precies dit voorstel, dan telt die als gebruikt.
+    /// Boekt één nieuwe transactie met de eigen keuzes. Een regel wordt alleen bewaard of bijgewerkt als
+    /// "Voortaan zo indelen" (of "Regel bijwerken met deze keuze") aan staat, net als in Nakijken (6i, D1); deed
+    /// een regel precies dit voorstel, dan telt die als gebruikt.
     func book(_ model: AppModel, _ p: TransactionsPending, with draft: TransactionsDraft) {
+        let ruleToSave = draft == self.draft ? ruleToRemember(for: p, model) : nil
         let kind = kind
         let unchanged = draft == TransactionsDraft(pending: p, kind: kind)
         let allocation = draft.allocation(amount: p.transaction.amount, kind: kind,
@@ -691,13 +751,15 @@ final class TransactionsStore {
         if selection.contains(.bank(p.id)) { reselectBankId = p.id }
         let name = targetName(draft)
         let loan = allocation.temporaryLoan
+        var learned: LearnResult?
         run(model, {
             if loan { return "Geboekt en gemarkeerd als tijdelijk geleend van spaar. Uitstaand: \(self.loanOutstanding.formatted())" }
             return "Geboekt op ‘\(name)’"
         }) { db in
             try BookingService.book(db, bankTransactionId: p.id, allocations: [allocation])
-            _ = try RuleEngine.afterBooking(correction, remember: nil, db)
+            learned = try RuleEngine.afterBooking(correction, remember: ruleToSave, db)
         }
+        if let learned, learned.outcome != .unchanged { model.toast = (model.toast.map { $0 + " · " } ?? "") + learned.message }
     }
 
     func skip(_ model: AppModel, ids: [TransactionsItemID]) {
@@ -917,8 +979,8 @@ final class TransactionsStore {
         let rows = entries(in: ids)
         guard !rows.isEmpty else { return }
         run(model, {
-            guard reviewed else { return "Teruggezet op nakijken" }
-            return rows.count == 1 ? "Nagekeken" : "\(TransactionsFormat.number(rows.count)) boekingen nagekeken"
+            guard reviewed else { return "Teruggezet op niet gecontroleerd" }
+            return rows.count == 1 ? "Gecontroleerd" : "\(TransactionsFormat.number(rows.count)) boekingen gecontroleerd"
         }) { db in
             try EntryService.setReviewed(db, entryIds: rows.map(\.id), reviewed)
         }

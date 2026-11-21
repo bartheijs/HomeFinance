@@ -308,7 +308,7 @@ let exportMoment = date("2027-06-18 12:00:00")
 
         #expect((0..<14).map { book.text(s, "\(Xlsx.column($0))1") } == [
             "Datum", "Hoort bij maand", "Rekening", "Omschrijving", "Post of potje", "Overig", "Tags", "Bedrag",
-            "Nog overboeken met spaar", "Tijdelijk geleend van spaar", "Nagekeken", "Notitie", "Tegenpartij", "Bankomschrijving",
+            "Nog overboeken met spaar", "Tijdelijk geleend van spaar", "Gecontroleerd", "Notitie", "Tegenpartij", "Bankomschrijving",
         ])
         // 8 boekingen op de betaalrekening en 3 op de spaarrekening tellen mee in 2027 (die van 15-12-2026 niet).
         let dataRows = Set(try #require(book.sheets[s]).keys.compactMap { Int($0.drop { $0.isLetter }) }).filter { $0 > 1 }

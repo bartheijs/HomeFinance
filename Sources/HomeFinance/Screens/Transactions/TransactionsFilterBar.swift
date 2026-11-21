@@ -114,7 +114,7 @@ private struct TransactionsFilterPopover: View {
                 ForEach(TransactionsStatusFilter.allCases) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
-            .help("Alleen nieuw = nog niet geboekt. Na te kijken = automatisch geboekt en nog niet door jou gecontroleerd.")
+            .help("Alleen nieuw = nog niet geboekt. Niet gecontroleerd = automatisch geboekt en nog niet door jou bekeken. (Nieuwe banktransacties kijk je na; geboekte boekingen controleer je.)")
             Picker("Maand", selection: $store.criteria.month) {
                 Text("Alle maanden").tag(Int?.none)
                 Divider()

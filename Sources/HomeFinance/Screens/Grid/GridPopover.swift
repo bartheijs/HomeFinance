@@ -215,7 +215,7 @@ struct GridCellPopover: View {
         var parts = [entry.accountName]
         if entry.bank == nil { parts.append("handinvoer") }
         if !entry.tags.isEmpty { parts.append(entry.tags.map(\.name).joined(separator: ", ")) }
-        if !entry.reviewed { parts.append("nog nakijken") }
+        if !entry.reviewed { parts.append("nog niet gecontroleerd") }
         return parts.joined(separator: " · ")
     }
 

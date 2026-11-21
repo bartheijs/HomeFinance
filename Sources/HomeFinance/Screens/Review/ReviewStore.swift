@@ -54,6 +54,15 @@ enum ReviewGroup: Int, CaseIterable, Identifiable {
     case doubt, probable, certain
     var id: Int { rawValue }
 
+    /// Uit de gedeelde indeling van HFInsight (dezelfde als in Transacties).
+    init(_ group: WaitingGroup) {
+        switch group {
+        case .doubt: self = .doubt
+        case .probable: self = .probable
+        case .certain: self = .certain
+        }
+    }
+
     var title: String {
         switch self {
         case .doubt: "Twijfelgevallen"
@@ -101,6 +110,8 @@ struct ReviewRow: Identifiable, Equatable {
     var usesDistribution = true
     /// Waarschuwing als bij deze transactie verrekenen met spaar wordt gekozen (overboeking met eigen spaar).
     var ownSavingsWarning: String?
+    /// Het gedeelde voorstel (zelfde bron als Transacties).
+    var proposal: WaitingProposal?
 
     var id: Int64 { item.id }
     /// De vaste storting zoals die meetelt voor het voorstel: nil als de gebruiker één pot kiest.
@@ -322,40 +333,23 @@ final class ReviewStore {
                 rows = []; pairs = []; lastBatch = nil; check = nil
                 return
             }
-            let suggestions = try RuleEngine.suggestAll(db, accountId: accountId)
-            // Volgorde van herkennen: verrekeningen met spaar, dan vaste stortingen, dan regels.
-            let settlements = try SavingsTransferService.recognizeAll(db, accountId: accountId)
-            let matches = try DistributionService.recognizeAll(db, accountId: accountId)
+            // Eén bron met Transacties (UX-stap D1): dezelfde voorstellen en dezelfde indeling zeker / twijfel.
+            let waiting = try WaitingProposals.load(db, accountId: accountId, today: model.today)
             labels = try Insight.allLabels(db, accountKind: account.kind)
-            // Wat als verrekening of vaste storting herkend is, telt niet mee als losse overboeking.
-            pairs = try TransferService.findTransferPairs(db).filter { pair in
-                guard pair.from.accountId == accountId || pair.to.accountId == accountId,
-                      pair.from.status == .nieuw || pair.to.status == .nieuw else { return false }
-                for side in [pair.from, pair.to] where side.status == .nieuw {
-                    if try SavingsTransferService.recognize(db, bankTransaction: side) != nil { return false }
-                    if try DistributionService.recognize(db, bankTransaction: side) != nil { return false }
-                }
-                return true
-            }
-            rows = try queue.filter { $0.transaction.accountId == accountId }.map { item in
-                let tx = item.transaction
-                let suggestion = suggestions[item.id] ?? Suggestion(bankTransactionId: item.id)
-                let settlement = settlements[item.id]
-                let match = settlement == nil ? chosenMatches[item.id] ?? matches[item.id] : nil
-                let pair = pairs.first { $0.from.id == tx.id || $0.to.id == tx.id }
+            pairs = waiting.pairs
+            rows = try waiting.proposals.map { p in
+                let chosen = p.settlement == nil ? chosenMatches[p.id] : nil
+                let match = chosen ?? p.match
                 let uses = match.map { m in
-                    m.side == .destination && m.distribution != nil ? distributionChoice[item.id] ?? !m.looksSeparate : true
+                    m.side == .destination && m.distribution != nil ? distributionChoice[p.id] ?? !m.looksSeparate : true
                 } ?? true
                 let ownSavings = account.kind == .betaal
-                    ? try SavingsTransferService.ownSavingsWarning(db, bankTransaction: tx, reimburse: true) : nil
+                    ? try SavingsTransferService.ownSavingsWarning(db, bankTransaction: p.transaction, reimburse: true) : nil
                 return ReviewRow(
-                    item: item, suggestion: suggestion,
-                    cleanLabel: LabelCleaner.cleanLabel(counterparty: tx.counterpartyName, description: tx.descriptionText),
-                    group: settlement != nil ? .doubt
-                        : match.map { $0.distribution != nil && $0.exactAmount && uses ? .certain : .doubt }
-                        ?? Self.group(suggestion, hasProposal: pair != nil),
-                    match: match, settlement: settlement, pair: pair,
-                    usesDistribution: uses, ownSavingsWarning: ownSavings)
+                    item: p.item, suggestion: p.suggestion, cleanLabel: p.cleanLabel,
+                    group: ReviewGroup(p.group(followsDistribution: distributionChoice[p.id], chosenMatch: chosen)),
+                    match: match, settlement: p.settlement, pair: p.pair,
+                    usesDistribution: uses, ownSavingsWarning: ownSavings, proposal: p)
             }
             .sorted { ($0.group.rawValue, $0.tx.day, $0.id) < ($1.group.rawValue, $1.tx.day, $1.id) }
 
@@ -387,24 +381,15 @@ final class ReviewStore {
         if selection.isEmpty, let first = rows.first { selection = [first.id] }
         if cursor == nil || !selection.contains(cursor!) { cursor = rows.first { selection.contains($0.id) }?.id }
         SelfTest.potPickerLoaded(.review, kinds: pots.map(\.kind), names: pots.map(\.name))
-    }
-
-    private static func group(_ s: Suggestion, hasProposal: Bool) -> ReviewGroup {
-        if s.amountDiffers || !s.warnings.isEmpty { return .doubt }
-        switch s.confidence {
-        case .hoog: return .certain
-        case .midden: return .probable
-        case .laag, .geen: return hasProposal ? .probable : .doubt
-        }
+        SelfTest.waitingCountsLoaded(.review, accountId: accountId, total: rows.count, certain: certainRows.count)
     }
 
     // MARK: Voorstel en concept
 
     private func makeDefault(_ row: ReviewRow) -> ReviewDraft {
         let s = row.suggestion
-        var draft = ReviewDraft(label: s.label.isEmpty || s.label == "Onbekend" ? row.cleanLabel : s.label,
+        var draft = ReviewDraft(label: row.proposal?.proposedLabel ?? row.cleanLabel,
                                 tagIds: kind == .betaal ? Set(s.tagIds) : [])   // tags alleen op de betaalrekening
-        if draft.label.isEmpty { draft.label = "Onbekend" }
         // Een vaste storting gaat vóór de regels.
         if let match = row.activeMatch, match.distribution != nil, !match.allocations.isEmpty {
             draft.tagIds = []
@@ -440,7 +425,7 @@ final class ReviewStore {
     /// De betaalkant van een overboeking naar een eigen rekening, terwijl er nog geleend geld uitstaat:
     /// dit lijkt de terugboeking van wat tijdelijk van spaar is gehaald.
     func looksLikeLoanReturn(_ row: ReviewRow) -> Bool {
-        kind == .betaal && row.pair != nil && row.tx.amount.isNegative && loanOutstanding > .zero
+        row.proposal?.looksLikeLoanReturn ?? false
     }
 
     /// Er passen meer vaste stortingen: de gebruiker kiest er één, daarna volgt het voorstel van die storting.
@@ -734,7 +719,7 @@ final class ReviewStore {
         finish(model, handled: [row.id])
     }
 
-    /// Boekt alle zekere transacties in één keer. Ze blijven "na te kijken" in Transacties.
+    /// Boekt alle zekere transacties in één keer. Ze staan daarna als "nog niet gecontroleerd" in Transacties.
     func bookAllCertain(_ model: AppModel) {
         book(certainRows, model, reviewedIfEdited: false)
     }
@@ -772,7 +757,7 @@ final class ReviewStore {
         guard ok else { return }
         let ids = Set(chosen.map(\.id))
         var text = ids.count == 1 ? "1 transactie geboekt" : "\(ids.count) transacties geboekt"
-        if !reviewedIfEdited { text += " · nog na te kijken in Transacties" }
+        if !reviewedIfEdited { text += " · nog te controleren in Transacties" }
         if requests.contains(where: { $0.allocations.contains(where: \.reimburse) }) { text += " · \(settlementBalanceText(model))" }
         announce(model, text, unbook: Array(ids), learned: nil)
         finish(model, handled: ids)

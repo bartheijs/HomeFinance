@@ -2,6 +2,7 @@ import SwiftUI
 import HFCore
 import HFInsight
 import HFBudget
+import HFRules
 
 /// Het paneel rechts: één transactie in detail, of de acties voor een selectie van meer regels.
 struct TransactionsDetailPanel: View {
@@ -45,6 +46,8 @@ private struct TransactionsSingleDetail: View {
     let item: TransactionsFeedItem
     @State private var confirmUnbook = false
     @State private var confirmDelete = false
+    /// Het regelconcept van "Voortaan zo indelen" in de regeleditor.
+    @State private var editingRule: TransactionsRuleEdit?
 
     private var row: EntryRow? { item.entry }
     private var pending: TransactionsPending? { item.pending }
@@ -99,6 +102,13 @@ private struct TransactionsSingleDetail: View {
             Divider()
             footer
         }
+        .sheet(item: $editingRule) { edit in
+            RuleEditorSheet(rule: edit.rule, isNew: edit.rule.id == nil, year: item.day.year,
+                            intro: "Deze regel wordt bewaard als je de transactie boekt.", saveTitle: "Gebruik") { rule in
+                guard let p = pending else { return nil }
+                return store.setCustomRule(rule, for: p)
+            }
+        }
         .confirmationDialog("Deze boeking ongedaan maken?", isPresented: $confirmUnbook) {
             Button("Maak ongedaan", role: .destructive) { if let row { store.unbook(model, row: row) } }
             Button("Annuleer", role: .cancel) {}
@@ -134,7 +144,7 @@ private struct TransactionsSingleDetail: View {
             if pending != nil {
                 Pill("Nieuw, nog niet geboekt", color: Theme.info).padding(.top, 4)
             } else if row?.reviewed == false {
-                Pill("Nog nakijken", color: Theme.warning).padding(.top, 4)
+                Pill("Nog niet gecontroleerd", color: Theme.warning).padding(.top, 4)
                     .help("Automatisch geboekt en nog niet door jou gecontroleerd")
             }
         }
@@ -172,7 +182,7 @@ private struct TransactionsSingleDetail: View {
                     action("square.split.2x1", "Splitsen…", disabled: inTransfer) { store.startSplit(model, item) }
                 }
                 action("note.text", row.note.isEmpty ? "Notitie…" : "Notitie: \(row.note)", active: !row.note.isEmpty) { store.startNote(model, ids: ids) }
-                action(row.reviewed ? "checkmark.circle.fill" : "checkmark.circle", row.reviewed ? "Nagekeken; klik om terug te zetten op nakijken" : "Markeer als nagekeken", active: row.reviewed) {
+                action(row.reviewed ? "checkmark.circle.fill" : "checkmark.circle", row.reviewed ? "Gecontroleerd; klik om terug te zetten op niet gecontroleerd" : "Markeer als gecontroleerd", active: row.reviewed) {
                     store.setReviewed(model, ids: ids, !row.reviewed)
                 }
             }
@@ -227,6 +237,11 @@ private struct TransactionsSingleDetail: View {
                 ForEach(p.suggestion.warnings, id: \.self) { warning in
                     Label(warning, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.warning)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+                // Hetzelfde vinkje als in Nakijken (UX-stap D1).
+                if let option = store.ruleOption(for: p, model) {
+                    RuleConsentChoice(option: option, setOn: { store.setRemember($0) }, edit: { editingRule = TransactionsRuleEdit(rule: $0) })
+                        .padding(.top, 4)
                 }
             }
         }
@@ -591,7 +606,7 @@ private struct TransactionsSingleDetail: View {
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(locked || (store.matchChoice.map { $0.distribution == nil }
                                          ?? store.draft.label.trimmingCharacters(in: .whitespaces).isEmpty))
-                    .help("Boekt de transactie met deze keuzes (⌘⏎). Er wordt geen regel gemaakt of gewijzigd.")
+                    .help("Boekt de transactie met deze keuzes (⌘⏎). Een regel wordt alleen bewaard als ‘Voortaan zo indelen’ aan staat.")
             } else {
                 Text(store.isTextDirty ? "Getypte tekst is nog niet bewaard" : "Keuzes worden meteen bewaard")
                     .font(.caption).foregroundStyle(store.isTextDirty ? Theme.warning : Color.secondary)
@@ -676,7 +691,7 @@ private struct TransactionsMultiDetail: View {
                     }
                     if rows.contains(where: { !$0.reviewed }) {
                         Button { store.setReviewed(model, ids: ids, true) } label: {
-                            Label("Nagekeken", systemImage: "checkmark.circle").frame(maxWidth: .infinity, alignment: .leading)
+                            Label("Gecontroleerd", systemImage: "checkmark.circle").frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 }
@@ -693,4 +708,10 @@ private struct TransactionsMultiDetail: View {
         }
         .padding(18)
     }
+}
+
+/// Het regelconcept dat in de regeleditor openstaat (vanuit "Voortaan zo indelen").
+private struct TransactionsRuleEdit: Identifiable {
+    let id = UUID()
+    let rule: Rule
 }

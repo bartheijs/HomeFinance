@@ -264,6 +264,17 @@ bankomschrijving), `budgetItemId`, `potId`, `tagId`, `diversOnly`, `unreviewedOn
 `EntryRow` bevat de boeking plus `accountName`, `accountKind`, `itemLabel`, `potName`, `settlementId`, `tags` en `bank`
 (`BankFields`, nil bij handinvoer); `isDivers` is true voor een boeking op een betaalrekening zonder vaste post.
 
+### Zeker, waarschijnlijk of twijfel (`waitingGroup`, UX-stap D1)
+
+Nakijken en Transacties delen één indeling van wachtende banktransacties. De app vult `WaitingSignals` uit HFRules
+(voorstel van de regels) en HFBudget (overboeking met spaar, automatisch sparen, eigen overboeking); de lijm staat in
+de app (`WaitingProposals`).
+
+| Functie | Geeft |
+|---|---|
+| `waitingGroup(_ signals: WaitingSignals)` | `WaitingGroup` (`doubt`, `probable`, `certain`). Overboeking met spaar: altijd `doubt`. Automatisch sparen: `certain` alleen bij één storting, precies het bedrag en de verdeling gevolgd, anders `doubt`. Regels: afwijkend bedrag of melding = `doubt`; `hoog` = `certain`; `midden` = `probable`; `laag`/`geen` = `probable` bij een eigen overboeking, anders `doubt` |
+| `waitingCountsLine(toCheck:certain:)` | de regel met aantallen, overal dezelfde: "Nog 3 na te kijken · 4 zeker" |
+
 ### Downloadadvies (`downloadAdvice`)
 
 Voor het blok onder de rekeningkaarten op het scherm Transacties (`Sources/HFInsight/DownloadAdvice.swift`).
