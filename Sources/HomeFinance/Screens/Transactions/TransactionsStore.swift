@@ -285,9 +285,12 @@ struct TransactionsExtra: Equatable {
     var counter: Entry?
     var counterAccountName: String?
     var savingsTransfer: SavingsTransfer?
+    /// Nog over te boeken met spaar, of nog terug te krijgen bij een voorgeschoten tag (HFInsight).
+    var progress: EntryProgress?
 
-    static func fetch(_ db: Database, row: EntryRow) throws -> TransactionsExtra {
+    static func fetch(_ db: Database, row: EntryRow, today: Day) throws -> TransactionsExtra {
         var d = TransactionsExtra()
+        d.progress = try Insight.entryProgress(db, entryId: row.id, today: today)
         if let bankId = row.bankTransactionId {
             let parts = try Entry.filter(Column("bankTransactionId") == bankId).order(Column("id")).fetchAll(db)
             if parts.count > 1 { d.parts = parts }
@@ -574,7 +577,7 @@ final class TransactionsStore {
             }
         }
         if let row = item?.entry {
-            extra = model.read(TransactionsExtra()) { try TransactionsExtra.fetch($0, row: row) }
+            extra = model.read(TransactionsExtra()) { try TransactionsExtra.fetch($0, row: row, today: model.today) }
             forecast = row.accountKind == .spaar && row.potId != nil
                 ? model.read(nil as ForecastItem?) { try ForecastService.suggestRealization($0, entryId: row.id).first }
                 : nil

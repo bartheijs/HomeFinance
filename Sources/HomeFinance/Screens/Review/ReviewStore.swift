@@ -262,6 +262,8 @@ final class ReviewStore {
     }
     func accountName(_ id: Int64) -> String { accounts.first { $0.id == id }?.name ?? "andere rekening" }
 
+    func potName(_ id: Int64?) -> String? { id.flatMap { potsById[$0]?.name } }
+
     func title(of target: ReviewTarget, kind: AccountKind) -> String {
         switch target {
         case .none: kind == .betaal ? "Divers" : "Geen pot (divers)"

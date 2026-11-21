@@ -70,6 +70,7 @@ private struct TransactionsSingleDetail: View {
                         transferSection(p, transferMatch)
                     } else {
                         if let row, let forecast = store.forecast { forecastBox(forecast, row: row) }
+                        if let progress = store.extra.progress { progressBox(progress) }
                         Group {
                             actionRow
                             if let p = pending, let match = store.matchChoice {
@@ -245,6 +246,31 @@ private struct TransactionsSingleDetail: View {
                 TransactionsSavingsTags(tags: store.tagsPresent(in: ids)) { store.removeTag(model, ids: ids, tagId: $0) }
             }
         }
+    }
+
+    // MARK: Voortgang
+
+    /// Eén regel: wat er nog openstaat voor deze boeking, met een knop naar de plek waar je het rechtzet.
+    private func progressBox(_ progress: EntryProgress) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(progress.line).font(.callout.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
+            Text(progress.explanation).font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            switch progress.kind {
+            case .toTransfer:
+                Button("Naar Verrekenen met spaar") { model.selection = .reimbursements }
+                    .controlSize(.small)
+                    .help("Open het scherm waar je de overboeking met spaar afvinkt")
+            case .toReceive(let tagId, let name):
+                Button("Verrekenen…") { store.startSettle(tagId: tagId) }
+                    .controlSize(.small)
+                    .help("Open het venster waarin je de terugbetaling voor \(name) verrekent")
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.info.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 
     // MARK: Verrekenen met spaar

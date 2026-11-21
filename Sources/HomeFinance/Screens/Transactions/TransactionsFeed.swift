@@ -137,19 +137,22 @@ private struct TransactionsFeedRow: View {
         case .betaal: parts.append(row.itemLabel ?? "Divers")
         case .spaar: parts.append(row.potName.map { "Pot \($0)" } ?? "Nog geen pot")
         }
-        // Een verrekende boeking krijgt een vinkje bij zijn tag.
-        parts.append(contentsOf: row.tags.map { tag in
-            row.settlementId != nil && store.lookups.tag(tag.id)?.settles == true ? "\(tag.name) ✓" : tag.name
+        // Een verrekende boeking krijgt een vinkje bij zijn tag; een uitgave die nog openstaat bij een tag die
+        // verrekend wordt heet "voorgeschoten (tag)".
+        let settles = { (tag: TagRef) in store.lookups.tag(tag.id)?.settles == true }
+        let advanced = row.settlementId == nil && row.amount.isNegative ? row.tags.filter(settles) : []
+        parts.append(contentsOf: row.tags.filter { tag in !advanced.contains { $0.id == tag.id } }.map { tag in
+            row.settlementId != nil && settles(tag) ? "\(tag.name) ✓" : tag.name
         })
-        if let month = TransactionsFormat.month(of: row.period) { parts.append("telt in \(Day.monthNamesShort[month - 1])") }
-        if let direction = row.settlementDirection {
+        if row.settlementDirection != nil {
             if let id = row.savingsTransferId, store.lookups.doneTransferIds.contains(id) {
                 parts.append("verrekend")
             } else {
-                let pot = row.potName.map { "pot \($0)" } ?? "spaar"
-                parts.append(direction == .fromPot ? "uit \(pot)" : "naar \(pot)")
+                parts += Insight.linkLabels(amount: row.amount, reimburse: true, potName: row.potName, settlingTagNames: [])
             }
         }
+        parts += Insight.linkLabels(amount: row.amount, reimburse: false, potName: nil, settlingTagNames: advanced.map(\.name))
+        if let month = TransactionsFormat.month(of: row.period) { parts.append("telt in \(Day.monthNamesShort[month - 1])") }
         if row.temporaryLoan { parts.append(row.amount.isNegative ? "terug naar spaar" : "tijdelijk geleend") }
         if let bank = row.bank, bank.amount != row.amount { parts.append("gesplitst") }
         if row.bankTransactionId == nil { parts.append("handinvoer") }
@@ -165,7 +168,12 @@ private struct TransactionsFeedRow: View {
             return store.lookups.item(match.allocations.first?.budgetItemId)?.label ?? distribution.name
         }
         switch store.kind {
-        case .betaal: return p.suggestion.targetItemLabel ?? "Divers"
+        case .betaal:
+            let s = p.suggestion
+            let settling = s.tagIds.compactMap { store.lookups.tag($0) }.filter(\.settles).map(\.name)
+            let extra = Insight.linkLabels(amount: p.transaction.amount, reimburse: s.reimburse,
+                                           potName: store.lookups.pot(s.potId)?.name, settlingTagNames: settling)
+            return ([s.targetItemLabel ?? "Divers"] + extra).joined(separator: " · ")
         case .spaar: return store.lookups.pot(p.suggestion.potId)?.name
         }
     }

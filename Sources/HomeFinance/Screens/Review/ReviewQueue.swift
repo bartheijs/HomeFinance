@@ -1,5 +1,6 @@
 import SwiftUI
 import HFCore
+import HFInsight
 
 /// De wachtrij: per transactie alleen datum, naam, voorstel en bedrag. Wat je moet bekijken staat bovenaan.
 struct ReviewQueueView: View {
@@ -88,7 +89,7 @@ struct ReviewQueueRow: View {
                 .frame(width: 54, alignment: .leading)
             Text(draft.isSplit ? row.cleanLabel : draft.label).fontWeight(.medium).lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            proposal(draft).lineLimit(1).fixedSize().layoutPriority(1)
+            proposal(draft).lineLimit(1).layoutPriority(1)
             Text(row.tx.amount.formatted(symbol: false)).monospacedDigit()
                 .foregroundStyle(row.tx.amount.isNegative ? Color.primary : Theme.positive)
                 .frame(width: 90, alignment: .trailing)
@@ -124,18 +125,28 @@ struct ReviewQueueRow: View {
         } else if draft.target == .none, row.pair != nil {
             label("Overboeking")
         } else if s.amountDiffers, !store.isEdited(row) {
-            label("\(store.title(of: draft.target, kind: store.kind)) · ander bedrag", attention: true)
+            label((["\(store.title(of: draft.target, kind: store.kind)) · ander bedrag"] + linkLabels(draft)).joined(separator: " · "), attention: true)
                 .help(s.expectedAmount.map { "De regel verwacht \($0.formatted())." } ?? "Het bedrag wijkt af van de regel.")
         } else if s.ruleId == nil, !store.isEdited(row) {
             label("Nog kiezen", attention: true)
                 .help("Geen regel herkent deze transactie. Zonder keuze wordt hij geboekt als \(store.title(of: .none, kind: store.kind).lowercased()).")
         } else {
-            label(store.title(of: draft.target, kind: store.kind))
+            let text = ([store.title(of: draft.target, kind: store.kind)] + linkLabels(draft)).joined(separator: " · ")
+            label(text).help(text)
         }
+    }
+
+    /// "uit potje X" bij verrekenen met spaar, "voorgeschoten (Tanken)" bij een tag die verrekend wordt.
+    private func linkLabels(_ draft: ReviewDraft) -> [String] {
+        guard store.kind == .betaal else { return [] }
+        let settling = store.tags.filter { $0.settles && draft.tagIds.contains($0.id ?? -1) }.map(\.name)
+        return Insight.linkLabels(amount: row.tx.amount, reimburse: draft.reimburse,
+                                  potName: store.potName(draft.reimbursePotId), settlingTagNames: settling)
     }
 
     private func label(_ text: String, attention: Bool = false) -> some View {
         Text(text)
+            .truncationMode(.middle)
             .font(.system(size: 12, weight: .medium))
             .padding(.horizontal, 9).padding(.vertical, 3)
             .foregroundStyle(attention ? Theme.warning : Color.secondary)
