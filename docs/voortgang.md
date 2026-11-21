@@ -177,6 +177,16 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
    in `HFBudget`). Bij Instellingen › Tags wordt "n boekingen" aanklikbaar: opent Transacties met de
    betaalrekening en het filter op die tag. (Aanleiding: een tag met één boeking op spaar was in Transacties
    onvindbaar omdat daar de betaalrekening geselecteerd stond.)
+6i. **Regels alleen met toestemming en aan te passen vanuit Nakijken** (wens van 21 november).
+   - Nakijken krijgt bij elke boeking "Onthoud als regel", **standaard uit**. Zonder vinkje boekt de app alleen
+     en leert hij niets (nu leert `RuleEngine` bij elke correctie automatisch).
+   - Vinkje aan: één samenvattingszin van de regel ("Voortaan bij X: post …, verrekenen met … bij geld eruit")
+     met "Aanpassen…", dat de regeleditor opent, voorgevuld: voorwaarden (tegenpartij, IBAN, omschrijving
+     bevat, bedrag) en acties (post, pot, verrekenen en richting, omschrijving, tags). Pas na opslaan bestaat hij.
+   - Bij een voorstel van een bestaande regel: "Regel aanpassen…" bij "Waarom dit voorstel?". Wijkt de keuze af
+     van de regel, dan niet stil bijwerken maar "Regel bijwerken met deze keuze?" (standaard uit).
+   - Daarna (afspraak met de gebruiker): de 15 bestaande, automatisch geleerde regels wissen (eerst een kopie)
+     en ze bij volgende imports met aandacht opnieuw maken.
 6d. **Versie zichtbaar in Instellingen › Over** — klaar (21 november). `scripts/run.sh` zet bij elke build de
    korte commit-hash (met een `+` als er niet-gecommitte wijzigingen waren) en de bouwdatum in `Info.plist`
    (`HFBuildCommit`, `HFBuildDate`; `CFBundleVersion` is het aantal commits). Over toont bv. "Versie 1.0 ·
