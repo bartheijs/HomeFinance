@@ -2,6 +2,36 @@
 
 *Bijgewerkt op 21 november 2026. Dit bestand is het overdrachtspunt voor de volgende werksessie.*
 
+## UX-ronde (vanaf 21 november 2026)
+
+Strikt gescheiden van de werkende versie: alles op de tak **`ux-ronde`**, de stand daarvóór heeft de markering
+`voor-ux-ronde`. Pas na de test van de gebruiker wordt er samengevoegd. Onderzoek en voorstellen: `docs/ux/`
+(`begrippen-voorstel.md`, `journeys-review.md`). Geen rekenregel, geen migratie; na elke stap een testronde,
+en de kerncijfers met voorbeelddata moeten gelijk blijven aan die van `voor-ux-ronde`.
+
+### Stap A: kleine, direct merkbare verbeteringen (gebouwd, nog niet getest door de gebruiker)
+
+| Commit | Wat de gebruiker ziet | Top 10 |
+|---|---|---|
+| `967cf70` A1 | Dashboard: onder "Nog te besteden deze maand" één zin over de opbouw ("Nu staat er € … op je betaalrekening; er komt nog € … binnen (o.a. Salaris, verwacht 25 jun) en gaat nog € … af. € … laat je staan als buffer."). Een waarschuwing met knop Boeken zolang er banktransacties op de betaalrekening wachten. Met voorbeelddata start de app op het Dashboard. | #10 |
+| `7ed9315` A2 | Maandgrid: vaste legenda van één regel onder het grid (Klopt / Wijkt af (± € X) / Nog verwacht / Te laat / Afgevinkt), boven het grid "Juni: 5 van 15 voldaan · 3 te laat". Het celvenster zegt de status in die woorden; bij "Te laat" een hint als er een wachtende banktransactie lijkt te passen, met een knop die Nakijken op die transactie opent. | #9 |
+| `df54ae2` A3 | Nakijken en Transacties: achter de post "uit potje X" of "voorgeschoten (Tanken)". In het detail van een boeking in Transacties één regel "Nog over te boeken: € …" of "Nog terug te krijgen: € …" met een knop naar de plek waar je het rechtzet. | #7 |
+
+Techniek: de zin, de teller, de hint en de voortgangsregel komen uit `HFInsight` (`SpendableExplanation`,
+`FixedItemsOverview.summaryLine`, `Insight.waitingCandidates`, `Insight.entryProgress`, `Insight.linkLabels`),
+met tests. Elke testronde GESLAAGD (zelftest 154 OK, 0 FOUT, beide venstermaten); kerncijfers voorbeelddata
+gelijk aan `voor-ux-ronde` (peildag 21-11-2026).
+
+Aandachtspunten voor de test door de gebruiker:
+- De hint in het celvenster zoekt alleen in de wachtrij: in de voorbeeldmodus (die de laatste transacties
+  "klaarzet om te importeren") verschijnt hij pas na het importeren van het voorbeeldbestand.
+- De woorden "potje" en "voorgeschoten" staan nu alleen in de nieuwe labels; de rest van de app gebruikt nog
+  "pot" en "verrekenen". De naamsronde (spoor 1) volgt apart.
+- De voortgangsregel staat in het detail van Transacties, niet in Nakijken (daar is de boeking nog niet gedaan).
+- Nog niet getest met een kopie van de eigen administratie en niet in de geïnstalleerde app.
+
+Volgende stappen (apart, later): indeling zijbalk, nieuwe namen, één plek om te boeken, scherm "Nog rechtzetten".
+
 ## Terug naar de code van 16 november (21 november 2026)
 
 - **Testvangnet (ronde 1)**: `scripts/testronde.sh`. De orchestrator draait het na elke wens op een kopie van de
