@@ -79,6 +79,14 @@ enum SelfTest {
                                  proposals.filter { $0.otherHalf != nil }.count)
     }
 
+    /// Nog rechtzetten meldde na het laden zijn blokken (D4): aantal blokken en hoeveel er openstaan.
+    private static var settleUp: (blocks: Int, open: Int)?
+
+    static func settleUpLoaded(blocks: Int, open: Int) {
+        guard isOn else { return }
+        settleUp = (blocks, open)
+    }
+
     /// Laatst gemeten plek (in venstercoördinaten, oorsprong linksboven) van views met `.selfTestProbe(_:)`.
     private static var probeFrames: [String: CGRect] = [:]
 
@@ -144,7 +152,7 @@ enum SelfTest {
         check(model.hasData, "administratie heeft gegevens (anders verschijnt het welkomstscherm)")
 
         // 2. De zijbalk.
-        let expected = Set(Screen.allCases)
+        let expected = Set(SidebarGroup.sidebarScreens)
         let rowsUp = await wait(.seconds(5)) { sidebarRows == expected }
         check(rowsUp, "zijbalk verscheen met \(expected.count) regels (gezien: \(sidebarRows.count))")
         let appKitRows = await waitValue(.seconds(3)) { visibleSidebarRowCount() } until: { $0 >= expected.count }
@@ -198,6 +206,12 @@ enum SelfTest {
               + " · transacties: \(tx.map { "\($0.deposits) terugbetaling, \($0.otherHalves) andere helft" } ?? "niet geladen")")
         check(rx != nil && rx?.deposits == tx?.deposits && rx?.otherHalves == tx?.otherHalves,
               "Nakijken en Transacties tonen dezelfde terugbetalingen en andere helften (D2)")
+
+        // 3a4. Nog rechtzetten laadde zijn vier blokken; de teller in de zijbalk is het aantal open blokken (D4).
+        write("     nog rechtzetten: \(settleUp.map { "\($0.blocks) blokken, \($0.open) open" } ?? "niet geladen")")
+        check(settleUp?.blocks == 4, "Nog rechtzetten toont vier blokken (D4)")
+        check(settleUp.map { SidebarBadges.count(for: .settleUp, model: model) == $0.open } ?? false,
+              "teller van Nog rechtzetten in de zijbalk = aantal open blokken (D4)")
 
         // 3b. Transacties: de kop blijft zichtbaar en het downloadblok (6a) staat eronder, ook in het kleinste venster.
         await checkTransactionsHeader(model: model)
@@ -289,6 +303,7 @@ enum SelfTest {
                     // Alleen de kop hoort bij het scherm; "scherm" en "scherm-ruimte" zitten om alle schermen heen
                     // en melden zich pas opnieuw als hun plek verandert.
                     probeFrames["scherm-kop"] = nil; probeFrames["scherm-titel"] = nil
+                    probeFrames = probeFrames.filter { !$0.key.hasPrefix("rechtzetten-blok-") }
                     let before = screenAppearances[stop.screen, default: 0]
                     if model.selection != stop.screen {
                         model.selection = stop.screen
@@ -341,6 +356,13 @@ enum SelfTest {
         // Zijbalk: links in beeld, breed genoeg, met alle rijen.
         let rows = visibleSidebarRowCount()
         let sidebarOK = (sidebar.map { $0.minX >= -0.5 && $0.width >= 150 } ?? false) && rows >= expectedRows
+        // Nog rechtzetten: de vier blokken staan in beeld, binnen de ruimte naast de zijbalk (D4).
+        if stop.screen == .settleUp {
+            let blocks = probeFrames.filter { $0.key.hasPrefix("rechtzetten-blok-") }.map(\.value)
+            let inside = blocks.allSatisfy { $0.width > 0 && $0.minX >= left - 1 && $0.maxX <= right + 1 }
+            check(blocks.count == 4 && inside, "Nog rechtzetten: vier blokken binnen beeld (\(label), gezien: \(blocks.count))")
+        }
+
         check(sidebarOK, "zijbalk zichtbaar: \(where_)"
               + (sidebarOK ? "" : " (\(sidebar.map { "x \(Int($0.minX))–\(Int($0.maxX))" } ?? "niet gevonden"), \(rows) rijen)"))
     }

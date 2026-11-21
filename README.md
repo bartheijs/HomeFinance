@@ -25,9 +25,14 @@ administratie beginnen**. Je kunt later altijd wisselen via Instellingen › Ove
 
 ## Zo werk je ermee
 
-De zijbalk is ingedeeld naar wat je komt doen: **Vandaag** (Dashboard), **Bijwerken** (Importeren en nakijken,
-Transacties), **Begroting** (Maandgrid, Posten), **Sparen** (Potjes, Automatisch sparen, Nog overboeken) en
-**Inzicht** (Rapporten), met Instellingen onderaan. Jaar aanmaken en afsluiten doe je bij Posten; regels beheer je
+De zijbalk is ingedeeld naar wat je komt doen: **Vandaag** (Dashboard, Nog rechtzetten), **Bijwerken**
+(Importeren en nakijken, Transacties, Voorgeschoten), **Begroting** (Maandgrid, Posten), **Sparen** (Potjes,
+Automatisch sparen) en **Inzicht** (Rapporten), met Instellingen onderaan. *Nog rechtzetten* zet alles wat nog
+open staat bij elkaar, in vier blokken met de volgende stap: nog overboeken met spaar (daar ga je naar het scherm
+Nog overboeken om af te vinken), voorgeschoten geld, tijdelijk geleend van spaar en wat nog op de bank wacht.
+Nieuwe banktransacties boek je in Nakijken of in Transacties: beide tonen dezelfde voorstellen, dezelfde aantallen
+"zeker / na te kijken" en hetzelfde vinkje "Voortaan zo indelen". Automatisch geboekte boekingen die je achteraf
+nog niet hebt bekeken, heten "nog niet gecontroleerd". Jaar aanmaken en afsluiten doe je bij Posten; regels beheer je
 bij Instellingen › Regels.
 
 1. **Download bij je bank** de transacties als CSV. Je krijgt een zip-bestand met één CSV per rekening.
@@ -146,7 +151,9 @@ Dat doet vier dingen en schrijft alles naar de map achter `--uit` (nooit in deze
    downloadblok eronder staat. Daarna loopt hij elk scherm (en elk tabblad van Rapporten en Instellingen)
    nog eens langs op de gewone en de kleinste venstermaat: is de kop zichtbaar, schuift het scherm niet
    horizontaal buiten beeld, staat de titel op één regel en blijft de zijbalk zichtbaar. Op Transacties en Nakijken kijkt hij of de pot-kiezers geladen zijn met de
-   potten per soort op alfabet (in het log alleen het aantal en "volgorde OK").
+   potten per soort op alfabet (in het log alleen het aantal en "volgorde OK"), en of beide schermen dezelfde
+   aantallen wachtend en zeker tonen, en dezelfde terugbetalingen en andere helften. Op Nog rechtzetten kijkt hij
+   of de vier blokken in beeld staan (beide venstermaten) en of de teller in de zijbalk klopt.
    Na hooguit 90 seconden stopt de app altijd.
 4. **Kerncijfers**: saldi per rekening, het saldo van elk potje, "vrij te besteden" (sleutel `besteedbaarNu`), "nog over deze maand"
    en een paar aantallen, in `kerncijfers-voorbeeld.json`.

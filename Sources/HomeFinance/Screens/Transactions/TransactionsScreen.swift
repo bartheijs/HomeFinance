@@ -81,6 +81,7 @@ struct TransactionsScreen: View {
             store.accountId = jump.accountId
             store.criteria = TransactionsCriteria()
             store.criteria.tagId = jump.tagId
+            store.criteria.loanOnly = jump.loanOnly
             model.transactionsJump = nil
         }
         .sheet(isPresented: $showNewEntry) {

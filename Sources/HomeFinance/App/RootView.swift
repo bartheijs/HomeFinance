@@ -50,6 +50,7 @@ struct RootView: View {
     @ViewBuilder private var detail: some View {
         switch model.selection {
         case .dashboard: DashboardScreen().onAppear { SelfTest.screenAppeared(.dashboard) }
+        case .settleUp: SettleUpScreen().onAppear { SelfTest.screenAppeared(.settleUp) }
         case .review: ReviewScreen().onAppear { SelfTest.screenAppeared(.review) }
         case .transactions: TransactionsScreen().onAppear { SelfTest.screenAppeared(.transactions) }
         case .advances: AdvancesScreen().onAppear { SelfTest.screenAppeared(.advances) }

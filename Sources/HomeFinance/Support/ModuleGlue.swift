@@ -61,6 +61,9 @@ enum SidebarBadges {
             return model.read(0) { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM bankTransaction WHERE status = 'nieuw'") ?? 0 }
         case .transactions:
             return model.read(0) { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM entry WHERE reviewed = 0") ?? 0 }
+        case .settleUp:
+            // Het aantal blokken van Nog rechtzetten waar iets openstaat (D4).
+            return model.read(0) { try SettleUpData.read($0, today: model.today).openBlockCount }
         case .advances:
             // Tags waarvan je nog voorgeschoten geld terugkrijgt (D3).
             return model.read(0) { try Insight.settlementOverview($0, today: model.today).filter { $0.outstanding > .zero }.count }
