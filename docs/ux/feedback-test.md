@@ -99,3 +99,13 @@ Opbouw van boven naar beneden, voor de gekozen maand:
   openstaande bedrag dan 0. **Eerst in de code controleren** dat dit klopt, ook met het startbedrag en met een
   bestaande verrekening; pas dan de knop weghalen. Nakijken/Transacties stellen bij een bijschrijving die op het
   openstaande bedrag lijkt de tag voor ("Is dit je € … van Tanken terug? → tag Tanken").
+
+## Te doen (was "Nog rechtzetten")
+
+- **"Nog overboeken" en "Wacht op de bank" worden één kaartje "Nog overboeken"**: elke regel heeft een status:
+  "Nog overmaken: € …" (knop Afvinken) → "Afgevinkt, wacht op de bank" (grijs) → verdwijnt na de import waarin de
+  overboeking gezien is. Blijft een afgevinkte regel langer dan vijf dagen staan: melding bij Aandacht op het
+  Dashboard.
+- **Lege kaartjes niet tonen**: een kaartje verschijnt alleen als er iets in staat; is alles leeg, één regel
+  "Er is niets te doen."
+- Minder uitlegtekst (zelfde wens als op het Dashboard).
