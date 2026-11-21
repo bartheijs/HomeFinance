@@ -50,3 +50,18 @@ Algemeen: **te veel informatie**.
 - **Kaartjes Periodiek en Incidenteel tonen zowel inkomende als uitgaande transacties** (in en uit, elk met
   totaal). Op de pagina erachter een **filter in / uit** (en alles).
 - **Maandgrid in de zijbalk onder Inzicht**, direct onder Rapporten (niet meer bij Begroting).
+
+## Vaste posten (pagina achter het kaartje Periodiek)
+
+1. Icoon en link naar het maandgrid (rechtsboven in het blok) **weg**.
+2. Het **info-icoontje doet niets**: laten werken (uitleg tonen) of weghalen.
+3. **"te laat" ook op het kaartje op het Dashboard tonen, ook als het 0 is.**
+4. **Bovenaan de lijst een samenvatting van wat er nog gaat gebeuren**: totaal **nog binnen te komen**, totaal
+   **nog af te gaan**, en het **saldo** daarvan.
+5. **In de lijst duidelijker wat verwerkt is en wat nog komt**:
+   - **nergens € 0,00**: altijd het bedrag van de post (plan), en bij een verwerkte post het werkelijke bedrag;
+     een afgevinkte post zonder boeking toont het planbedrag met "afgevinkt";
+   - **duidelijk onderscheid tussen in- en uitgaande posten** (bijv. aparte groepen "Inkomsten" en "Uitgaven",
+     of kleur en teken);
+   - **duidelijk of een post deze maand al verwerkt is of nog moet komen** (bijv. groepen "Nog te komen" en
+     "Verwerkt", of een duidelijke status per regel).
