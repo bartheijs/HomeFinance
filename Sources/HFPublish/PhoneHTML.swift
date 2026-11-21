@@ -122,7 +122,7 @@ extension PhoneDashboard {
             lines.append("<div class=\"notes\">\n\(notes.joined(separator: "\n"))\n</div>")
         }
         if !budget.returning.isEmpty {
-            lines.append("<div class=\"sub fine\">Voorgeschoten geld dat nog terugkomt, telt al mee.</div>")
+            lines.append("<div class=\"sub fine\">Geld dat nog terugkomt, telt al mee.</div>")
         }
         lines.append("</section>")
         return lines.joined(separator: "\n")

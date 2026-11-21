@@ -469,7 +469,7 @@ struct TransactionsContextMenu: View {
                     Button("Terugbetaling \(tag.name)…", systemImage: "arrow.left.arrow.right") {
                         store.startSettle(tagId: tag.id ?? 0, deposit: row)
                     }
-                    .help("Deze bijschrijving is de terugbetaling van wat je voor \(tag.name) hebt voorgeschoten")
+                    .help("Deze bijschrijving is de terugbetaling van wat je voor \(tag.name) terugkrijgt")
                 }
             }
             if chosen.count == 1, let item = chosen.first {

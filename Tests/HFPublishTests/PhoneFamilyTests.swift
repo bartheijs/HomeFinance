@@ -85,7 +85,7 @@ private struct Family {
         #expect(html.contains("€&nbsp;6.820<span class=\"cents\">,00</span>"))
         #expect(html.contains("Vrij te besteden <strong>€&nbsp;3.890,00</strong>"))
         #expect(html.contains("Komt nog terug: Tanken &lt;auto&gt;"))
-        #expect(html.contains("Voorgeschoten geld dat nog terugkomt, telt al mee."))
+        #expect(html.contains("Geld dat nog terugkomt, telt al mee."))
         // Het hoofdgetal staat vóór besteedbaar nu.
         #expect(html.range(of: "6.820")!.lowerBound < html.range(of: "Vrij te besteden")!.lowerBound)
     }
@@ -94,7 +94,7 @@ private struct Family {
         let html = PhoneDashboard.html(try Fixture().db.read { try PhoneDashboard.make($0, today: Fixture.today, now: now) },
                                        timeZone: amsterdam)
         #expect(!html.contains("Komt nog terug"))
-        #expect(!html.contains("Voorgeschoten geld"))
+        #expect(!html.contains("Geld dat nog terugkomt"))
     }
 
     // MARK: Potjes van de kinderen

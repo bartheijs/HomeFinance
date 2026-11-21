@@ -44,7 +44,7 @@ struct SettleUpScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScreenHeader("Nog rechtzetten",
+            ScreenHeader("Te doen",
                          subtitle: "Alles wat nog een handeling van jou vraagt, of nog terug moet komen. Per blok staat de volgende stap.")
             if let data {
                 ScrollView {
@@ -111,9 +111,9 @@ struct SettleUpScreen: View {
     // MARK: 2. Voorgeschoten
 
     @ViewBuilder private func advancesBlock(_ data: SettleUpData) -> some View {
-        block("Voorgeschoten", icon: "arrow.uturn.backward.circle", isOpen: !data.advances.isEmpty,
-              explanation: "Uitgaven die je voorschiet en terugkrijgt, zoals tankkosten van je werk.",
-              empty: "Je krijgt niets meer terug van voorgeschoten geld.") {
+        block("Terug te ontvangen", icon: "arrow.uturn.backward.circle", isOpen: !data.advances.isEmpty,
+              explanation: "Uitgaven met een tag die je terugkrijgt.",
+              empty: "Er komt niets meer terug.") {
             ForEach(data.advances) { tag in
                 step("Je krijgt nog \(tag.outstanding.formatted()) terug (\(tag.name))",
                      detail: TransactionsFormat.entries(tag.openCount) + (tag.oldestOpenDay.map { ", de oudste van \($0.short())" } ?? "")) {
@@ -123,7 +123,7 @@ struct SettleUpScreen: View {
                     .help("Geef aan dat je het geld van \(tag.name) hebt teruggekregen, en met welke bijschrijving.")
                 }
             }
-            Button("Naar Voorgeschoten") { model.selection = .advances }.buttonStyle(.link)
+            Button("Naar Tags") { model.selection = .tags }.buttonStyle(.link)
         }
     }
 

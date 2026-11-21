@@ -718,7 +718,7 @@ struct ReviewNewTagButton: View {
             }
             if store.kind == .betaal {
                 VStack(alignment: .leading, spacing: 3) {
-                    Toggle("Voorgeschoten", isOn: $settles)
+                    Toggle("Krijg ik terug", isOn: $settles)
                     Text("Voor uitgaven die je voorschiet en terugkrijgt, zoals tankkosten van je werk.")
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }

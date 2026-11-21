@@ -98,7 +98,7 @@ public enum SettlementService {
             guard tag.settles else { throw BudgetError.tagNotSettling(tag: tag.name) }
             let ids = Array(Set(entryIds))
             guard !ids.isEmpty || includeStart else {
-                throw BudgetError.validation("Kies minstens één voorgeschoten boeking die terugbetaald is.")
+                throw BudgetError.validation("Kies minstens één boeking die terugbetaald is.")
             }
             guard !includeStart || tag.startIsOpen else {
                 throw BudgetError.validation("Het startbedrag van ‘\(tag.name)’ staat niet (meer) open.")
@@ -215,7 +215,7 @@ public enum SettlementService {
                     SELECT EXISTS(SELECT 1 FROM entryTag WHERE entryId = ? AND tagId = ?)
                     """, arguments: [depositEntryId, settlement.tagId]) ?? false
                 guard !hasTag else {
-                    throw BudgetError.depositInvalid("De terugbetaling mag zelf niet de tag van het voorgeschoten geld hebben; "
+                    throw BudgetError.depositInvalid("De terugbetaling mag zelf niet de tag van de uitgaven hebben; "
                         + "haal de tag van de bijschrijving af.")
                 }
                 let other = try Int64.fetchOne(db, sql: "SELECT id FROM settlement WHERE depositEntryId = ? AND id <> ?",
@@ -237,7 +237,7 @@ public enum SettlementService {
         try atomic(db) {
             let settlement = try Check.fetch(db, Settlement.self, settlementId, "Terugbetaling")
             guard !settlement.isOpening else {
-                throw BudgetError.validation("De beginstand kan niet verwijderd worden. Zet ‘Voorgeschoten’ opnieuw aan "
+                throw BudgetError.validation("De beginstand kan niet verwijderd worden. Zet ‘Krijg ik terug’ opnieuw aan "
                     + "met een andere datum, of zet het uit.")
             }
             try db.execute(sql: "UPDATE entry SET settlementId = NULL WHERE settlementId = ?", arguments: [settlementId])

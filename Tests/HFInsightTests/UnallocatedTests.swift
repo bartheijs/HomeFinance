@@ -29,8 +29,8 @@ import Testing
     }
 
     @Test func onePairCancels() throws {
-        let plus = try add("2027-03-05", Money(cents: 105_851), "Voorgeschoten terug")
-        let minus = try add("2027-03-05", Money(cents: -105_851), "Voorgeschoten")
+        let plus = try add("2027-03-05", Money(cents: 105_851), "Tanken terug")
+        let minus = try add("2027-03-05", Money(cents: -105_851), "Tanken")
         let o = try overview()
         // +1.058,51 en −1.058,51 op dezelfde dag heffen elkaar op; alleen de rente blijft over.
         #expect(o.cancelledPairs.count == 1)

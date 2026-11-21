@@ -28,7 +28,7 @@ struct WaitingExtras: View {
             Label("Is dit je \(c.outstanding.formatted()) van \(c.tagName) terug?", systemImage: "arrow.uturn.backward.circle")
                 .fontWeight(.medium)
             Text(c.exact
-                 ? "Dit is precies wat je voor \(c.tagName) hebt voorgeschoten en nog terugkrijgt."
+                 ? "Dit is precies wat je voor \(c.tagName) nog terugkrijgt."
                  : "Dit is bijna wat je voor \(c.tagName) nog terugkrijgt (\((proposal.transaction.amount - c.outstanding).formatted(alwaysSign: true)) verschil).")
                 .font(.callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

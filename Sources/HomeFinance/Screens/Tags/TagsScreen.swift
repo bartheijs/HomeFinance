@@ -4,7 +4,8 @@ import HFCore
 import HFBudget
 import HFInsight
 
-struct SettingsTagsData: Equatable {
+/// Alles wat het scherm Tags toont, in één keer gelezen.
+struct TagsScreenData: Equatable {
     var tags: [Tag] = []
     /// Gebruik per tag, uitgesplitst naar betaal- en spaarrekening (uit `Insight.tagUsage`).
     var usage: [Int64: TagUsage] = [:]
@@ -12,34 +13,50 @@ struct SettingsTagsData: Equatable {
     var outstanding: [Int64: Money] = [:]
     /// Dag van de beginstand per tag (vanaf wanneer verrekenen aan staat): de voorgestelde dag voor een startbedrag.
     var openingDay: [Int64: Day] = [:]
+    /// Bedrag per tag deze maand en dit jaar t/m vandaag (uit `Insight.tagYear`).
+    var month: [Int64: Money] = [:]
+    var year: [Int64: Money] = [:]
 
-    static func load(_ db: Database, today: Day) throws -> SettingsTagsData {
-        var d = SettingsTagsData()
+    static func load(_ db: Database, today: Day) throws -> TagsScreenData {
+        var d = TagsScreenData()
         d.tags = try Tag.order(Column("sortOrder"), Column("id")).fetchAll(db)
         for s in try Settlement.filter(Column("isOpening") == true).fetchAll(db) { d.openingDay[s.tagId] = s.day }
         d.usage = try Insight.tagUsage(db)
         for summary in try Insight.settlementOverview(db, today: today) { d.outstanding[summary.id] = summary.outstanding }
+        for row in try Insight.tagYear(db, year: today.year, today: today) {
+            d.month[row.id] = row.months[today.month - 1]
+            d.year[row.id] = row.yearToDate
+        }
         return d
     }
 }
 
-struct SettingsTagsTab: View {
+/// Tags (was "Voorgeschoten" en Instellingen › Tags): per tag de uitgaven deze maand en dit jaar, wat je nog
+/// terug te ontvangen hebt, en het beheer (aanmaken, kleur, naam, schakelaars). Alleen weergave: de cijfers komen
+/// uit HFInsight, het vastleggen gaat via `TagService` en `SettlementService`.
+struct TagsScreen: View {
     @Environment(AppModel.self) private var model
-    @State private var data = SettingsTagsData()
+    @State private var data = TagsScreenData()
     @State private var loaded = false
     @State private var resetToken = 0
     @State private var newName = ""
     @State private var deleteTarget: Tag?
+    /// Alleen voor het venster "Ontvangen…": dezelfde acties als in Transacties.
+    @State private var settleStore = TransactionsStore()
 
     var body: some View {
+        VStack(spacing: 0) {
+            ScreenHeader("Tags")
+            list
+        }
+        .sheet(item: $settleStore.settleTarget) { target in
+            TransactionsSettleSheet(store: settleStore, target: target).environment(model)
+        }
+    }
+
+    private var list: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.spacing) {
-                Text("Met tags volg je waar geld aan opgaat, dwars door posten heen: tanken, uit eten, vakantie. Een tag is geen extra uitgave; hij telt alleen mee in de rapporten.")
-                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Text("**Voorgeschoten** is voor uitgaven die je voorschiet en terugkrijgt, zoals tankkosten van je werk. De app houdt bij wat je nog terugkrijgt.")
-                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Text("Stond er bij de start van de app al iets open, zet dat dan als **startbedrag** bij de tag. Zet je **reken mee als inkomen dat nog komt** aan, dan telt het bedrag dat je nog terugkrijgt alvast mee in wat je deze maand kunt uitgeven.")
-                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Card(padding: 0) {
                     VStack(spacing: 0) {
                         if loaded && data.tags.isEmpty {
@@ -49,14 +66,17 @@ struct SettingsTagsTab: View {
                             Divider()
                         }
                         ForEach(Array(data.tags.enumerated()), id: \.element.id) { index, tag in
-                            SettingsTagRow(tag: tag, usage: data.usage[tag.id ?? -1] ?? TagUsage(tagId: tag.id ?? -1),
-                                           outstanding: data.outstanding[tag.id ?? -1] ?? .zero, today: model.today,
+                            TagRow(tag: tag, usage: data.usage[tag.id ?? -1] ?? TagUsage(tagId: tag.id ?? -1),
+                                           outstanding: data.outstanding[tag.id ?? -1] ?? .zero,
+                                           month: data.month[tag.id ?? -1] ?? .zero, year: data.year[tag.id ?? -1] ?? .zero,
+                                           today: model.today,
                                            openingDay: data.openingDay[tag.id ?? -1],
                                            isFirst: index == 0, isLast: index == data.tags.count - 1,
                                            onSave: { save($0) }, onSettle: { setSettles(tag, from: $0) },
                                            onStart: { setStart(tag, amount: $0, day: $1) },
                                            onCounts: { setCounts(tag, $0) },
                                            onMove: { move(tag, by: $0) }, onShow: { show(tag) },
+                                           onReceived: { startSettle(tag) },
                                            onDelete: { deleteTarget = tag })
                                 .id("\(tag.id ?? 0)-\(resetToken)")
                             Divider().padding(.leading, 14)
@@ -64,9 +84,9 @@ struct SettingsTagsTab: View {
                         addRow
                     }
                 }
-                .frame(maxWidth: 640)
+                .frame(maxWidth: 680)
             }
-            .padding(24)
+            .padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: SettingsReloadKey(revision: model.revision, year: model.year)) { load() }
@@ -98,7 +118,7 @@ struct SettingsTagsTab: View {
     }
 
     private func load() {
-        data = model.read(SettingsTagsData()) { try SettingsTagsData.load($0, today: model.today) }
+        data = model.read(TagsScreenData()) { try TagsScreenData.load($0, today: model.today) }
         loaded = true
     }
 
@@ -124,11 +144,11 @@ struct SettingsTagsTab: View {
     private func setSettles(_ tag: Tag, from: Day?) {
         guard let id = tag.id else { return }
         if let from {
-            _ = write("Voorgeschoten staat aan voor ‘\(tag.name)’ vanaf \(from.short(withYear: true))") { db in
+            _ = write("‘Krijg ik terug’ staat aan voor ‘\(tag.name)’ vanaf \(from.short(withYear: true))") { db in
                 _ = try SettlementService.enable(db, tagId: id, from: from)
             }
         } else {
-            _ = write("Voorgeschoten staat uit voor ‘\(tag.name)’") { db in try SettlementService.disable(db, tagId: id) }
+            _ = write("‘Krijg ik terug’ staat uit voor ‘\(tag.name)’") { db in try SettlementService.disable(db, tagId: id) }
         }
     }
 
@@ -143,8 +163,8 @@ struct SettingsTagsTab: View {
     /// "Telt mee in nog te besteden" aan of uit.
     private func setCounts(_ tag: Tag, _ on: Bool) {
         guard let id = tag.id else { return }
-        let text = on ? "Openstaand bij ‘\(tag.name)’ reken mee als inkomen dat nog komt"
-            : "Openstaand bij ‘\(tag.name)’ telt niet meer mee als inkomen dat nog komt"
+        let text = on ? "‘\(tag.name)’ telt mee bij ‘nog te besteden’"
+            : "‘\(tag.name)’ telt niet meer mee bij ‘nog te besteden’"
         _ = write(text) { db in _ = try TagService.setCountsInSpendable(db, tagId: id, on) }
     }
 
@@ -157,6 +177,11 @@ struct SettingsTagsTab: View {
         }
         model.transactionsJump = TransactionsJump(accountId: target.accountId, tagId: target.tagId)
         model.selection = .transactions
+    }
+
+    private func startSettle(_ tag: Tag) {
+        guard let id = tag.id else { return }
+        settleStore.settleTarget = TransactionsSettleTarget(tagId: id, tagName: tag.name)
     }
 
     private func delete(_ tag: Tag) {
@@ -172,10 +197,13 @@ struct SettingsTagsTab: View {
     }
 }
 
-struct SettingsTagRow: View {
+struct TagRow: View {
     let tag: Tag
     let usage: TagUsage
     let outstanding: Money
+    /// Bedrag met deze tag deze maand en dit jaar.
+    let month: Money
+    let year: Money
     let today: Day
     /// Dag van de beginstand, als voorstel voor de dag van het startbedrag.
     let openingDay: Day?
@@ -191,6 +219,8 @@ struct SettingsTagRow: View {
     var onMove: (Int) -> Void
     /// Opent Transacties met het filter op deze tag.
     var onShow: () -> Void
+    /// Opent het venster om vast te leggen dat het geld terug is.
+    var onReceived: () -> Void
     var onDelete: () -> Void
 
     @State private var name: String
@@ -202,11 +232,14 @@ struct SettingsTagRow: View {
     @State private var startValue: Money?
     @State private var startDate = Date()
 
-    init(tag: Tag, usage: TagUsage, outstanding: Money, today: Day, openingDay: Day?, isFirst: Bool, isLast: Bool,
+    init(tag: Tag, usage: TagUsage, outstanding: Money, month: Money, year: Money, today: Day, openingDay: Day?,
+         isFirst: Bool, isLast: Bool,
          onSave: @escaping (Tag) -> Void, onSettle: @escaping (Day?) -> Void,
          onStart: @escaping (Money, Day) -> Void, onCounts: @escaping (Bool) -> Void,
-         onMove: @escaping (Int) -> Void, onShow: @escaping () -> Void, onDelete: @escaping () -> Void) {
+         onMove: @escaping (Int) -> Void, onShow: @escaping () -> Void, onReceived: @escaping () -> Void,
+         onDelete: @escaping () -> Void) {
         self.tag = tag; self.usage = usage; self.outstanding = outstanding; self.today = today
+        self.month = month; self.year = year; self.onReceived = onReceived
         self.openingDay = openingDay
         self.isFirst = isFirst; self.isLast = isLast
         self.onSave = onSave; self.onSettle = onSettle; self.onStart = onStart; self.onCounts = onCounts
@@ -219,6 +252,7 @@ struct SettingsTagRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             mainLine
+            amountsLine
             settleLine
             if tag.settles {
                 startLine
@@ -234,20 +268,34 @@ struct SettingsTagRow: View {
         }
     }
 
-    /// Schakelaar "Verrekenen"; bij aanzetten eerst de vraag vanaf welke datum.
+    /// "Deze maand € … · Dit jaar € …".
+    private var amountsLine: some View {
+        HStack(spacing: 14) {
+            HStack(spacing: 4) { Text("Deze maand"); Text(month.formatted()).monospacedDigit() }
+            HStack(spacing: 4) { Text("Dit jaar"); Text(year.formatted()).monospacedDigit() }
+            Spacer(minLength: 0)
+        }
+        .font(.callout)
+        .padding(.leading, 54)
+    }
+
+    /// Schakelaar "Krijg ik terug"; bij aanzetten eerst de vraag vanaf welke datum.
     private var settleLine: some View {
         HStack(spacing: 8) {
-            Toggle("Voorgeschoten", isOn: Binding(get: { tag.settles }, set: { on in
+            Toggle("Krijg ik terug", isOn: Binding(get: { tag.settles }, set: { on in
                 if on { fromDate = SettingsFormat.date(today); askFrom = true } else { onSettle(nil) }
             }))
             .toggleStyle(.switch).controlSize(.mini)
-            .help("Voor uitgaven die je voorschiet en terugkrijgt, zoals tankkosten van je werk. De app houdt bij wat je nog terugkrijgt.")
+            .help("Voor uitgaven die je terugkrijgt, zoals tankkosten van je werk. De app houdt bij wat er nog terug moet komen.")
             .popover(isPresented: $askFrom, arrowEdge: .bottom) { fromPopover }
             if tag.settles {
-                Text("openstaand").foregroundStyle(.secondary)
-                Text(outstanding.formatted()).monospacedDigit()
-                    .foregroundStyle(outstanding.isZero ? Color.secondary : Color.primary)
-                    .help("Nog terug te krijgen: de uitgaven met deze tag die nog niet terugbetaald zijn.")
+                Text("Nog terug te ontvangen: \(outstanding.formatted())").monospacedDigit()
+                    .fontWeight(outstanding.isZero ? .regular : .semibold)
+                if outstanding > .zero {
+                    Button("Het is binnen…", action: onReceived)
+                        .controlSize(.small)
+                        .help("Geef aan dat je het geld hebt teruggekregen, en met welke bijschrijving.")
+                }
             }
             Spacer(minLength: 0)
         }
@@ -258,13 +306,13 @@ struct SettingsTagRow: View {
     /// Startbedrag: wat er bij de start van de app al openstond.
     private var startLine: some View {
         HStack(spacing: 8) {
-            Text("Startbedrag").foregroundStyle(.secondary)
+            Text("Startbedrag")
             if tag.startAmount.isZero {
-                Text("geen").foregroundStyle(.secondary)
+                Text("geen")
             } else {
                 Text(tag.startAmount.formatted()).monospacedDigit()
-                if let day = tag.startDay { Text("op \(day.short(withYear: true))").foregroundStyle(.secondary) }
-                if tag.startSettlementId != nil { Text("· terugbetaald").foregroundStyle(.secondary) }
+                if let day = tag.startDay { Text("op \(day.short(withYear: true))") }
+                if tag.startSettlementId != nil { Text("· terugbetaald") }
             }
             if tag.startSettlementId == nil {
                 Button(tag.startAmount.isZero ? "Voeg toe…" : "Wijzig…") {
@@ -285,8 +333,8 @@ struct SettingsTagRow: View {
     private var startPopover: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Startbedrag voor ‘\(tag.name)’").font(.headline)
-            Text("Geld dat bij de start van de app al was voorgeschoten en nog terug moet komen. Het telt mee in wat je nog terugkrijgt en gaat mee als het geld terug is. Leeg of 0 haalt het weg.")
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("Wat er bij de start van de app al terug moest komen. Leeg of 0 haalt het weg.")
+                .font(.callout).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Text("Bedrag")
                 MoneyField("0,00", value: $startValue).textFieldStyle(.roundedBorder).frame(width: 120)
@@ -306,12 +354,12 @@ struct SettingsTagRow: View {
         .frame(width: 340)
     }
 
-    /// Schakelaar "Telt mee in nog te besteden".
+    /// Schakelaar "Tel mee bij 'nog te besteden'".
     private var countsLine: some View {
         HStack(spacing: 8) {
-            Toggle("Reken mee als inkomen dat nog komt", isOn: Binding(get: { tag.countsInSpendable }, set: { onCounts($0) }))
+            Toggle("Tel mee bij ‘nog te besteden’", isOn: Binding(get: { tag.countsInSpendable }, set: { onCounts($0) }))
                 .toggleStyle(.switch).controlSize(.mini)
-                .help("Rekent het openstaande bedrag alvast mee als geld dat terugkomt, in ‘vrij te besteden’ en ‘nog te besteden deze maand’.")
+                .help("Wat nog terug te ontvangen is, telt alvast mee bij ‘nog te besteden deze maand’.")
             Spacer(minLength: 0)
         }
         .font(.callout)
@@ -320,9 +368,9 @@ struct SettingsTagRow: View {
 
     private var fromPopover: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Voorgeschoten voor ‘\(tag.name)’").font(.headline)
-            Text("Vanaf welke datum tellen uitgaven mee als openstaand? Alles van daarvoor geldt als al terugbetaald.")
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("Krijg ik terug: ‘\(tag.name)’").font(.headline)
+            Text("Vanaf welke datum? Alles van daarvoor geldt als al terugbetaald.")
+                .font(.callout).fixedSize(horizontal: false, vertical: true)
             DatePicker("Vanaf", selection: $fromDate, displayedComponents: .date)
             HStack {
                 Spacer()
@@ -361,7 +409,7 @@ struct SettingsTagRow: View {
     /// van vroeger op een spaarrekening, dan staat dat eronder: die zijn daar te vinden via de spaarrekening.
     @ViewBuilder private var usageText: some View {
         if usage.total == 0 {
-            Text("niet gebruikt").font(.callout).foregroundStyle(.secondary)
+            Text("niet gebruikt").font(.callout)
         } else {
             VStack(alignment: .trailing, spacing: 0) {
                 Button(SettingsFormat.count(usage.total, "boeking", "boekingen"), action: onShow)

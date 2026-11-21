@@ -875,7 +875,7 @@ final class TransactionsStore {
         let ok = run(model, {
             var text = "Tag ‘\(name)’ aangemaakt"
             if !rows.isEmpty { text += rows.count == 1 ? " en gezet" : " en gezet op \(TransactionsFormat.entries(rows.count))" }
-            if settles { text += "; voorgeschoten staat aan" }
+            if settles { text += "; ‘Krijg ik terug’ staat aan" }
             return text
         }) { db in
             let tag = try TagService.create(db, name: name, color: color)

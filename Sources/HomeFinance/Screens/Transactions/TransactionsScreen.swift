@@ -228,23 +228,23 @@ struct TransactionsScreen: View {
         .help(TransactionsFormat.settleHelp)
     }
 
-    /// Eén rustige regel per tag waarvan je nog voorgeschoten geld terugkrijgt.
+    /// Eén rustige regel per tag waarvan je nog geld terugkrijgt.
     private func settlementBanner(_ settlement: TagSettlementSummary) -> some View {
         HStack(spacing: 10) {
             Circle().fill(Color(hex: settlement.color)).frame(width: 7, height: 7)
-            Text("Voorgeschoten (\(settlement.name)): nog terug te krijgen: \(settlement.outstanding.formatted()) · \(TransactionsFormat.entries(settlement.openCount))")
+            Text("\(settlement.name): nog terug te ontvangen: \(settlement.outstanding.formatted()) · \(TransactionsFormat.entries(settlement.openCount))")
             Button("Het geld is terug…") { store.startSettle(tagId: settlement.id) }
                 .buttonStyle(.link)
-                .help("Geef aan dat je het voorgeschoten geld hebt teruggekregen, en met welke bijschrijving")
-            Button("Naar Voorgeschoten") { model.selection = .advances }
+                .help("Geef aan dat je het geld hebt teruggekregen, en met welke bijschrijving")
+            Button("Naar Tags") { model.selection = .tags }
                 .buttonStyle(.link)
-                .help("Het overzicht van alles wat je hebt voorgeschoten en nog terugkrijgt, per tag")
+                .help("Per tag wat je nog terugkrijgt")
             Spacer(minLength: 0)
         }
         .font(.callout)
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 9))
-        .help("Uitgaven met de tag \(settlement.name) die je hebt voorgeschoten en nog terugkrijgt")
+        .help("Uitgaven met de tag \(settlement.name) die je nog terugkrijgt")
     }
 
     // MARK: Inhoud

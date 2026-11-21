@@ -11,7 +11,7 @@ enum ReportsTab: String, CaseIterable, Identifiable {
         switch self {
         case .overview: "Overzicht"
         case .spendable: "Vrij te besteden"
-        case .tags: "Categorieën"
+        case .tags: "Tags"
         case .labels: "Per omschrijving"
         case .budget: "Budget tegen werkelijk"
         case .divers: "Overige uitgaven"

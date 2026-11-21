@@ -125,9 +125,9 @@ private let today = Fixture.today
         let dash = try f.db.read { try Insight.dashboard($0, today: today) }
         let item = AttentionItem.openSettlement(tagId: f.tagTanken, tagName: "tanken", amount: eur(90), count: 3)
         #expect(dash.attention.contains(item))
-        #expect(item.message == "Voorgeschoten (tanken): nog terug te krijgen: € 90,00 (3 boekingen).")
+        #expect(item.message == "tanken: nog terug te ontvangen: € 90,00 (3 boekingen).")
         #expect(AttentionItem.openSettlement(tagId: 1, tagName: "Tanken", amount: eur(45), count: 1).message
-                == "Voorgeschoten (Tanken): nog terug te krijgen: € 45,00 (1 boeking).")
+                == "Tanken: nog terug te ontvangen: € 45,00 (1 boeking).")
         // Parkeren heeft niets openstaan: geen aandachtspunt.
         #expect(dash.attention.filter { if case .openSettlement = $0 { return true }; return false }.count == 1)
     }

@@ -209,9 +209,9 @@ enum SelfTest {
 
         // 3a4. Nog rechtzetten laadde zijn vier blokken; de teller in de zijbalk is het aantal open blokken (D4).
         write("     nog rechtzetten: \(settleUp.map { "\($0.blocks) blokken, \($0.open) open" } ?? "niet geladen")")
-        check(settleUp?.blocks == 4, "Nog rechtzetten toont vier blokken (D4)")
+        check(settleUp?.blocks == 4, "Te doen toont vier blokken (D4)")
         check(settleUp.map { SidebarBadges.count(for: .settleUp, model: model) == $0.open } ?? false,
-              "teller van Nog rechtzetten in de zijbalk = aantal open blokken (D4)")
+              "teller van Te doen in de zijbalk = aantal open blokken (D4)")
 
         // 3b. Transacties: de kop blijft zichtbaar en het downloadblok (6a) staat eronder, ook in het kleinste venster.
         await checkTransactionsHeader(model: model)
@@ -360,7 +360,7 @@ enum SelfTest {
         if stop.screen == .settleUp {
             let blocks = probeFrames.filter { $0.key.hasPrefix("rechtzetten-blok-") }.map(\.value)
             let inside = blocks.allSatisfy { $0.width > 0 && $0.minX >= left - 1 && $0.maxX <= right + 1 }
-            check(blocks.count == 4 && inside, "Nog rechtzetten: vier blokken binnen beeld (\(label), gezien: \(blocks.count))")
+            check(blocks.count == 4 && inside, "Te doen: vier blokken binnen beeld (\(label), gezien: \(blocks.count))")
         }
 
         check(sidebarOK, "zijbalk zichtbaar: \(where_)"

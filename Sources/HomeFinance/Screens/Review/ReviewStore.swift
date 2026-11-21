@@ -486,7 +486,7 @@ final class ReviewStore {
         var d = draft(for: row)
         d.tagIds.insert(id)   // gaat zo ook mee in het regelconcept (Onthoud als regel)
         setDraft(d, for: row)
-        model.toast = settles ? "Tag \"\(name)\" gemaakt, met voorgeschoten aan" : "Tag \"\(name)\" gemaakt"
+        model.toast = settles ? "Tag \"\(name)\" gemaakt, met ‘Krijg ik terug’ aan" : "Tag \"\(name)\" gemaakt"
         return nil
     }
 

@@ -149,17 +149,17 @@ public enum BudgetError: LocalizedError, Equatable, Sendable {
         case let .duplicateName(name):
             return "De naam '\(name)' is al in gebruik."
         case .inSettlement:
-            return "Deze voorgeschoten boeking is terugbetaald. Bedrag, rekening en de tag liggen vast; "
+            return "Deze boeking is terugbetaald. Bedrag, rekening en de tag liggen vast; "
                 + "verwijder eerst de terugbetaling."
         case .depositLinked:
-            return "Deze bijschrijving is gekoppeld als terugbetaling van voorgeschoten geld. Ontkoppel haar eerst."
+            return "Deze bijschrijving is gekoppeld als terugbetaling. Ontkoppel haar eerst."
         case let .tagHasSettlements(tag, count):
             return "De tag \(tag) heeft \(count) terugbetaling(en) en kan niet verwijderd worden; de historie zou "
-                + "verloren gaan. Zet ‘Voorgeschoten’ voor deze tag uit als je hem niet meer gebruikt."
+                + "verloren gaan. Zet ‘Krijg ik terug’ voor deze tag uit als je hem niet meer gebruikt."
         case let .tagNotSettling(tag):
-            return "Voor de tag \(tag) staat ‘Voorgeschoten’ niet aan."
+            return "Voor de tag \(tag) staat ‘Krijg ik terug’ niet aan."
         case let .notSettleable(entry, tag):
-            return "De boeking '\(entry)' staat niet open als voorgeschoten voor \(tag): ze heeft de tag niet, "
+            return "De boeking '\(entry)' staat niet open bij \(tag): ze heeft de tag niet, "
                 + "staat niet op een betaalrekening of is al terugbetaald."
         case let .depositInvalid(message):
             return message

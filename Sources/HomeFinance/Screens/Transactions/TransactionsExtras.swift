@@ -210,8 +210,8 @@ struct TransactionsSettleSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Voorgeschoten: \(target.tagName)").font(.title2.weight(.semibold))
-                Text("Uitgaven met deze tag die je hebt voorgeschoten. Kies welke je hebt teruggekregen; daarna staan ze niet meer open.")
+                Text("Terug ontvangen: \(target.tagName)").font(.title2.weight(.semibold))
+                Text("Kies welke uitgaven je hebt teruggekregen.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -237,7 +237,7 @@ struct TransactionsSettleSheet: View {
                             }
                             .toggleStyle(.checkbox)
                             .padding(.vertical, 2)
-                            .help("Wat er bij de start van de app al openstond (Instellingen › Tags)")
+                            .help("Wat er bij de start van de app al openstond (bij Tags)")
                         }
                         ForEach(open) { row in
                             Toggle(isOn: Binding(
@@ -326,7 +326,7 @@ struct TransactionsSettleSheet: View {
             }
             if let deposit, chosenCount > 0, deposit.amount != total {
                 let difference = deposit.amount - total
-                Label("De storting is \(difference.magnitude.formatted()) \(difference > .zero ? "hoger" : "lager") dan het voorgeschoten bedrag. Dat kan gewoon; het verschil wordt vastgelegd.",
+                Label("De storting is \(difference.magnitude.formatted()) \(difference > .zero ? "hoger" : "lager") dan het openstaande bedrag. Dat kan gewoon; het verschil wordt vastgelegd.",
                       systemImage: "exclamationmark.triangle")
                     .font(.callout).foregroundStyle(Theme.warning)
                     .fixedSize(horizontal: false, vertical: true)

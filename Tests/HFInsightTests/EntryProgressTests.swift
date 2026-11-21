@@ -36,13 +36,13 @@ import Testing
         let p = try #require(try progress("Tanken"))
         #expect(p.kind == .toReceive(tagId: f.tagTanken, tagName: "tanken"))
         #expect(p.amount == eur(115))
-        #expect(p.line == "Nog terug te krijgen: € 115,00 (tanken)")
+        #expect(p.line == "Nog terug te ontvangen: € 115,00 (tanken)")
     }
 
     @Test func linkLabels() {
         #expect(Insight.linkLabels(amount: eur(-75), reimburse: true, potName: "Vakantie", settlingTagNames: []) == ["uit potje Vakantie"])
         #expect(Insight.linkLabels(amount: eur(20), reimburse: true, potName: nil, settlingTagNames: []) == ["naar spaar"])
-        #expect(Insight.linkLabels(amount: eur(-60), reimburse: false, potName: nil, settlingTagNames: ["Tanken"]) == ["voorgeschoten (Tanken)"])
+        #expect(Insight.linkLabels(amount: eur(-60), reimburse: false, potName: nil, settlingTagNames: ["Tanken"]) == ["krijg ik terug (Tanken)"])
         #expect(Insight.linkLabels(amount: eur(144), reimburse: false, potName: nil, settlingTagNames: ["Tanken"]).isEmpty)
         #expect(Insight.linkLabels(amount: eur(-10), reimburse: false, potName: nil, settlingTagNames: []).isEmpty)
     }

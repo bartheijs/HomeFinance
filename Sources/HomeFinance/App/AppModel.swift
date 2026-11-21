@@ -6,16 +6,16 @@ import os
 
 /// De schermen in de zijbalk, in de volgorde van de zijbalk (zie `SidebarGroup.all`).
 enum Screen: String, CaseIterable, Identifiable, Hashable {
-    case dashboard, settleUp, review, transactions, advances, grid, budget, pots, distributions, reimbursements, reports, settings
+    case dashboard, settleUp, review, transactions, tags, grid, budget, pots, distributions, reimbursements, reports, settings
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: "Dashboard"
-        case .settleUp: "Nog rechtzetten"
+        case .settleUp: "Te doen"
         case .review: "Importeren en nakijken"
         case .transactions: "Transacties"
-        case .advances: "Voorgeschoten"
+        case .tags: "Tags"
         case .grid: "Maandgrid"
         case .budget: "Posten"
         case .pots: "Potjes"
@@ -32,7 +32,7 @@ enum Screen: String, CaseIterable, Identifiable, Hashable {
         case .settleUp: "checklist"
         case .review: "tray.and.arrow.down"
         case .transactions: "list.bullet.rectangle"
-        case .advances: "arrow.uturn.backward.circle"
+        case .tags: "tag"
         case .grid: "tablecells"
         case .budget: "list.bullet.clipboard"
         case .pots: "square.grid.3x3.topleft.filled"
@@ -51,17 +51,17 @@ struct SidebarGroup: Identifiable {
     var id: String { title }
 
     static let all: [SidebarGroup] = [
-        // Nog rechtzetten vervangt in de zijbalk het losse scherm Nog overboeken (UX-stap D4); dat scherm blijft
-        // bestaan en is bereikbaar vanuit Nog rechtzetten en de andere links.
+        // Te doen vervangt in de zijbalk het losse scherm Nog overboeken (UX-stap D4); dat scherm blijft
+        // bestaan en is bereikbaar vanuit Te doen en de andere links. Maandgrid staat onder Inzicht (UX-feedback).
         SidebarGroup(title: "Vandaag", screens: [.dashboard, .settleUp]),
-        SidebarGroup(title: "Bijwerken", screens: [.review, .transactions, .advances]),
-        SidebarGroup(title: "Begroting", screens: [.grid, .budget]),
+        SidebarGroup(title: "Bijwerken", screens: [.review, .transactions, .tags]),
+        SidebarGroup(title: "Begroting", screens: [.budget]),
         SidebarGroup(title: "Sparen", screens: [.pots, .distributions]),
-        SidebarGroup(title: "Inzicht", screens: [.reports]),
+        SidebarGroup(title: "Inzicht", screens: [.reports, .grid]),
         SidebarGroup(title: "", screens: [.settings]),
     ]
 
-    /// De schermen die een regel in de zijbalk hebben (niet elk scherm: Nog overboeken zit in Nog rechtzetten).
+    /// De schermen die een regel in de zijbalk hebben (niet elk scherm: Nog overboeken zit in Te doen).
     static var sidebarScreens: [Screen] { all.flatMap(\.screens) }
 }
 
@@ -84,7 +84,7 @@ enum ChainJump: Equatable {
 struct TransactionsJump: Equatable {
     var accountId: Int64
     var tagId: Int64?
-    /// Alleen de boekingen die als tijdelijk geleend van spaar gemarkeerd zijn (vanuit Nog rechtzetten).
+    /// Alleen de boekingen die als tijdelijk geleend van spaar gemarkeerd zijn (vanuit Te doen).
     var loanOnly = false
 }
 

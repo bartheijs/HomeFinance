@@ -293,7 +293,7 @@ private struct TransactionsSingleDetail: View {
             case .toReceive(let tagId, let name):
                 Button("Het geld is terug…") { store.startSettle(tagId: tagId) }
                     .controlSize(.small)
-                    .help("Open het venster waarin je aangeeft dat je het voorgeschoten geld voor \(name) hebt teruggekregen")
+                    .help("Open het venster waarin je aangeeft dat je het geld voor \(name) hebt teruggekregen")
             }
         }
         .padding(12)
@@ -472,7 +472,7 @@ private struct TransactionsSingleDetail: View {
                         Button("Terugbetaling \(tag.name)…", systemImage: "arrow.left.arrow.right") {
                             store.startSettle(tagId: tag.id ?? 0, deposit: row)
                         }
-                        .help("Deze bijschrijving is de terugbetaling van wat je voor \(tag.name) hebt voorgeschoten")
+                        .help("Deze bijschrijving is de terugbetaling van wat je voor \(tag.name) terugkrijgt")
                     }
                 }
                 if store.extra.parts.count > 1 { partsSection }

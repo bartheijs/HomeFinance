@@ -29,7 +29,7 @@ public struct EntryProgress: Equatable, Sendable {
             case .none: return "Nog over te boeken: niets, alleen tussen potjes"
             }
         case .toReceive(_, let name):
-            return "Nog terug te krijgen: \(amount.formatted()) (\(name))"
+            return "Nog terug te ontvangen: \(amount.formatted()) (\(name))"
         }
     }
 
@@ -42,7 +42,7 @@ public struct EntryProgress: Equatable, Sendable {
                 ? "Zit in een vastgelegde overboeking die nog niet is afgevinkt. Maak het bedrag over en vink hem af."
                 : "Dit is het totaal van alle open boekingen: zet het in één overboeking recht en vink hem af.")
         case .toReceive(_, let name):
-            return "Je hebt dit voorgeschoten. Het bedrag is het totaal dat nog openstaat voor \(name); geef bij Transacties aan wanneer het geld terug is."
+            return "Dit krijg je terug. Het bedrag is het totaal dat nog openstaat voor \(name)."
         }
     }
 }
@@ -81,7 +81,7 @@ extension Insight {
             let pot = potName.map { "potje \($0)" } ?? "spaar"
             parts.append(amount.isNegative ? "uit \(pot)" : "naar \(pot)")
         }
-        if amount.isNegative { parts += settlingTagNames.map { "voorgeschoten (\($0))" } }
+        if amount.isNegative { parts += settlingTagNames.map { "krijg ik terug (\($0))" } }
         return parts
     }
 }

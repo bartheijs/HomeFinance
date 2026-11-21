@@ -3,7 +3,7 @@ import Charts
 import HFCore
 import HFInsight
 
-/// Rapport Categorieën: hoeveel geven we per maand uit aan één tag?
+/// Rapport Tags: hoeveel geven we per maand uit aan één tag?
 struct ReportsTagsTab: View {
     let data: ReportsData
     let year: Int
@@ -59,8 +59,8 @@ struct ReportsTagsTab: View {
 
     private func settlementLine(_ s: TagSettlementSummary) -> String {
         var text = s.openCount == 0
-            ? "Voorgeschoten: niets meer terug te krijgen."
-            : "Voorgeschoten: nog terug te krijgen: \(s.outstanding.formatted()) (\(s.openCount) \(s.openCount == 1 ? "boeking" : "boekingen"))."
+            ? "Niets meer terug te ontvangen."
+            : "Nog terug te ontvangen: \(s.outstanding.formatted()) (\(s.openCount) \(s.openCount == 1 ? "boeking" : "boekingen"))."
         if showsSettledThisYear { text += " Dit jaar terugbetaald: \(s.settledThisYear.formatted())." }
         return text
     }
@@ -72,7 +72,7 @@ struct ReportsTagsTab: View {
             if let settlement = data.settlements.first(where: { $0.id == tag.id }) {
                 Label(settlementLine(settlement), systemImage: "arrow.left.arrow.right")
                     .foregroundStyle(.secondary)
-                    .help("Voorgeschoten: deze uitgaven krijg je later terug. Nog terug te krijgen is wat nog niet terugbetaald is.")
+                    .help("Deze uitgaven krijg je later terug.")
             }
             chart(tag).frame(height: 320)
             if let month {

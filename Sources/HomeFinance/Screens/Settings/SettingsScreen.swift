@@ -1,7 +1,7 @@
 import SwiftUI
 import HFCore
 
-/// Instellingen: zes tabbladen, gekozen via `model.settingsTab`.
+/// Instellingen: vijf tabbladen, gekozen via `model.settingsTab`.
 struct SettingsScreen: View {
     @Environment(AppModel.self) private var model
     /// De breedte die het scherm van het venster krijgt; bepaalt of de tabbladen naast de titel passen.
@@ -34,7 +34,6 @@ struct SettingsScreen: View {
                 switch tab {
                 case .rekeningen: SettingsAccountsTab()
                 case .regels: RulesScreen(embedded: true)
-                case .tags: SettingsTagsTab()
                 case .backup: SettingsBackupTab()
                 case .telefoon: SettingsPhoneTab()
                 case .over: SettingsAboutTab()

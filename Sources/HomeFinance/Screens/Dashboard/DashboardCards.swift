@@ -89,8 +89,8 @@ private struct DashboardAttentionLook {
             settingsTab = "rekeningen"
             help = "Afstemmen is het berekende saldo vergelijken met het saldo bij de bank. Doe dit ongeveer elke maand."
         case .openSettlement:
-            icon = "arrow.uturn.left.circle"; tint = .secondary; action = "Bekijk"; target = .transactions
-            help = "Voorgeschoten: uitgaven met deze tag waarvan je het geld nog terugkrijgt."
+            icon = "arrow.uturn.left.circle"; tint = .secondary; action = "Bekijk"; target = .tags
+            help = "Uitgaven met deze tag waarvan je het geld nog terugkrijgt."
         case .unconfirmedSettlement, .unconfirmedSettlements:
             icon = "questionmark.circle"; tint = Theme.warning; action = "Bekijk"; target = .reimbursements
             help = "Je hebt deze overboeking met spaar afgevinkt, maar hij is nog niet in een bankbestand gezien. Controleer of je hem hebt overgemaakt, of importeer een nieuw bankbestand."

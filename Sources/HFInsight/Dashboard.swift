@@ -68,7 +68,7 @@ public enum AttentionItem: Equatable, Sendable {
         case .temporaryLoanOutstanding(let amount):
             return "\(amount.formatted()) tijdelijk geleend van spaar staat nog uit."
         case .openSettlement(_, let name, let amount, let n):
-            return "Voorgeschoten (\(name)): nog terug te krijgen: \(amount.formatted()) (\(n) \(n == 1 ? "boeking" : "boekingen"))."
+            return "\(name): nog terug te ontvangen: \(amount.formatted()) (\(n) \(n == 1 ? "boeking" : "boekingen"))."
         case .fixedItemsLate(let labels):
             return labels.count == 1 ? "Later dan normaal: \(labels[0])."
                 : "\(labels.count) vaste posten later dan normaal: \(labels.joined(separator: ", "))."
