@@ -7,7 +7,8 @@ verwerkt.*
 
 Algemeen: **te veel informatie**.
 
-1. Datumregel onder de titel: alleen de dag ("zaterdag 21 november"), **zonder "November 2026"** ervoor.
+1. Datumregel onder de titel: **"zaterdag 21 november 2026"**: het jaartal erachter, en **niet** "November 2026"
+   ervoor.
 2. Titel van het hoofdgetal: terug naar **"Nog te besteden deze maand"** (niet "Nog over deze maand").
 3. De grijze uitlegzin onder die titel **weg**.
 4. De opbouw-zin onder het getal ("Nu staat er … er komt nog … en gaat nog … af. … laat je minimaal staan") is
@@ -18,3 +19,31 @@ Algemeen: **te veel informatie**.
    een van de bestaande kaartjes. Met het totaal en de details: de grootste posten of omschrijvingen (bijv. top 5
    met bedrag), en een klik naar de volledige lijst. Reden van de gebruiker: vaste posten en periodieke uitgaven
    zijn interessant, maar bij de overige uitgaven kun je direct besparen.
+
+### Dashboard, uitgewerkt door de gebruiker (vervangt 3 t/m 6 waar het overlapt)
+
+- **Alle grijze tekst weg** (uitlegzinnen, rekenzin, "Vrij te besteden").
+- **Opbouw als korte rekensom** onder de titel "Nog te besteden deze maand":
+
+  ```
+    Huidig saldo betaalrekening            € …
+  − Minimaal op de rekening aan het eind van de maand   € …   (de buffer, nu € 5.000)
+  + Komt nog terug                         € …   (voorgeschoten, als "telt mee" aan staat)
+  + Nog verwacht deze maand                € …   ▸ uitklappen: alle verwachte inkomsten (en uitgaven) per post
+  = Nog te besteden deze maand             € …
+  ```
+
+  Let op voor de bouw: de regels moeten **exact optellen** tot het hoofdgetal. "Nog verwacht deze maand" is
+  netto (verwachte inkomsten min verwachte vaste uitgaven); uitgeklapt beide, per post. Controleer met de
+  kerncijfers dat het totaal gelijk blijft.
+- **Drie kaartjes**: **Periodieke transacties** (vaste posten: x van y voldaan, te laat, nog verwacht) ·
+  **Incidentele transacties** (overige uitgaven deze maand: totaal + grootste uitgaven, klik naar de lijst) ·
+  **Huidig saldo** (betaal, spaar en het totaal samen; **niet** aanklikbaar, het scherm Rekeningen erachter voegt
+  weinig toe).
+- **Aandacht** blijft, en krijgt er meer bij:
+  - vaste posten die **later zijn dan normaal** (te laat);
+  - **spaardoelen die niet op koers liggen**;
+  - nog meer wat aandacht verdient, bijvoorbeeld: de buffer wordt aan het eind van de maand niet gehaald (nog te
+    besteden negatief), het saldo sluit niet aan na een import, de laatste import is lang geleden, een grote
+    verwachte uitgave komt eraan, afgevinkte verrekeningen die nog niet bij de bank gezien zijn.
+- **Knop "Maandgrid" rechtsboven weg.** De gebruiker verwacht het maandgrid weinig te gebruiken.
