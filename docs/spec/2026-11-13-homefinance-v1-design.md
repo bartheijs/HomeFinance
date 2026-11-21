@@ -151,6 +151,13 @@ Zie `Sources/HFCore/Records.swift` (records met uitleg) en `Schema.swift` (tabel
   bestaande verrekening gehangen. Er komt geen nieuwe boeking bij en het saldo verandert niet.
 - Een afgevinkte verrekening die na 5 dagen nog niet in een bankbestand is gezien, wordt gemeld.
 - Volgorde van herkennen bij nieuwe banktransacties: verrekeningen, dan vaste stortingen, dan regels.
+- **Een regel verrekent alleen in één richting** (`Rule.reimburseDirection`: geld erin, geld eruit of beide).
+  In de andere richting stelt dezelfde regel de post, de omschrijving en de tags voor, maar géén verrekenen en
+  géén pot, met zekerheid laag en een melding (twijfelgeval in Nakijken). Leren vult de richting met die van de
+  transactie waarbij de gebruiker verrekenen koos. Bestaande regels met verrekenen kregen bij migratie v9 de
+  richting van hun laatste boeking met verrekenen, en zonder zo'n boeking "geld erin" (alleen bijschrijving)
+  als veilige keuze. Aanleiding: een regel op de rekening van een kind, geleerd van geld dat binnenkwam voor
+  haar spaarpot, haalde ook zakgeld dat naar het kind ging van die spaarpot af.
 
 ### Verrekenen per tag
 - Een tag kan "verrekenen" hebben (bv. Tanken): uitgaven met die tag stort de gebruiker later terug op de

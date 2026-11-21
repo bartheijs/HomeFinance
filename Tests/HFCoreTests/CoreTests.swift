@@ -132,3 +132,50 @@ import GRDB
         #expect(!BuildInfo(infoDictionary: nil).isComplete)
     }
 }
+
+// MARK: - 6f: richting van verrekenen met spaar per regel
+
+@Suite struct ReimburseDirectionMigrationTests {
+    /// Bestaande regels krijgen bij migratie v9 een richting: die van hun laatste boeking met verrekenen,
+    /// anders "erin" (alleen bijschrijving). Regels zonder verrekenen krijgen "beide". Verzonnen data.
+    @Test func existingRulesGetDirectionFromLastUse() throws {
+        let queue = try DatabaseQueue()
+        try AppDatabase.migrator.migrate(queue, upTo: "v8-scenario-goalparts-project")
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO account (id, name, iban, kind, openingDate) VALUES (1, 'Betaal', 'NL00TEST0000000001', 'betaal', '2027-01-01');
+                INSERT INTO rule (id, name, origin, counterpartyIban, reimburse) VALUES
+                    (1, 'Kind A', 'geleerd', 'NL00TEST0000000011', 1),
+                    (2, 'Apotheek', 'geleerd', 'NL00TEST0000000012', 1),
+                    (3, 'Nooit gebruikt', 'handmatig', 'NL00TEST0000000013', 1),
+                    (4, 'Zonder verrekenen', 'geleerd', 'NL00TEST0000000014', 0),
+                    (5, 'Wisselend', 'geleerd', 'NL00TEST0000000015', 1);
+                INSERT INTO entry (accountId, day, amount, reimburse, ruleId, createdAt) VALUES
+                    (1, '2027-02-01', 2500, 1, 1, '2027-02-01 10:00:00'),
+                    (1, '2027-02-03', -1999, 1, 2, '2027-02-03 10:00:00'),
+                    (1, '2027-02-05', -500, 0, 3, '2027-02-05 10:00:00'),
+                    (1, '2027-02-07', -700, 0, 4, '2027-02-07 10:00:00'),
+                    (1, '2027-01-10', -1500, 1, 5, '2027-01-10 10:00:00'),
+                    (1, '2027-03-10', 4000, 1, 5, '2027-03-10 10:00:00');
+                """)
+        }
+        try AppDatabase.migrator.migrate(queue)
+        let directions = try queue.read { db in
+            try Dictionary(uniqueKeysWithValues: Rule.fetchAll(db).map { ($0.id!, $0.reimburseDirection) })
+        }
+        #expect(directions[1] == .incoming)   // laatst gebruikt bij geld erin
+        #expect(directions[2] == .outgoing)   // laatst gebruikt bij geld eruit
+        #expect(directions[3] == .incoming)   // geen boeking met verrekenen: veilige keuze
+        #expect(directions[4] == .both)       // geen verrekenen: richting telt niet
+        #expect(directions[5] == .incoming)   // de laatste boeking telt
+    }
+
+    @Test func directionApplies() {
+        #expect(ReimburseDirection.incoming.applies(to: Money(cents: 100)))
+        #expect(!ReimburseDirection.incoming.applies(to: Money(cents: -100)))
+        #expect(ReimburseDirection.outgoing.applies(to: Money(cents: -100)))
+        #expect(ReimburseDirection.both.applies(to: Money(cents: -100)))
+        let withoutReimburse = Rule(name: "Spaar", targetPotId: 1, reimburseDirection: .incoming)
+        #expect(withoutReimburse.reimburseApplies(to: Money(cents: -100)))
+    }
+}

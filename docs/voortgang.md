@@ -156,11 +156,16 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
    Ook: de gebruiker vindt het onderscheid niet vanzelfsprekend tussen "verrekenen" (bij de aanleiding: geld
    voor een pot staat op betaal) en de overboeking zelf (geen verrekenen). Waarschuw als bij een overboeking
    naar of van de eigen spaarrekening "Verrekenen met spaar" wordt gekozen, met één zin uitleg.
-6f. **Regels met "verrekenen met spaar" kijken niet naar de richting** (21 november). Een regel op de
-   tegenpartij (bv. de rekening van een kind) met verrekenen gold ook voor zakgeld dat de gebruiker naar dat kind
-   stuurde; dat kwam zo onterecht in een verrekening. Leer verrekenen alleen voor dezelfde richting (in of uit)
-   als waarin de gebruiker het koos, of vraag het bij de andere richting. Bij de gebruiker zijn drie regels met
-   de hand aangepast (verrekenen uit).
+6f. **Regels met "verrekenen met spaar" kijken naar de richting** — klaar (21 november, nog niet geïnstalleerd).
+   Aanleiding: een regel op de rekening van een kind met verrekenen gold ook voor zakgeld dat naar dat kind ging.
+   Nu heeft elke regel `reimburseDirection` (geld erin / geld eruit / beide, nieuwe migratie v9). In de andere
+   richting stelt de regel post, omschrijving en tags voor, zonder verrekenen en zonder pot, met zekerheid laag
+   en een melding: een twijfelgeval in Nakijken. Leren legt de richting vast; zakgeld zonder verrekenen boeken
+   laat het verrekenen van de regel voor geld erin staan. Bestaande regels met verrekenen: richting van hun
+   laatste boeking met verrekenen, anders "geld erin". Regels waar verrekenen al met de hand uit staat (drie bij
+   de gebruiker) veranderen niet. Bij Regels staat in de lijst "verrekenen met spaar bij geld erin", en in de
+   editor onder "Verrekenen met spaar" een keuze "Verrekenen bij: geld erin / geld eruit / beide". Details in
+   `docs/api/HFRules.md` en de spec (Verrekenen met spaar).
 6g. **Startbedrag op een verrekentag, en meetellen in "nog te besteden"** (wens van 21 november). Voor tags
    met verrekenen (nu alleen Tanken): een beginbedrag op de startdatum voor wat er uit de periode vóór de app
    nog openstond; telt mee in het openstaande bedrag van de tag. Nieuw: per tag een instelling "telt mee in

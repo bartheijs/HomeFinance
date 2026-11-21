@@ -309,6 +309,24 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Richting van "verrekenen met spaar" per regel (6f). Bestaande regels met verrekenen krijgen de richting
+        // van hun laatste boeking met verrekenen; zonder zo'n boeking "erin" (alleen bijschrijving), de veilige
+        // keuze. Regels zonder verrekenen krijgen "beide"; de richting telt pas als verrekenen aan gaat.
+        m.registerMigration("v9-rule-reimburse-direction") { db in
+            try db.alter(table: "rule") { t in
+                t.add(column: "reimburseDirection", .text).notNull().defaults(to: "beide")
+            }
+            try db.execute(sql: """
+                UPDATE rule SET reimburseDirection = COALESCE(
+                    (SELECT CASE WHEN e.amount > 0 THEN 'erin' ELSE 'eruit' END
+                     FROM entry e
+                     WHERE e.ruleId = rule.id AND e.reimburse = 1 AND e.amount <> 0
+                     ORDER BY e.day DESC, e.id DESC LIMIT 1),
+                    'erin')
+                WHERE reimburse = 1
+                """)
+        }
+
         return m
     }
 }

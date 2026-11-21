@@ -207,8 +207,16 @@ struct RulesEditor: View {
                 }
             }
             Toggle(isOn: $draft.reimburse) {
-                Text("Vergoeden uit spaar")
-                Text("De uitgave komt op de lijst Spaaroverboekingen.")
+                Text("Verrekenen met spaar")
+                Text("Uitgave: komt uit de pot. Bijschrijving: gaat naar de pot. Staat daarna bij Verrekenen met spaar.")
+            }
+            if draft.reimburse {
+                Picker("Verrekenen bij", selection: $draft.reimburseDirection) {
+                    ForEach(ReimburseDirection.allCases, id: \.self) { direction in
+                        Text(direction.title).tag(direction)
+                    }
+                }
+                .help("Alleen in deze richting stelt de regel verrekenen met spaar en de pot voor. In de andere richting doet hij een voorstel zonder verrekenen en zonder pot, als twijfelgeval in Nakijken.")
             }
         } header: {
             Text("Dan")

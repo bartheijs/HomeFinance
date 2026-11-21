@@ -189,6 +189,17 @@ public struct RuleMatcher: Sendable {
         }
         s.reason = "Regel '\(rule.name)': \(what)"
 
+        // Verrekenen met spaar (en de pot daarvan) alleen in de richting waarin de gebruiker het koos.
+        if !rule.reimburseApplies(to: tx.amount) {
+            s.reimburse = false
+            s.potId = nil
+            s.confidence = .laag
+            let chosen = rule.reimburseDirection == .incoming ? "bij geld erin" : "bij geld eruit"
+            let now = tx.amount.cents > 0 ? "binnenkomt" : "eruit gaat"
+            s.warnings.append("Regel '\(rule.name)' verrekent met spaar alleen \(chosen); hier gaat het om geld dat "
+                              + "\(now), dus zonder verrekenen en zonder pot voorgesteld. Kijk na of dat klopt.")
+        }
+
         if let label = s.targetItemLabel {
             let year = tx.day.year
             if !years.contains(year) {

@@ -327,6 +327,36 @@ public enum RuleOrigin: String, Codable, Sendable, CaseIterable, DatabaseValueCo
     case handmatig, geleerd
 }
 
+/// In welke richting een regel "verrekenen met spaar" (en de pot daarvan) voorstelt.
+/// In de andere richting stelt dezelfde regel alleen de post, de omschrijving en de tags voor.
+public enum ReimburseDirection: String, Codable, Sendable, CaseIterable, DatabaseValueConvertible {
+    /// Alleen bij geld erin (bijschrijving, bedrag positief).
+    case incoming = "erin"
+    /// Alleen bij geld eruit (afschrijving, bedrag negatief).
+    case outgoing = "eruit"
+    /// Bij beide richtingen.
+    case both = "beide"
+
+    /// De richting van één bedrag: positief = erin, anders eruit.
+    public static func of(_ amount: Money) -> ReimburseDirection {
+        amount.cents > 0 ? .incoming : .outgoing
+    }
+
+    /// Geldt verrekenen in deze richting voor dit bedrag?
+    public func applies(to amount: Money) -> Bool {
+        self == .both || self == Self.of(amount)
+    }
+
+    /// Nederlandse tekst voor het scherm, bv. "geld erin".
+    public var title: String {
+        switch self {
+        case .incoming: return "geld erin"
+        case .outgoing: return "geld eruit"
+        case .both: return "beide"
+        }
+    }
+}
+
 /// Een categorisatieregel. Alle ingevulde voorwaarden moeten kloppen (EN).
 /// Tekstvergelijkingen zijn hoofdletterongevoelig en negeren accenten.
 public struct Rule: Codable, Identifiable, Equatable, Sendable, FetchableRecord, MutablePersistableRecord {
@@ -355,6 +385,8 @@ public struct Rule: Codable, Identifiable, Equatable, Sendable, FetchableRecord,
     /// Tag-id's, gescheiden door komma's.
     public var tagIds: String
     public var reimburse: Bool
+    /// In welke richting `reimburse` en een pot gelden; in de andere richting stelt de regel ze niet voor.
+    public var reimburseDirection: ReimburseDirection
 
     public var hitCount: Int
     public var lastUsed: Date?
@@ -365,15 +397,23 @@ public struct Rule: Codable, Identifiable, Equatable, Sendable, FetchableRecord,
                 counterpartyContains: String? = nil, counterpartyIban: String? = nil,
                 descriptionContains: String? = nil, amount: Money? = nil,
                 targetItemLabel: String? = nil, targetPotId: Int64? = nil, entryLabel: String? = nil,
-                tagIds: String = "", reimburse: Bool = false, hitCount: Int = 0, lastUsed: Date? = nil) {
+                tagIds: String = "", reimburse: Bool = false, reimburseDirection: ReimburseDirection = .both,
+                hitCount: Int = 0, lastUsed: Date? = nil) {
         self.id = id; self.name = name; self.priority = priority; self.enabled = enabled
         self.origin = origin; self.accountId = accountId
         self.counterpartyContains = counterpartyContains; self.counterpartyIban = counterpartyIban
         self.descriptionContains = descriptionContains; self.amount = amount
         self.targetItemLabel = targetItemLabel; self.targetPotId = targetPotId; self.entryLabel = entryLabel
-        self.tagIds = tagIds; self.reimburse = reimburse; self.hitCount = hitCount; self.lastUsed = lastUsed
+        self.tagIds = tagIds; self.reimburse = reimburse; self.reimburseDirection = reimburseDirection
+        self.hitCount = hitCount; self.lastUsed = lastUsed
     }
     public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
+
+    /// Gelden verrekenen met spaar en de pot van deze regel voor dit bedrag? Alleen relevant als `reimburse` aan
+    /// staat; zonder verrekenen geldt de pot (bv. op een spaarrekening) altijd.
+    public func reimburseApplies(to amount: Money) -> Bool {
+        !reimburse || reimburseDirection.applies(to: amount)
+    }
 
     public var tagIdList: [Int64] {
         get { tagIds.split(separator: ",").compactMap { Int64($0) } }

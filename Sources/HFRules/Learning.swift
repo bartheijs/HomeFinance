@@ -55,8 +55,12 @@ extension RuleEngine {
 
         let itemLabel = RuleMatcher.filled(correction.itemLabel)
         let chosenLabel = RuleMatcher.filled(correction.entryLabel)
+        // Zoals de winnende regel voor déze richting voorstelt: in de andere richting dan waarin verrekenen met
+        // spaar gekozen is, zonder verrekenen en zonder pot.
         let sameAsProposal: Bool = {
-            guard let rule = best?.rule else { return false }
+            guard let winner = best?.rule else { return false }
+            var rule = winner
+            if !rule.reimburseApplies(to: tx.amount) { rule.reimburse = false; rule.targetPotId = nil }
             return TextNormalizer.normalize(rule.targetItemLabel ?? "") == TextNormalizer.normalize(itemLabel ?? "")
                 && rule.targetPotId == correction.potId
                 && Set(rule.tagIdList) == Set(correction.tagIds)
@@ -106,13 +110,12 @@ extension RuleEngine {
         let defaultLabel = LabelCleaner.cleanLabel(counterparty: tx.counterpartyName, description: tx.descriptionText)
         var rule = existing ?? party.newRule(name: defaultLabel.isEmpty ? "Geleerde regel" : defaultLabel)
         rule.targetItemLabel = itemLabel
-        rule.targetPotId = correction.potId
         rule.entryLabel = chosenLabel.flatMap {
             TextNormalizer.normalize($0) == TextNormalizer.normalize(defaultLabel) ? nil : $0
         }
         rule.tagIdList = correction.tagIds
-        rule.reimburse = correction.reimburse
         rule.amount = desiredAmount
+        Self.learnReimburse(into: &rule, from: correction)
         // Een andere regel won tot nu toe: zet de geleerde regel ervoor, anders heeft leren geen effect.
         if let winner = best?.rule, winner.id != rule.id, winner.priority <= rule.priority {
             rule.priority = winner.priority - 1
@@ -132,9 +135,37 @@ extension RuleEngine {
             target = "pot '\(name ?? String(potId))'"
         }
         let amountText = rule.amount.map { " (bedrag \($0.formatted()))" } ?? ""
+        let reimburseText = rule.reimburse ? ", verrekenen met spaar bij \(rule.reimburseDirection.title)" : ""
         let verb = existing == nil ? "Regel geleerd" : "Regel bijgewerkt"
         return LearnResult(outcome: existing == nil ? .created : .updated, rule: rule, previousRule: existing,
-                           usedRuleId: nil, message: "\(verb): '\(rule.name)' → \(target)\(amountText)")
+                           usedRuleId: nil,
+                           message: "\(verb): '\(rule.name)' → \(target)\(amountText)\(reimburseText)")
+    }
+
+    /// Verrekenen met spaar, de pot en de richting daarvan leren. Verrekenen geldt alleen in de richting
+    /// (geld erin of eruit) waarin de gebruiker het koos:
+    /// - verrekenen gekozen bij een regel die het nog niet had → alleen voor de richting van deze transactie;
+    /// - verrekenen gekozen in de andere richting dan waarin de regel het al deed → voortaan beide richtingen;
+    /// - géén verrekenen in de andere richting → verrekenen, pot en richting van de regel blijven zoals ze waren;
+    /// - géén verrekenen bij een regel die het in beide richtingen deed → alleen nog de andere richting;
+    /// - géén verrekenen in de richting van de regel → verrekenen uit.
+    static func learnReimburse(into rule: inout Rule, from correction: Correction) {
+        let amount = correction.bankTransaction.amount
+        let here = ReimburseDirection.of(amount)
+        let had = rule.reimburse
+        let otherDirection = had && !rule.reimburseDirection.applies(to: amount)
+        if correction.reimburse {
+            rule.reimburse = true
+            rule.targetPotId = correction.potId
+            rule.reimburseDirection = !had ? here : (otherDirection ? .both : rule.reimburseDirection)
+        } else if otherDirection {
+            // Deze richting hoort niet bij het verrekenen van de regel: daar niets aan veranderen.
+        } else if had && rule.reimburseDirection == .both {
+            rule.reimburseDirection = here == .incoming ? .outgoing : .incoming
+        } else {
+            rule.reimburse = false
+            rule.targetPotId = correction.potId
+        }
     }
 
     /// Maakt het leren ongedaan: een gemaakte regel wordt verwijderd, een aangepaste regel teruggezet.

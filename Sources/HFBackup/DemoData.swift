@@ -185,7 +185,8 @@ public enum DemoData {
         for (name, _, pot, _, _, tag) in DemoPlan.reimbursables {
             rules.append(Rule(name: name, priority: 50, origin: .geleerd, accountId: checkingId,
                               counterpartyContains: name, targetPotId: potIds[pot],
-                              tagIds: tag.flatMap { tagIds[$0] }.map { String($0) } ?? "", reimburse: true))
+                              tagIds: tag.flatMap { tagIds[$0] }.map { String($0) } ?? "", reimburse: true,
+                              reimburseDirection: .outgoing))
         }
         var seenBills = Set<String>()
         for (_, _, name, _, pot, _) in DemoPlan.annualBills where seenBills.insert(name).inserted {

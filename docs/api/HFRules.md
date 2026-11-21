@@ -78,6 +78,12 @@ voorwaarden (`accountId` telt mee) → laagste id.
   **dag van de transactie**. Bestaat het jaar of de post niet, dan is hij nil en staat er een melding in `warnings`
   ("Het jaar 2028 bestaat nog niet; …", "De post 'X' bestaat niet in 2027."). `targetItemLabel == nil` = divers.
 - `label`: `entryLabel` van de regel, anders de opgeschoonde tegenpartij, anders "Onbekend".
+- **Richting van verrekenen** (`Rule.reimburseDirection`, `.incoming` "erin" / `.outgoing` "eruit" / `.both`
+  "beide"): heeft de regel `reimburse` en past de richting niet bij het bedrag van de transactie
+  (`rule.reimburseApplies(to:) == false`), dan zijn `reimburse` false en `potId` nil, is `confidence` `.laag`
+  en staat er een melding in `warnings` ("Regel 'X' verrekent met spaar alleen bij geld erin; …"). Post,
+  omschrijving en tags blijven. Zonder `reimburse` geldt de pot altijd (bv. op de spaarrekening). Nakijken zet
+  zo'n voorstel bij de twijfelgevallen, en het wordt nooit automatisch geboekt (er is een melding).
 
 ## `RuleMatcher`
 
@@ -114,7 +120,28 @@ rekenwerk (handig voor lijsten). `RuleMatcher.match(rule, transaction, ignoreEna
 5. Won er tot nu toe een **andere** regel, dan krijgt de geleerde regel een priority net vóór die regel, zodat
    de correctie de volgende keer effect heeft.
 
+6. **Verrekenen met spaar en de richting** (`learnReimburse`): verrekenen geldt alleen in de richting (geld
+   erin = bedrag positief, geld eruit = negatief) waarin de gebruiker het koos.
+   - Verrekenen gekozen bij een regel die het nog niet had → richting van deze transactie.
+   - Verrekenen gekozen in de andere richting dan waarin de regel het al deed → `.both`.
+   - Géén verrekenen in de andere richting → verrekenen, pot en richting blijven; alleen post, omschrijving,
+     tags en bedrag worden geleerd.
+   - Géén verrekenen bij een regel met `.both` → alleen nog de andere richting.
+   - Géén verrekenen in de richting van de regel → verrekenen uit.
+   "Gelijk aan het voorstel" (stap 2) vergelijkt met wat de regel voor déze richting voorstelt (dus zonder
+   verrekenen en pot in de andere richting). Het bericht noemt de richting: "…, verrekenen met spaar bij geld erin".
+
 `learn` telt het gebruik alleen in geval 2. Roep `recordUse` niet nog eens aan voor dezelfde boeking.
+
+Beperking: één geleerde regel per tegenpartij. Wordt dezelfde tegenpartij in de twee richtingen op een
+verschillende post geboekt, dan wint de laatste keuze voor de post; verrekenen en pot blijven wel per richting.
+
+### Migratie v9 (`v9-rule-reimburse-direction`)
+
+Nieuwe kolom `rule.reimburseDirection` (tekst, standaard "beide"). Regels met `reimburse` krijgen de richting van
+hun laatste boeking (`entry.ruleId`, `entry.reimburse = 1`, nieuwste dag en id) met verrekenen; zonder zo'n
+boeking "erin" (alleen bijschrijving) als veilige keuze. Regels zonder verrekenen houden "beide"; de richting telt
+pas als verrekenen aan gaat. In `Rule(...)` is de standaard `.both` (het oude gedrag).
 
 ## Regels voorstellen uit de Excel-historie (`HistoryRuleSeeder`)
 
