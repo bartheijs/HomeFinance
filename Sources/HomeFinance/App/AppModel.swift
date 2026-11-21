@@ -85,7 +85,27 @@ final class AppModel {
         AppDatabase.defaultURL.deletingLastPathComponent().appendingPathComponent("voorbeeld.sqlite")
     }
 
+    /// Gestart met `--database` of `--voorbeeld`: een testbestand, niet de eigen administratie. Geen back-up bij
+    /// afsluiten, geen telefoondashboard en niet wisselen naar de eigen administratie of de voorbeelddata.
+    private(set) var isTestDatabase = false
+    /// Fouten uit `read` en `perform` (en bij het openen), voor de zelftest. Leeg als alles goed ging.
+    @ObservationIgnored private(set) var failures: [String] = []
+
     static func launch() -> AppModel {
+        if LaunchOptions.isTestRun {
+            // Nooit terugvallen op de eigen administratie: bij een fout een lege database met de fout in beeld.
+            do {
+                let m = AppModel(db: try LaunchOptions.openTestDatabase(), isDemo: false)
+                m.isTestDatabase = true
+                return m
+            } catch {
+                let m = AppModel(db: try! AppDatabase.inMemory(), isDemo: false)
+                m.isTestDatabase = true
+                m.failures.append("openen: \(error.localizedDescription)")
+                m.errorMessage = "De testdatabase kon niet geopend worden: \(error.localizedDescription)"
+                return m
+            }
+        }
         let wantsDemo = UserDefaults.standard.bool(forKey: "toonVoorbeelddata")
         do {
             if wantsDemo {
@@ -101,6 +121,7 @@ final class AppModel {
     }
 
     func switchToDemo() {
+        guard !isTestDatabase else { return }
         perform {
             let demo = try DemoSupport.openDemo(at: Self.demoURL)
             UserDefaults.standard.set(true, forKey: "toonVoorbeelddata")
@@ -109,6 +130,7 @@ final class AppModel {
     }
 
     func switchToOwnData() {
+        guard !isTestDatabase else { return }
         perform {
             let own = try AppDatabase.open(at: AppDatabase.defaultURL)
             UserDefaults.standard.set(false, forKey: "toonVoorbeelddata")
@@ -155,7 +177,7 @@ final class AppModel {
             Task { @MainActor in
                 guard let self else { return }
                 self.revision += 1
-                PublishSupport.schedule(self)
+                if !self.isTestDatabase { PublishSupport.schedule(self) }
             }
         })
     }
@@ -170,6 +192,7 @@ final class AppModel {
     /// Lezen met een terugvalwaarde; een fout komt in beeld.
     func read<T>(_ fallback: T, _ block: (Database) throws -> T) -> T {
         do { return try db.read(block) } catch {
+            failures.append("read (\(T.self)): \(error.localizedDescription)")
             errorMessage = error.localizedDescription
             return fallback
         }
@@ -183,13 +206,14 @@ final class AppModel {
             if let success { toast = success }
             return true
         } catch {
+            failures.append("perform: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
             return false
         }
     }
 
     func onQuit() {
-        guard !isDemo else { return }
+        guard !isDemo, !isTestDatabase else { return }
         BackupSupport.backupOnQuitIfWanted(db: db)
         PublishSupport.publishNow(self)
     }

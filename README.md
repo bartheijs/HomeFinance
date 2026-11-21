@@ -80,5 +80,46 @@ swift run HomeFinance --snapshot /tmp/snap   # elk scherm als afbeelding, met vo
 open Package.swift                           # het project openen in Xcode
 ```
 
+### Een testronde na elke wijziging
+
+Groene tests zijn niet genoeg: de app moet ook echt starten en met je eigen gegevens hetzelfde rekenen als
+de vorige versie. Daarvoor is er één script:
+
+```bash
+scripts/testronde.sh --uit ~/Desktop/testronde
+```
+
+Dat doet vier dingen en schrijft alles naar de map achter `--uit` (nooit in deze repo):
+
+1. **Bouwen** (`bouwen.log`).
+2. **Alle tests** (`swift-test.log`).
+3. **Zelftest**: de echte app start met voorbeelddata in een tijdelijk bestand, opent het gewone venster en
+   klikt zelf alle schermen in de zijbalk langs. Per controle staat er OK of FOUT in `zelftest-voorbeeld.log`:
+   verscheen de zijbalk met alle regels, verscheen elk scherm binnen 5 seconden, kwam er geen foutmelding.
+   Na hooguit 90 seconden stopt de app altijd.
+4. **Kerncijfers**: saldi per rekening, het saldo van elke pot, "besteedbaar nu", "nog te besteden deze maand"
+   en een paar aantallen, in `kerncijfers-voorbeeld.json`.
+
+Met een **kopie** van je administratie (nooit het origineel; dat weigert het script) doet hij stap 3 en 4 ook op
+je eigen gegevens. Geef de kerncijfers van de vorige ronde mee als basis, dan zie je precies wat er veranderd is:
+
+```bash
+scripts/testronde.sh --uit ~/Desktop/testronde-nieuw --database ~/Desktop/kopie/homefinance.sqlite \
+  --basis ~/Desktop/testronde-vorige/kerncijfers-kopie.json
+```
+
+Elk verschil staat er als `sleutel: oud → nieuw`, of "geen verschillen". De peildag is die van de basis, zodat
+een andere datum geen verschillen geeft. Het script eindigt met **TOTAAL: GESLAAGD** of **TOTAAL: NIET
+GESLAAGD** (ook bij verschillen: die beoordeel je zelf; klopt de nieuwe uitkomst, dan is die de volgende basis).
+
+De losse startopties, voor wie ze zelf wil gebruiken:
+
+| Optie | Doet |
+|---|---|
+| `--database <pad>` | Opent dat bestand in plaats van je administratie. Geweigerd in `~/Library/Application Support/HomeFinance/`. Geen back-up bij afsluiten, geen telefoondashboard. |
+| `--voorbeeld` | Voorbeelddata in een nieuw tijdelijk bestand (met `--database`: in dat bestand, als het nog leeg is). |
+| `--zelftest <log>` | De zelftest hierboven; exitcode 0 = alles OK, 1 = iets FOUT. |
+| `--kerncijfers <json> [--dag jjjj-mm-dd]` | Alleen de kerncijfers, zonder venster. Peildag standaard vandaag. |
+
 Techniek: Swift 6, SwiftUI, Swift Charts, SQLite via [GRDB](https://github.com/groue/GRDB.swift).
 Werkafspraken voor AI-agents staan in `CLAUDE.md`.

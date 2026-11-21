@@ -47,15 +47,15 @@ struct RootView: View {
 
     @ViewBuilder private var detail: some View {
         switch model.selection {
-        case .dashboard: DashboardScreen()
-        case .review: ReviewScreen()
-        case .grid: GridScreen()
-        case .transactions: TransactionsScreen()
-        case .pots: PotsScreen()
-        case .reimbursements: ReimbursementsScreen()
-        case .reports: ReportsScreen()
-        case .rules: RulesScreen()
-        case .settings: SettingsScreen()
+        case .dashboard: DashboardScreen().onAppear { SelfTest.screenAppeared(.dashboard) }
+        case .review: ReviewScreen().onAppear { SelfTest.screenAppeared(.review) }
+        case .grid: GridScreen().onAppear { SelfTest.screenAppeared(.grid) }
+        case .transactions: TransactionsScreen().onAppear { SelfTest.screenAppeared(.transactions) }
+        case .pots: PotsScreen().onAppear { SelfTest.screenAppeared(.pots) }
+        case .reimbursements: ReimbursementsScreen().onAppear { SelfTest.screenAppeared(.reimbursements) }
+        case .reports: ReportsScreen().onAppear { SelfTest.screenAppeared(.reports) }
+        case .rules: RulesScreen().onAppear { SelfTest.screenAppeared(.rules) }
+        case .settings: SettingsScreen().onAppear { SelfTest.screenAppeared(.settings) }
         }
     }
 }
@@ -84,6 +84,7 @@ private struct Sidebar: View {
             Label(s.title, systemImage: s.icon)
                 .badge(SidebarBadges.count(for: s, model: model))
                 .tag(s)
+                .onAppear { SelfTest.sidebarRowAppeared(s) }
         }
     }
 }

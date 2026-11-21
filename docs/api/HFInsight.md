@@ -447,6 +447,19 @@ print(balance.plan.surplus, balance.hasScenario ? balance.scenario.surplus : nil
   `openSettlement(tagId:tagName:amount:count:)` per tag waarvoor nog iets terug te storten is;
 - `recentEntries`, `monthIncome` / `monthExpenses` tegen `planIncome` / `planExpenses`, `topTags`.
 
+## Kerncijfers (testronde)
+
+`keyFigures(db, today:)` geeft `KeyFigures` (`day`, `values: [String: String]`, `json()`): een platte lijst om
+twee versies van de app op dezelfde gegevens te vergelijken. Rekent niet zelf; bedragen komen uit
+`accountOverview`, `balance`, `potOverview`, `spendable` en `openReimbursements`.
+
+- Bedragen als `"-1234.56"`, aantallen als `"12"`; id's met vier cijfers (`rekening.0001.saldo`).
+- Sleutels: `rekening.<id>.naam|soort|gearchiveerd|saldo|laatsteImport.dag|laatsteImport.eindsaldo|laatsteImport.saldoVolgensApp`,
+  `pot.<id>.naam|rekening|gearchiveerd|saldo`, `besteedbaarNu`, `nogTeBestedenDezeMaand` ("geen begrotingsjaar"
+  als het jaar ontbreekt), `boekingen.aantal`, `banktransacties.<status>`, `verrekeningen.openNetto|openAantal`,
+  `afgevinkt.<jjjj-mm>`, `peildag`, `kerncijfers.versie` (`Insight.keyFiguresVersion`).
+- `json()` is stabiel: sleutels op alfabet, één per regel.
+
 ## Gekozen uitleg
 
 - Boekingen met een datum ná de peildag tellen niet mee in saldo, besteedbaar en potsaldi; het

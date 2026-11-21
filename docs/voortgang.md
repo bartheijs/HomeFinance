@@ -4,6 +4,10 @@
 
 ## Terug naar de code van 16 november (21 november 2026)
 
+- **Testvangnet (ronde 1)**: `scripts/testronde.sh`. De orchestrator draait het na elke wens op een kopie van de
+  echte administratie. De basis met kerncijfers staat buiten de repo, bij de gebruiker lokaal in
+  `~/Library/Application Support/HomeFinance/testronde/` (eerste basis: `basis-ronde1-5a8410b.json`).
+
 - Na installatie van `16b21a1` werkte de app niet goed bij de gebruiker (lege zijbalk, startpagina zonder kop).
   Oorzaak niet gevonden. Op verzoek van de gebruiker is de **code teruggezet naar `9cba8b0`** (16 november),
   de versie waarin hij al zijn werk deed. De documentatie (deze voortgang, checklist, tijdlijn) blijft.
@@ -16,6 +20,34 @@
   `wip/diagnose-zijbalk` (startoptie `--database`, logging).
 - Let op: de gebruiker meldde dat ook de versie van 16 november soms dezelfde lege zijbalk toont. Na elke
   bouwronde dit expliciet laten controleren.
+
+## Testvangnet, ronde 1 (21 november 2026, nog niet gecommit)
+
+Twee gaten gedicht: de echte app werd nooit gestart, en niemand controleerde of een nieuwe versie met de echte
+gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een testronde na elke wijziging").
+
+- **`scripts/testronde.sh --uit <map>`**: bouwt, draait `swift test`, start de echte app met voorbeelddata voor de
+  zelftest en schrijft de kerncijfers. Eindigt met TOTAAL: GESLAAGD of NIET GESLAAGD.
+- **Op een kopie** (alleen de orchestrator draait dit, nooit een bouwsessie):
+  `scripts/testronde.sh --uit <nieuwe map> --database <kopie.sqlite> --basis <vorige map>/kerncijfers-kopie.json`.
+  Het script werkt op eigen kopieën in de uitvoermap; het opgegeven bestand verandert niet. Verschillen met de
+  basis staan per veld als `oud → nieuw` in `verschillen.txt`. De eerste keer zonder `--basis`: die ronde levert
+  de basis.
+- **Zelftest** (`--zelftest <log>`, `App/SelfTest.swift`): opent de echte `NavigationSplitView` (niet de
+  snapshot-zijbalk), kiest elk scherm via `model.selection` en logt per controle OK/FOUT: zijbalk met 9 regels
+  (in SwiftUI én als getekende rijen in AppKit, ook nog na de ronde), elk scherm binnen 5 s, geen
+  `errorMessage`, geen fouten in `model.read`/`perform`. Harde limiet 90 s op een eigen thread.
+  Aangetoond: met het Regels-scherm tijdelijk weggehaald faalt hij (exitcode 1, "FOUT scherm rules").
+- **Kerncijfers** (`--kerncijfers <json> [--dag]`, `Insight.keyFigures`): platte, gesorteerde lijst met saldo per
+  rekening (en saldo volgens de app tegen het eindsaldo van de laatste import), saldo per pot, besteedbaar nu,
+  nog te besteden deze maand, aantallen boekingen en banktransacties per status, open verrekeningen netto en
+  afgevinkte posten per maand. 8 tests.
+- **Gevonden bij het bouwen:** met een bestandspad op de opdrachtregel (zoals `--database <pad>`) opende de app
+  géén venster: AppKit zag het pad als document om te openen. Bij testruns staat dat nu uit
+  (`NSTreatUnknownArgumentsAsOpen`). Waarschijnlijk niet de oorzaak van de lege zijbalk bij de gebruiker (die start
+  zonder opties), maar wel een verklaring voor vreemd gedrag bij eerder diagnosewerk met `--database`.
+- Overgenomen van `wip/diagnose-zijbalk`: alleen het idee van `--database`/`--voorbeeld` (opnieuw geschreven,
+  met weigering van de echte map). De `--log`/hartslag-diagnose is niet overgenomen.
 
 ## Stand op 20 november 2026
 
@@ -120,6 +152,17 @@
    stuurde; dat kwam zo onterecht in een verrekening. Leer verrekenen alleen voor dezelfde richting (in of uit)
    als waarin de gebruiker het koos, of vraag het bij de andere richting. Bij de gebruiker zijn drie regels met
    de hand aangepast (verrekenen uit).
+6g. **Startbedrag op een verrekentag, en meetellen in "nog te besteden"** (wens van 21 november). Voor tags
+   met verrekenen (nu alleen Tanken): een beginbedrag op de startdatum voor wat er uit de periode vóór de app
+   nog openstond; telt mee in het openstaande bedrag van de tag. Nieuw: per tag een instelling "telt mee in
+   nog te besteden". Staat die aan, dan telt het openstaande bedrag (geld dat nog terugkomt) mee in "nog te
+   besteden deze maand" en "besteedbaar". Standaard uit. Rekenen in `HFInsight`, instelling via `TagService`;
+   waarschijnlijk een nieuwe migratie (bestaande niet aanpassen). Ook op het Dashboard en de telefoon tonen.
+6h. **Tags alleen op de betaalrekening, en filteren op tag** (wens van 21 november). Een tag mag alleen
+   boekingen van de betaalrekening hebben: niet kunnen kiezen bij boekingen op een spaarrekening (of weigeren
+   in `HFBudget`). Bij Instellingen › Tags wordt "n boekingen" aanklikbaar: opent Transacties met de
+   betaalrekening en het filter op die tag. (Aanleiding: een tag met één boeking op spaar was in Transacties
+   onvindbaar omdat daar de betaalrekening geselecteerd stond.)
 6d. **Versie zichtbaar in Instellingen › Over** (wens van 21 november). Nu staat er altijd "Versie 1.0 (1)", zodat
    de gebruiker niet ziet welke build draait. Laat `scripts/run.sh` bij het bouwen de korte commit-hash en de
    bouwdatum in de app zetten (bijvoorbeeld in `Info.plist`) en toon die bij Over, bv. "gebouwd 21-11-2026,

@@ -10,7 +10,14 @@ enum Main {
         if let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count {
             Snapshot.run(outputDirectory: URL(fileURLWithPath: args[i + 1]),
                          only: args.firstIndex(of: "--only").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil })
+        } else if let output = LaunchOptions.keyFiguresURL {
+            KeyFiguresCommand.run(output: output)
         } else {
+            if LaunchOptions.isTestRun || SelfTest.isOnNonisolated {
+                // Anders ziet AppKit de paden na --database en --zelftest als documenten om te openen en opent
+                // het geen gewoon venster.
+                UserDefaults.standard.register(defaults: ["NSTreatUnknownArgumentsAsOpen": "NO"])
+            }
             HomeFinanceApp.main()
         }
     }
@@ -56,6 +63,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Zonder app-bundel (swift run) is dit nodig om een gewoon venster met menubalk te krijgen.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        MainActor.assumeIsolated {
+            SelfTest.start { [weak self] in self?.model }
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
