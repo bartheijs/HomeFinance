@@ -44,6 +44,8 @@ struct PotsScreen: View {
                               today: model.today, onSaved: { _ in }, onDistributions: { self.sheet = .distributions })
             case .distributions:
                 PotsDistributionsSheet(focus: distributionFocus)
+            case .annual:
+                PotsAnnualSheet()
             case .openings(let id):
                 PotsOpeningSheet(accountId: id, accountName: data?.accountName(id) ?? "de spaarrekening")
             case .move(let pot):
@@ -103,6 +105,8 @@ struct PotsScreen: View {
             if !data.savingsAccounts.isEmpty {
                 Button("Vaste stortingen") { sheet = .distributions }
                     .help("Wat je regelmatig van betaal naar spaar overmaakt, en hoe dat over de potten verdeeld wordt.")
+                Button("Nieuw jaarbedrag…") { sheet = .annual }
+                    .help("Voor een rekening die één keer per jaar komt: maakt in één keer het potje, de regel in de vaste storting en de post in je begroting.")
                 Button { sheet = .new } label: { Label("Nieuwe pot…", systemImage: "plus") }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut("n", modifiers: .command)

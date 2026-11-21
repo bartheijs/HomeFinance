@@ -485,3 +485,20 @@ handmatige boeking tegenover staat.
 - Verplaatsen tussen potten koppelt de twee boekingen niet via `counterEntryId`; dat veld is voor
   overboekingen tussen twee eigen rekeningen.
 - Een developer reviewt deze module vóór gebruik met echte gegevens.
+
+## Hulpje "Nieuw jaarbedrag" (`AnnualAmountService`, UX-stap B3)
+
+| Functie | Doet |
+|---|---|
+| `monthly(for:)` | Jaarbedrag ÷ 12, half naar boven afgerond op centen (€ 100 → € 8,33) |
+| `forecastDay(month:today:)` | De 1e van die maand: dit jaar als de maand nog komt (of nu is), anders volgend jaar |
+| `preview(db, request)` | `AnnualAmountPreview`, schrijft niets: `monthly`, potje en storting (nieuw of bestaand), totaal vóór en na, de post die meeloopt (of `itemNote` waarom niet), `addsReserveLine`, `forecastDay`, en de zinnen `summary`, `steps` en `afterwards` |
+| `apply(db, request)` | Alles of niets: maakt of kiest het potje (reservering), zet in de storting het bedrag van dat potje + `monthly` (`setLine`), maakt of koppelt de post als de storting in dat jaar nog geen post heeft, en maakt eventueel een verwachting van − het jaarbedrag. `AnnualAmountResult` met de id's |
+
+`AnnualAmountRequest`: `name`, `yearlyAmount` (> 0), `pot` (`.existing(id)` / `.new(name:)`), `distribution`
+(`.existing(id)` / `.new(name:accountId:)`; een nieuwe storting krijgt de eerste betaalrekening als herkomst), `item`
+(`.existing(id)` / `.new(label:)` / nil), `year`, `forecastMonth` (nil = geen verwachting) en `today`.
+
+Is de post RESERVERINGEN en heeft het jaar RES-regels, dan verhoogt het hulpje ook de RES-regel van het potje (of
+maakt er een), omdat het plan van RESERVERINGEN in het maandgrid de som van de RES-regels is. Zonder RES-regels
+gebeurt dat niet.

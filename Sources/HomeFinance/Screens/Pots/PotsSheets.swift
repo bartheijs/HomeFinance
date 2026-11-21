@@ -10,6 +10,8 @@ enum PotsSheet: Identifiable {
     case move(PotSummary)
     case distributions
     case openings(Int64)
+    /// Hulpje "Nieuw jaarbedrag" (UX-stap B3).
+    case annual
 
     var id: String {
         switch self {
@@ -18,6 +20,7 @@ enum PotsSheet: Identifiable {
         case .move(let pot): "move-\(pot.id)"
         case .distributions: "distributions"
         case .openings(let id): "openings-\(id)"
+        case .annual: "annual"
         }
     }
 }
