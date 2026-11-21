@@ -984,7 +984,7 @@ final class ReviewStore {
 
     func openSample(_ model: AppModel) {
         model.perform {
-            let url = try DemoSupport.writeSampleCSV(today: model.today)
+            let url = try DemoSupport.writeSampleArchive(today: model.today)
             open(url, model)
         }
     }

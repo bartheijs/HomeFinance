@@ -323,13 +323,37 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
    - Testronde met een kopie: geen nieuwe kerncijfers; verwacht geen verschillen.
    Na de installatie zet de orchestrator het telefoondashboard samen met de gebruiker aan en laat het op een
    echte iPhone bekijken.
-6m. **Voorbeelddata versie 3, om te demonstreren** (wens van 21 november; als laatste, na 6l). De gebruiker wil
-   de app kunnen laten zien zonder zijn eigen situatie. Een verzonnen gezin waarmee alle onderdelen te tonen
-   zijn: import met een zip om na te kijken (inclusief een losse overboeking naar spaar en een verrekening),
-   potten per kind, spaardoel uit onderdelen, vaste stortingen, een paar regels gemaakt met "Onthoud als
-   regel", Tanken met startbedrag, het telefoondashboard. Neem uit `70cab3b` (versie 2) over wat bruikbaar is.
-   Alles verzonnen (IBAN's als NL00TEST…). Een oudere voorbeelddatabase wordt vanzelf vernieuwd; de eigen
-   administratie nooit.
+6m. **Voorbeelddata versie 3, om te demonstreren** — klaar (21 november), nog niet geïnstalleerd of gecommit.
+   Een verzonnen gezin waarmee alles van 6a–6l te laten zien is; de demo-route staat in de README
+   ("Demonstreren"), de inhoud in `docs/api/HFBackup.md`.
+   - `DemoData.version` = 3. `DemoData.openDemo` (uit `70cab3b`) vult een voorbeeldbestand van een andere of
+     onbekende versie opnieuw; weigert de eigen administratie vóór er iets geopend wordt (ook via koppeling).
+   - Voorbeeldmodus: de laatste 10 dagen van **beide** rekeningen ontbreken; Nakijken heeft de knop
+     "Voorbeeldbestand importeren" (was: "Gebruik het voorbeeldbestand", alleen betaal-CSV). Die schrijft een zip
+     zoals de bank hem levert (`DemoData.writeSampleArchive`) en opent hem met het gewone zip-importeren. Daarin:
+     zakgeld (verrekenen bij geld eruit, 6f), geld terug van een kind (twijfel, 6f), "Oppas zaterdag" (eigen
+     tekst, 6b), een rommelige pinnaam (6j), een losse overboeking naar spaar (6e) en de overboeking van een
+     vastgelegde, nog niet afgevinkte verrekening met spaar ("Afvinken en aanhangen").
+   - Uit versie 2 overgenomen: potten per kind (spaargeld, kleedgeld, zakgeld), "Studie en rijbewijs" met
+     onderdelen (nu met eigenaar **Kids**), rijlessen met tag per kind, kleding uit kleedgeld, vooruitblik voor de
+     rentepot. Nieuw: "Buffer gezin" met vooruitblik (verwachte wasmachine), Tanken verrekent met startbedrag en
+     "telt mee in nog te besteden" en maandelijkse terugstorting (6g), regels zoals "Onthoud als regel" ze maakt
+     (6i, 6f), pinnamen zoals de bank ze levert (6j), tags alleen op betaal (6h).
+   - Vaste stortingen: bewust **één** ("Maandelijkse reserveringen", 28 potten). Versie 2 had er vier vanaf de
+     betaalrekening; dan vraagt Nakijken bij een losse overboeking naar spaar eerst "Kies welke vaste storting"
+     in plaats van "lijkt een losse overboeking" (6e kijkt pas naar het bedrag als er één kandidaat is). Zie 6n.
+   - Telefoon (6l): na het vullen zet de app bij "Voor het gezin" Kind 1, Kind 2 en Buffer gezin aan
+     (`DemoSupport.configurePhone`, ook bij `--voorbeeld` en `--snapshot`). Het dashboard zelf blijft uit.
+   - Tests: `DemoDataTests` bijgewerkt, nieuw `DemoDataPotsTests`, `DemoDataVersion3Tests`,
+     `DemoDatabaseFileTests` (HFBackup), `DemoArchiveTests` en `DemoPhoneTests` (IntegrationTests; die hangt nu
+     ook af van HFPublish): de zip importeert foutloos, sluit aan op beide saldi en na boeken sluit elke import.
+     Testronde met voorbeelddata GESLAAGD (563 tests, zelftest 33 OK, 152 kerncijfers).
+   - Niet met de hand geprobeerd: de knop in de echte app en het vernieuwen van een bestaand voorbeeldbestand
+     (de zelftest gebruikt `--voorbeeld`, niet de voorbeeldmodus). Geen migratie, geen invloed op de eigen
+     administratie; op een kopie verwacht ik geen verschillen (niet gedraaid).
+6n. **Losse overboeking bij meer vaste stortingen** (voorstel, nog niet gepland). `DistributionService.recognize`
+   (spaarkant): passen er meer vaste stortingen op tegenrekening en geen enkele op bedrag, dan nu "kies welke";
+   beter: als het bedrag ver van álle totalen ligt, meteen "lijkt een losse overboeking".
 6d. **Versie zichtbaar in Instellingen › Over** — klaar (21 november). `scripts/run.sh` zet bij elke build de
    korte commit-hash (met een `+` als er niet-gecommitte wijzigingen waren) en de bouwdatum in `Info.plist`
    (`HFBuildCommit`, `HFBuildDate`; `CFBundleVersion` is het aantal commits). Over toont bv. "Versie 1.0 ·

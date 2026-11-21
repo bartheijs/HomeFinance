@@ -43,7 +43,7 @@ let package = Package(
         .testTarget(name: "HFHistoryTests", dependencies: ["HFHistory", "HFCore", grdb]),
         .testTarget(name: "HFPublishTests", dependencies: ["HFPublish", "HFInsight", "HFCore", grdb]),
         .testTarget(name: "IntegrationTests",
-                    dependencies: ["HFCore", "HFImport", "HFBudget", "HFRules", "HFInsight", "HFBackup", grdb]),
+                    dependencies: ["HFCore", "HFImport", "HFBudget", "HFRules", "HFInsight", "HFBackup", "HFPublish", grdb]),
     ],
     swiftLanguageModes: [.v5]
 )

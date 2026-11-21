@@ -33,6 +33,34 @@ administratie beginnen**. Je kunt later altijd wisselen via Instellingen › Ove
 4. **Maandgrid** toont je vertrouwde jaaroverzicht. **Dashboard** toont wat er te besteden is.
 5. **Afstemmen** (Instellingen › Rekeningen): vul het saldo van je bank in; het verschil moet € 0,00 zijn.
 
+## Demonstreren
+
+Wil je de app laten zien zonder je eigen gegevens? Gebruik de voorbeelddata: een verzonnen gezin (Ouder 1,
+Ouder 2, Kind 1, Kind 2) met verzonnen bedrijven en rekeningnummers. Je eigen administratie wordt daarbij niet
+geopend of veranderd.
+
+1. **Instellingen › Over › Bekijk voorbeelddata.** Voorbeelddata van een oudere versie van de app wordt
+   vanzelf vernieuwd (alleen het voorbeeldbestand, nooit je eigen administratie).
+2. **Importeren en nakijken › Voorbeeldbestand importeren.** Een zip zoals de bank hem levert, met de betaal- en
+   de spaarrekening van de laatste tien dagen. De import is foutloos en sluit op het saldo.
+3. **Nakijken** laat zien:
+   - zakgeld naar een kind, verrekend met zijn zakgeldpot (regel "Kind 1 Voorbeeld");
+   - geld dat van datzelfde kind terugkomt: twijfel, zonder verrekenen (de regel geldt alleen bij geld eruit);
+   - "Oppas zaterdag": de eigen tekst van een overboeking als omschrijving;
+   - "Frietkraam Demo": een nette naam bij een rommelige pinbetaling;
+   - "Extra voor de vakantie" aan de spaarkant: een losse overboeking, niet de vaste storting;
+   - de verrekening met spaar, herkend aan beide kanten: "Afvinken en aanhangen";
+   - "Onthoud als regel" bij een betaling zonder regel.
+4. **Potten:** per kind spaargeld, kleedgeld en zakgeld; de groep Kids met het spaardoel "Studie en rijbewijs"
+   uit onderdelen; "Buffer gezin" met een vooruitblik. Bij **Vaste stortingen** de maandelijkse reserveringen.
+5. **Dashboard:** "Nog te besteden deze maand" met "+ Komt nog terug: Tanken". Bij **Instellingen › Tags** staat
+   Tanken met een startbedrag en "Telt mee in nog te besteden".
+6. **Instellingen › Telefoon:** bij "Voor het gezin" zijn de kinderen en Buffer gezin al gekozen. Kies een map
+   om de pagina te maken.
+7. Klaar? **Instellingen › Over › Bekijk eigen administratie.**
+
+Wat je in de voorbeelddata verandert, blijft staan tot de app een nieuwere versie van de voorbeelddata heeft.
+
 ## Begrippen
 
 | Begrip | Betekenis |

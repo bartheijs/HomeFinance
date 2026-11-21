@@ -251,8 +251,8 @@ struct ReviewEmptyView: View {
                         Button("Kies bestand…", action: chooseFile).buttonStyle(.borderedProminent)
                             .keyboardShortcut("o", modifiers: .command)
                         if model.isDemo {
-                            Button("Gebruik het voorbeeldbestand") { store.openSample(model) }
-                                .help("Een verzonnen afschrift van de betaalrekening met de transacties van de laatste dagen.")
+                            Button("Voorbeeldbestand importeren") { store.openSample(model) }
+                                .help("Een verzonnen zip van de bank met de betaal- en spaarrekening van de laatste 10 dagen.")
                         }
                     }
                     .controlSize(.large).padding(.top, 8)

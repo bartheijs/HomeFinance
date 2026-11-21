@@ -170,11 +170,13 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
                 #expect(out.counterEntryId == inPot[0].id)
             }
 
-            // Elke rentebetaling is gemarkeerd met de pot; alleen de laatste staat nog open.
+            // Elke rentebetaling is gemarkeerd met de pot; alleen de laatste is nog niet afgerond: die staat open
+            // of zit in de verrekening die nog afgevinkt moet worden.
             let payments = try Entry.fetchAll(database, sql:
                 "SELECT * FROM entry WHERE budgetItemId = ? ORDER BY day", arguments: [item.id])
             #expect(payments.allSatisfy { $0.reimburse && $0.potId == pot.id && $0.accountId == summary.checkingAccountId })
-            let open = payments.filter { $0.savingsTransferId == nil }
+            let doneIds = Set(try Int64.fetchAll(database, sql: "SELECT id FROM savingsTransfer WHERE done = 1"))
+            let open = payments.filter { $0.savingsTransferId.map { !doneIds.contains($0) } ?? true }
             #expect(open.map(\.id) == Array(payments.suffix(1)).map(\.id))
             if today == testToday {
                 #expect(payments.count == 5)
@@ -185,19 +187,24 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
             let balance = try Money.fetchOne(database, sql:
                 "SELECT COALESCE(SUM(amount), 0) FROM entry WHERE accountId = ? AND potId = ?",
                 arguments: [summary.savingsAccountId, pot.id])!
-            let reimbursed = payments.filter { $0.savingsTransferId != nil }.map(\.amount).sum()
+            let reimbursed = payments.filter { $0.savingsTransferId.map(doneIds.contains) ?? false }.map(\.amount).sum()
             #expect(balance == (giftBooked ? gift : .zero) + reimbursed)
             #expect(balance >= .zero)
 
-            // Eén afgeronde spaaroverboeking per maand, elk met de rente van de maand ervoor erin.
+            // Eén afgeronde verrekening per maand op de 27e; in de laatste 10 dagen hoogstens één die nog
+            // afgevinkt moet worden.
             let transfers = try SavingsTransfer.fetchAll(database, sql: "SELECT * FROM savingsTransfer ORDER BY day")
-            #expect(Set(transfers.map(\.day.month)).count == transfers.count)
-            #expect(transfers.allSatisfy { $0.done && $0.day.day == 27 && $0.day <= cutoff })
+            let done = transfers.filter(\.done)
+            #expect(Set(done.map(\.day.month)).count == done.count)
+            #expect(done.allSatisfy { $0.day.day == 27 && $0.day <= cutoff })
+            #expect(transfers.filter { !$0.done }.allSatisfy { $0.day > cutoff && $0.day <= today })
+            #expect(transfers.filter { !$0.done }.count <= 1)
 
             // De regel herkent de tegenpartij en stelt vergoeden uit de pot voor.
             let rule = try #require(try Rule.filter(Column("name") == "Privélening").fetchOne(database))
             #expect(rule.reimburse && rule.targetPotId == pot.id && rule.targetItemLabel == "Privélening")
             #expect(rule.counterpartyContains == "Lening Familie Voorbeeld")
+            #expect(rule.reimburseDirection == .outgoing)
         }
     }
 
@@ -207,7 +214,7 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
     func settlementsHaveBankTransactionsOnBothSides(today: Day) throws {
         let (db, summary) = try seeded(today)
         try db.read { database in
-            let transfers = try SavingsTransfer.fetchAll(database, sql: "SELECT * FROM savingsTransfer ORDER BY day, id")
+            let transfers = try SavingsTransfer.fetchAll(database, sql: "SELECT * FROM savingsTransfer WHERE done = 1 ORDER BY day, id")
             for transfer in transfers {
                 #expect(transfer.done && transfer.doneAt != nil && transfer.amount > .zero)
                 let id = transfer.id!
@@ -310,7 +317,10 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
             let items = try BudgetItem.fetchAll(database)
             #expect(items.count == summary.budgetItemCount)
             let res = items.filter { $0.direction == .RES }
-            #expect(res.count == 20)
+            // 20 reserveringspotten, plus spaargeld, kleedgeld en zakgeld per kind, de buffer en het spaardoel
+            // studie en rijbewijs: alles via de ene vaste storting.
+            #expect(res.count == 28)
+            #expect(res.count == DemoPlan.reserveLines.count)
             #expect(res.allSatisfy { $0.potId != nil && $0.planAmount.isNegative })
             let total = items.filter(\.isReserveTotal)
             #expect(total.count == 1)
@@ -323,11 +333,17 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
 
             let pots = try Pot.fetchAll(database)
             #expect(pots.filter { $0.kind == .reservering }.count == 21)
-            #expect(pots.filter { $0.kind == .reservering }.map(\.monthlyAmount).sum() == -total[0].planAmount)
-            #expect(Set(pots.filter { $0.kind == .spaar }.compactMap(\.owner)) == ["Kind 1", "Kind 2", "Ouder 1", "Ouder 2"])
-            #expect(pots.filter { $0.kind == .spaar }.allSatisfy { $0.targetAmount != nil })
+            let resPots = Set(res.compactMap(\.potId))
+            #expect(pots.filter { resPots.contains($0.id!) }.map(\.monthlyAmount).sum() == -total[0].planAmount)
+            #expect(Set(pots.filter { $0.kind == .spaar }.compactMap(\.owner)) == ["Kind 1", "Kind 2", "Ouder 1", "Ouder 2", "Kids"])
+            // Spaardoelen: spaargeld per kind, de doelen per ouder, de buffer en studie en rijbewijs; kleed- en
+            // zakgeld hebben geen doel.
+            let goals = pots.filter { $0.targetAmount != nil }.map(\.name)
+            #expect(goals == ["Spaargeld Kind 1", "Spaargeld Kind 2", "Studie Ouder 1", "Nieuwe fiets Ouder 2",
+                              "Buffer gezin", "Studie en rijbewijs"])
 
-            #expect(try Tag.fetchAll(database).map(\.name) == ["Tanken", "Uit eten", "Cadeau", "Vakantie"])
+            #expect(try Tag.fetchAll(database).map(\.name) == ["Tanken", "Uit eten", "Cadeau", "Vakantie",
+                                                                "Rijbewijs Kind 1", "Rijbewijs Kind 2"])
             #expect(try Rule.fetchCount(database) > 30)
             #expect(try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM rule WHERE hitCount > 0")! > 20)
 
@@ -337,17 +353,15 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
                     SELECT COUNT(*) FROM entryTag et JOIN tag t ON t.id = et.tagId WHERE t.name = ?
                     """, arguments: [tag])! >= 3)
             }
-            // Vergoedingen: deels in een afgeronde spaaroverboeking, deels open.
+            // Vergoedingen: in afgeronde verrekeningen, en de laatste in één die nog afgevinkt moet worden.
             let transfers = try SavingsTransfer.fetchAll(database)
             #expect(!transfers.isEmpty)
-            #expect(transfers.allSatisfy { $0.done })
+            #expect(transfers.filter { !$0.done }.count == 1)
             for transfer in transfers {
                 let covered = try Money.fetchOne(database, sql:
                     "SELECT COALESCE(SUM(amount), 0) FROM entry WHERE savingsTransferId = ?", arguments: [transfer.id])!
                 #expect(-covered == transfer.amount)
             }
-            #expect(try Int.fetchOne(database, sql:
-                "SELECT COUNT(*) FROM entry WHERE reimburse AND savingsTransferId IS NULL")! >= 1)
             #expect(try Int.fetchOne(database, sql:
                 "SELECT COUNT(*) FROM entry WHERE reimburse AND (amount >= 0 OR potId IS NULL)") == 0)
 
@@ -358,7 +372,7 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
             for entry in reserveEntries {
                 let counter = try Entry.fetchAll(database, sql:
                     "SELECT * FROM entry WHERE counterEntryId = ?", arguments: [entry.id])
-                #expect(counter.count == 20)
+                #expect(counter.count == 28)
                 #expect(counter.map(\.amount).sum() == -entry.amount)
                 #expect(counter.allSatisfy { $0.accountId == summary.savingsAccountId && $0.potId != nil })
                 #expect(counter.contains { $0.id == entry.counterEntryId })
@@ -459,5 +473,289 @@ func seeded(_ today: Day, leaveRecentForImport: Bool = false) throws -> (AppData
         #expect(first == (0..<20).map { _ in b.int(1...1_000) })
         #expect(first != (0..<20).map { _ in c.int(1...1_000) })
         #expect(first.allSatisfy { (1...1_000).contains($0) })
+    }
+}
+
+/// Wat de gebruiker zelf ook heeft ingericht: potten per kind, een spaardoel uit onderdelen met een tag per kind,
+/// vaste stortingen en de pot voor de rente op de privélening met een vooruitblik.
+@Suite struct DemoDataPotsTests {
+    @Test(arguments: demoDays)
+    func everyChildHasSavingsClothingAndPocketMoney(today: Day) throws {
+        let (db, summary) = try seeded(today)
+        try db.read { database in
+            for child in ["Kind 1", "Kind 2"] {
+                let pots = try Pot.filter(Column("owner") == child).order(Column("sortOrder")).fetchAll(database)
+                #expect(pots.map(\.name) == ["Spaargeld \(child)", "Kleedgeld \(child)", "Zakgeld \(child)"])
+                #expect(pots.allSatisfy { $0.kind == .spaar && $0.accountId == summary.savingsAccountId && $0.monthlyAmount > .zero })
+                // Zakgeld en kleding van dit kind gaan van de betaalrekening en worden vergoed uit zijn eigen pot.
+                for (label, pot) in [("Zakgeld \(child)", pots[2]), ("Kleding \(child)", pots[1])] {
+                    let entries = try Entry.filter(Column("label") == label).fetchAll(database)
+                    #expect(entries.allSatisfy { $0.accountId == summary.checkingAccountId && $0.reimburse
+                                                 && $0.potId == pot.id && $0.amount.isNegative && $0.budgetItemId == nil })
+                    if today >= Day(year: today.year, month: 3, day: 15)! { #expect(!entries.isEmpty, "\(label)") }
+                }
+            }
+        }
+    }
+
+    @Test(arguments: demoDays)
+    func goalIsBuiltFromPartsWithATagPerChild(today: Day) throws {
+        let (db, summary) = try seeded(today)
+        try db.read { database in
+            let pot = try #require(try Pot.filter(Column("name") == "Studie en rijbewijs").fetchOne(database))
+            let parts = try GoalPart.filter(Column("potId") == pot.id).order(Column("sortOrder")).fetchAll(database)
+            #expect(parts.count == 4)
+            #expect(parts.map(\.label).contains("Rijlessen Kind 1") && parts.map(\.label).contains("Rijlessen Kind 2"))
+            #expect(pot.targetAmount == parts.map(\.amount).sum())
+            #expect(pot.targetDate == Day(year: today.year + 1, month: 8, day: 31))
+            // Het spaardoel van beide kinderen staat bij de groep "Kids".
+            #expect(pot.owner == "Kids" && pot.kind == .spaar)
+
+            // Rijlessen en examen: van de betaalrekening, vergoed uit deze pot, met de tag van het kind.
+            for child in ["Kind 1", "Kind 2"] {
+                let tag = try #require(try Tag.filter(Column("name") == "Rijbewijs \(child)").fetchOne(database))
+                let tagged = try Entry.fetchAll(database, sql: """
+                    SELECT e.* FROM entry e JOIN entryTag et ON et.entryId = e.id WHERE et.tagId = ? ORDER BY e.day
+                    """, arguments: [tag.id])
+                #expect(tagged.allSatisfy { $0.potId == pot.id && $0.reimburse && $0.accountId == summary.checkingAccountId
+                                            && $0.label.hasSuffix(child) })
+                let rule = try #require(try Rule.filter(Column("name") == "Rijles \(child)").fetchOne(database))
+                #expect(rule.descriptionContains == child && rule.targetPotId == pot.id && rule.reimburse)
+                #expect(rule.tagIds == String(tag.id!))
+                if today == testToday {
+                    // Kind 1 heeft om de twee weken rijles sinds 4 februari en deed theorie-examen; Kind 2 sinds 11 mei.
+                    #expect(tagged.count == (child == "Kind 1" ? 10 : 3))
+                }
+            }
+        }
+    }
+
+    @Test(arguments: demoDays)
+    func fixedDepositsMatchTheirItems(today: Day) throws {
+        let (db, summary) = try seeded(today)
+        try db.read { database in
+            let distributions = try Distribution.order(Column("sortOrder")).fetchAll(database)
+            // Eén vaste storting vanaf de betaalrekening, zodat een losse overboeking naar spaar herkend wordt (6e).
+            #expect(distributions.map(\.name) == ["Maandelijkse reserveringen"])
+            for distribution in distributions {
+                #expect(distribution.accountId == summary.savingsAccountId)
+                #expect(distribution.sourceAccountId == summary.checkingAccountId)
+                let lines = try DistributionLine.filter(Column("distributionId") == distribution.id).fetchAll(database)
+                let item = try #require(try BudgetItem.filter(Column("distributionId") == distribution.id).fetchOne(database))
+                #expect(item.planAmount == -lines.map(\.amount).sum())
+            }
+            // De verdeling van RESERVERINGEN is precies die van de RES-regels.
+            let reserve = try #require(try BudgetItem.filter(Column("isReserveTotal") == true).fetchOne(database))
+            let lines = try DistributionLine.filter(Column("distributionId") == reserve.distributionId).fetchAll(database)
+            let res = try BudgetItem.filter(Column("direction") == Direction.RES.rawValue).fetchAll(database)
+            #expect(Dictionary(uniqueKeysWithValues: lines.map { ($0.potId, $0.amount) })
+                    == Dictionary(uniqueKeysWithValues: res.map { ($0.potId!, -$0.planAmount) }))
+        }
+    }
+
+    @Test(arguments: demoDays)
+    func potsLookAhead(today: Day) throws {
+        let (db, _) = try seeded(today)
+        try db.read { database in
+            let pot = try #require(try Pot.filter(Column("name") == "Rente privélening").fetchOne(database))
+            let expected = try ForecastItem.filter(Column("potId") == pot.id).order(Column("day")).fetchAll(database)
+            #expect(expected.allSatisfy { $0.day > today && !$0.isRealized })
+            let gift = try #require(expected.last)
+            #expect(gift.day == Day(year: today.year + 1, month: 1, day: 5) && gift.amount == Money(euros: 3_000))
+            #expect(expected.dropLast().allSatisfy {
+                $0.amount == Money(euros: -250) && $0.day.day == 28 && $0.day.year == today.year
+            })
+            // Op 18 juni: de rente van juni t/m december en de schenking van volgend jaar.
+            if today == testToday { #expect(expected.count == 8) }
+
+            // De gezamenlijke spaarpot: eigen vaste storting en een verwachte uitgave over 75 dagen.
+            let shared = try #require(try Pot.filter(Column("name") == DemoData.sharedPotName).fetchOne(database))
+            #expect(shared.owner == nil && shared.monthlyAmount == Money(euros: 150))
+            let planned = try ForecastItem.filter(Column("potId") == shared.id).fetchAll(database)
+            #expect(planned.count == 1 && planned[0].day == today.adding(days: 75) && planned[0].amount.isNegative)
+            #expect(try DistributionLine.filter(Column("potId") == shared.id).fetchCount(database) == 1)
+        }
+    }
+}
+
+/// Versie 3: alles wat er sinds versie 1 bijkwam (6a–6l) is in de voorbeelddata te zien.
+@Suite struct DemoDataVersion3Tests {
+    @Test(arguments: demoDays)
+    func tagsOnlyOnTheCheckingAccount(today: Day) throws {
+        let (db, summary) = try seeded(today)
+        let onSavings = try db.read { database in
+            try Int.fetchOne(database, sql: """
+                SELECT COUNT(*) FROM entryTag et JOIN entry e ON e.id = et.entryId WHERE e.accountId <> ?
+                """, arguments: [summary.checkingAccountId])
+        }
+        #expect(onSavings == 0)
+    }
+
+    /// Tanken wordt verrekend: startbedrag, telt mee in nog te besteden, maandelijkse terugstorting gekoppeld.
+    @Test(arguments: demoDays)
+    func fuelIsSettledMonthly(today: Day) throws {
+        let (db, summary) = try seeded(today)
+        let cutoff = today.adding(days: -10)
+        try db.read { database in
+            let tag = try #require(try Tag.filter(Column("name") == "Tanken").fetchOne(database))
+            #expect(tag.settles && tag.countsInSpendable)
+            #expect(tag.startAmount == Money(cents: 86_40) && tag.startDay == Day(year: today.year, month: 1, day: 1))
+            let opening = try Settlement.filter(Column("tagId") == tag.id && Column("isOpening") == true).fetchAll(database)
+            #expect(opening.count == 1 && opening[0].amount == .zero)
+
+            let settlements = try Settlement.filter(Column("tagId") == tag.id && Column("isOpening") == false)
+                .order(Column("day")).fetchAll(database)
+            let firstRefund = Day(year: today.year, month: 1, day: 12)!
+            #expect((tag.startSettlementId != nil) == (firstRefund <= cutoff))
+            #expect(settlements.allSatisfy { $0.day <= cutoff && $0.day.day == 12 })
+            for settlement in settlements {
+                let entries = try Entry.filter(Column("settlementId") == settlement.id).fetchAll(database)
+                let start = tag.startSettlementId == settlement.id ? tag.startAmount : .zero
+                #expect(settlement.amount == start - entries.map(\.amount).sum())
+                #expect(entries.allSatisfy { $0.accountId == summary.checkingAccountId && $0.amount.isNegative })
+                let deposit = try #require(try Entry.fetchOne(database, key: settlement.depositEntryId))
+                #expect(deposit.amount == settlement.amount && deposit.accountId == summary.checkingAccountId)
+                #expect(try EntryTag.filter(Column("entryId") == deposit.id).fetchCount(database) == 0)
+            }
+            if today == testToday {
+                // Januari (startbedrag) t/m mei terugbetaald; tankbeurten van mei en juni staan nog open.
+                #expect(settlements.count == 5)
+                let open = try Int.fetchOne(database, sql: """
+                    SELECT COUNT(*) FROM entry e JOIN entryTag et ON et.entryId = e.id
+                    WHERE et.tagId = ? AND e.settlementId IS NULL
+                    """, arguments: [tag.id])!
+                #expect(open >= 1)
+            }
+        }
+    }
+
+    /// Regels zoals "Onthoud als regel" ze maakt: voor het zakgeld op het IBAN van het kind, verrekenen met de
+    /// zakgeldpot alleen bij geld eruit, zonder vaste omschrijving en zonder bedrag.
+    @Test func rulesLookRemembered() throws {
+        let (db, _) = try seeded(testToday)
+        try db.read { database in
+            for (child, iban, _) in DemoPlan.children {
+                let rule = try #require(try Rule.filter(Column("name") == "\(child) Voorbeeld").fetchOne(database))
+                let pot = try #require(try Pot.filter(Column("name") == "Zakgeld \(child)").fetchOne(database))
+                #expect(rule.origin == .geleerd && rule.counterpartyIban == iban && rule.amount == nil)
+                #expect(rule.entryLabel == nil && rule.targetPotId == pot.id && rule.reimburse)
+                #expect(rule.reimburseDirection == .outgoing && rule.hitCount > 0)
+            }
+            #expect(try Rule.filter(Column("origin") == RuleOrigin.geleerd.rawValue).fetchCount(database) >= 10)
+        }
+    }
+
+    /// De laatste 10 dagen bevatten alles wat de voorbeeldzip moet laten zien.
+    @Test func recentDaysShowEveryCase() throws {
+        let (db, summary) = try seeded(testToday)
+        let cutoff = testToday.adding(days: -10)
+        let checkingId = summary.checkingAccountId, savingsId = summary.savingsAccountId
+        let new = try db.read { try BankTransaction.filter(Column("status") == "nieuw").fetchAll($0) }
+        let inWindow = new.filter { $0.day > cutoff && $0.day <= testToday }
+        #expect(inWindow.count == new.count)
+        let checking = new.filter { $0.accountId == checkingId }
+        let savings = new.filter { $0.accountId == savingsId }
+        // 6b: overboeking met eigen tekst; 6j: rommelige pinnaam; 6f: zakgeld eruit en geld van een kind erin.
+        #expect(checking.contains { $0.descriptionText == "Oppas zaterdag" && $0.transactionCode == "OVB" })
+        #expect(checking.contains { $0.counterpartyName.hasPrefix("0712 FRIETKRAAM DEMO S>VOORBEELDSTAD") })
+        #expect(checking.contains { $0.counterpartyIban == "NL00TEST0000000021" && $0.amount.isNegative })
+        #expect(checking.contains { $0.counterpartyIban == "NL00TEST0000000021" && $0.amount == Money(cents: 12_50) })
+        // 6e: losse overboeking naar spaar, aan beide kanten.
+        #expect(checking.contains { $0.amount == Money(euros: -250) && $0.counterpartyIban == DemoData.savingsIban })
+        #expect(savings.contains { $0.amount == Money(euros: 250) && $0.counterpartyIban == DemoData.checkingIban })
+
+        // De verrekening met spaar: vastgelegd, nog niet afgevinkt, met de overboeking aan beide kanten.
+        let (transfer, entriesSetting, marked) = try db.read { database in
+            let transfer = try #require(try SavingsTransfer.filter(Column("done") == false).fetchOne(database))
+            return (transfer, try Setting.get(database, "savingsTransfer.\(transfer.id!).entries"),
+                    try Entry.filter(Column("savingsTransferId") == transfer.id).fetchAll(database))
+        }
+        #expect(transfer.day > cutoff && transfer.doneAt == nil && entriesSetting == nil)
+        #expect(!marked.isEmpty)
+        #expect(marked.filter { $0.day <= cutoff && $0.reimburse }.count == marked.count)
+        #expect(-marked.map(\.amount).sum() == transfer.amount)
+        #expect(checking.contains { $0.amount == transfer.amount && $0.day == transfer.day })
+        #expect(savings.contains { $0.amount == -transfer.amount && $0.day == transfer.day })
+    }
+
+    @Test(arguments: demoDays)
+    func savingsCSVContinuesTheSeededBalance(today: Day) throws {
+        let (db, summary) = try seeded(today, leaveRecentForImport: true)
+        let csv = DemoData.sampleSavingsCSV(today: today)
+        try db.read { database in
+            #expect(try BankTransaction.filter(Column("status") == "nieuw").fetchCount(database) == 0)
+            let last = try BankTransaction.filter(Column("accountId") == summary.savingsAccountId)
+                .order(Column("id").desc).fetchOne(database)
+            guard !csv.isEmpty, let last else { return }
+            let first = csv.split(separator: "\n")[0].split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+            #expect(first[1] == DemoData.savingsIban)
+            #expect(Money(parsing: first[8]) == (last.balanceBefore ?? .zero) + last.amount)
+        }
+    }
+
+    @Test func archiveHoldsOneFilePerAccount() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("hf-demozip-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = try DemoData.writeSampleArchive(today: testToday, to: folder)
+        #expect(url.lastPathComponent == "voorbeeld-bank-2027-06-18.zip")
+        let list = Process()
+        list.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+        list.arguments = ["-Z1", url.path]
+        let pipe = Pipe()
+        list.standardOutput = pipe
+        try list.run()
+        list.waitUntilExit()
+        let names = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            .split(separator: "\n").map(String.init)
+        #expect(names == ["NL00TEST0000000001-18-06-2027.csv", "NL00TEST0000000002-18-06-2027.csv"])
+    }
+}
+
+/// De app vult een bestaande voorbeelddatabase opnieuw zodra de voorbeelddata een nieuwe versie heeft.
+@Suite struct DemoDatabaseFileTests {
+    @Test func oldDemoDataIsReplacedAndCurrentDataKept() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("hf-demo-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("voorbeeld.sqlite")
+
+        // Eerste keer: gevuld, met de versie erbij, en daarna `afterSeed`.
+        var seededCount = 0
+        var db: AppDatabase? = try DemoData.openDemo(at: url, today: testToday, afterSeed: { _ in seededCount += 1 })
+        #expect(seededCount == 1)
+        let pots = try db!.read { try Pot.fetchCount($0) }
+        #expect(pots == DemoPlan.pots.count)
+        let version = try db!.read { try Setting.get($0, DemoData.versionKey) }
+        #expect(version == "3" && DemoData.version == 3)
+
+        // Zelfde versie: niets opnieuw; wat de gebruiker in het voorbeeld deed blijft staan.
+        try db!.write { try $0.execute(sql: "UPDATE pot SET name = 'Uitgeprobeerd' WHERE id = 1") }
+        db = nil
+        db = try DemoData.openDemo(at: url, today: testToday, afterSeed: { _ in seededCount += 1 })
+        #expect(seededCount == 1)
+        let kept = try db!.read { try String.fetchOne($0, sql: "SELECT name FROM pot WHERE id = 1") }
+        #expect(kept == "Uitgeprobeerd")
+
+        // Oudere versie (of nog geen versie): het bestand wordt leeggemaakt en opnieuw gevuld.
+        for old in ["2", nil] as [String?] {
+            try db!.write { try Setting.set($0, DemoData.versionKey, old) }
+            db = nil
+            db = try DemoData.openDemo(at: url, today: testToday, afterSeed: { _ in seededCount += 1 })
+            try db!.read { database throws in
+                #expect(try Pot.fetchCount(database) == DemoPlan.pots.count)
+                #expect(try Pot.filter(Column("name") == "Uitgeprobeerd").fetchCount(database) == 0)
+                #expect(try Account.fetchCount(database) == 2)
+                #expect(try Setting.get(database, DemoData.versionKey) == String(DemoData.version))
+            }
+            try db!.write { try $0.execute(sql: "UPDATE pot SET name = 'Uitgeprobeerd' WHERE id = 1") }
+        }
+        #expect(seededCount == 3)
+    }
+
+    /// Weigert vóór er iets geopend wordt; de echte administratie wordt dus niet aangeraakt.
+    @Test func refusesTheRealAdministration() throws {
+        #expect(DemoData.isRealAdministration(AppDatabase.defaultURL))
+        #expect(throws: (any Error).self) { _ = try DemoData.openDemo(at: AppDatabase.defaultURL, today: testToday) }
+        #expect(!DemoData.isRealAdministration(FileManager.default.temporaryDirectory.appendingPathComponent("x.sqlite")))
     }
 }

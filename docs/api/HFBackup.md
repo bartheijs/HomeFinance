@@ -162,14 +162,19 @@ Alleen de back-up is een back-up. De twee exports zijn kopieën om te lezen; de 
 ## Voorbeelddata (`DemoData`)
 
 Verzonnen gezin ("Ouder 1", "Ouder 2", "Kind 1", "Kind 2"), verzonnen bedrijven, IBAN's `NL00TEST…`.
-Dezelfde `today` geeft altijd exact dezelfde data (eigen generator, vaste tijdstempels).
+Dezelfde `today` geeft altijd exact dezelfde data (eigen generator, vaste tijdstempels). Versie 3 (6m) laat
+alles zien wat er tot en met 6l in de app kwam; de demo-route staat in de README ("Demonstreren").
 
 | Functie | Doet |
 |---|---|
-| `DemoData.seed(into:today:leaveRecentForImport:) -> DemoSummary` | Vult een lege database. Gooit `DemoDataError.databaseNotEmpty` als er al rekeningen of een jaar zijn. |
-| `DemoData.sampleCSV(today:) -> String` | Bank-CSV voor de betaalrekening met de transacties van de laatste 10 dagen. |
-| `DemoData.sampleCSVFileName(today:)` | `voorbeeld-betaalrekening-<dag>.csv` |
+| `DemoData.seed(into:today:leaveRecentForImport:) -> DemoSummary` | Vult een lege database. Gooit `DemoDataError.databaseNotEmpty` als er al rekeningen of een jaar zijn. Met `leaveRecentForImport: true` ontbreken de transacties van de laatste 10 dagen op **beide** rekeningen; die komen uit de voorbeeldzip. |
+| `DemoData.openDemo(at:today:leaveRecentForImport:afterSeed:) -> AppDatabase` | Opent het voorbeeldbestand. Leeg: vullen, `voorbeeld.versie` vastleggen en `afterSeed` aanroepen. Andere versie (of geen): het bestand leegmaken en opnieuw vullen. Zelfde versie: niets. Weigert de eigen administratie (`AppDatabase.defaultURL`, ook via een koppeling) vóór er iets geopend wordt. |
+| `DemoData.version`, `DemoData.versionKey` | `3`, `"voorbeeld.versie"`. Hoog de versie op bij elke wijziging in de voorbeelddata. |
+| `DemoData.writeSampleArchive(today:to:) -> URL` | Schrijft `voorbeeld-bank-<dag>.zip` in de map: per rekening `<IBAN>-<dd-mm-jjjj>.csv` met de laatste 10 dagen (een rekening zonder transacties ontbreekt). Ingepakt met `/usr/bin/zip`. |
+| `DemoData.sampleCSV(today:)`, `DemoData.sampleSavingsCSV(today:)` | De CSV van de betaal- of spaarrekening uit die zip (spaar: leeg als er niets was). |
+| `DemoData.sampleCSVFileName(today:)`, `DemoData.sampleArchiveFileName(today:)` | `voorbeeld-betaalrekening-<dag>.csv`, `voorbeeld-bank-<dag>.zip` |
 | `DemoData.checkingIban`, `DemoData.savingsIban` | De twee eigen IBAN's. |
+| `DemoData.sharedPotName`, `DemoData.childOwners` | "Buffer gezin" en ["Kind 1", "Kind 2"], voor het telefoondashboard. De app zet die keuze na het vullen (`DemoSupport.configurePhone`, met HFPublish); HFBackup zelf kent HFPublish niet. |
 
 `DemoSummary`: `checkingAccountId`, `savingsAccountId`, `budgetItemCount`, `potCount`, `bankTransactionCount`,
 `newTransactionCount`, `entryCount`, `checkingBalance`, `bookedThrough`.
@@ -177,54 +182,62 @@ Dezelfde `today` geeft altijd exact dezelfde data (eigen generator, vaste tijdst
 Wat erin zit, van 1 januari van het jaar van `today` t/m `today`:
 
 - Betaalrekening (beginsaldo € 6.850) en spaarrekening; jaar met anti-rood € 4.500 (`reserveBase` blijft 0).
-- 20 vaste posten (salarissen, kinderbijslag en sportvereniging per kwartaal, hypotheek, verzekeringen, energie,
-  telecom, streaming, privélening, RESERVERINGEN, drie spaarposten) en 20 RES-regels,
-  elk gekoppeld aan een reserveringspot. 5 spaarpotten met doel, waarvan 4 met eigenaar.
+- 17 vaste posten (salarissen, kinderbijslag en sportvereniging per kwartaal, hypotheek, verzekeringen, energie,
+  telecom, streaming, privélening, RESERVERINGEN) en 28 RES-regels, elk met een pot.
+- **Potten:** 20 reserveringspotten, de rentepot voor de privélening, per kind spaargeld (met doel), kleedgeld en
+  zakgeld, doelen voor Ouder 1 en Ouder 2, "Buffer gezin" (zonder eigenaar, de gezamenlijke spaarpot) en
+  "Studie en rijbewijs" met eigenaar **Kids** (een groep) en een spaardoel uit vier onderdelen (`GoalPart`) met
+  doeldatum eind augustus volgend jaar.
+- **Vaste storting:** één, "Maandelijkse reserveringen", van betaal naar spaar, gekoppeld aan RESERVERINGEN en
+  precies verdeeld zoals de RES-regels. (Bewust één: met meer vaste stortingen vanaf dezelfde rekening vraagt
+  Nakijken bij een losse overboeking eerst welke storting het is.)
+- **Vooruitblik:** de rentepot (rente per maand eraf, schenking van volgend jaar erbij) en "Buffer gezin"
+  (€ 150 per maand via de vaste storting en een verwachte "Nieuwe wasmachine" over 75 dagen).
 - De spaarrekening heeft beginsaldo € 0,00; wat er op 1 januari staat is per pot geboekt als handboeking
-  "Beginsaldo <pot>". De eerste banktransactie heeft als saldo vóór mutatie de som van die boekingen.
-- Eén boeking op de spaarrekening heeft geen pot: de rentebijschrijving van 2 januari (€ 12,84). "Niet
-  toegewezen" is daarmee precies dat bedrag.
-- Tags Tanken, Uit eten, Cadeau, Vakantie; regels voor alle terugkerende tegenpartijen.
+  "Beginsaldo <pot>". Eén boeking zonder pot: de rentebijschrijving van 2 januari (€ 12,84).
+- **Tags** Tanken, Uit eten, Cadeau, Vakantie, Rijbewijs Kind 1, Rijbewijs Kind 2, alleen op boekingen van de
+  betaalrekening (6h).
+- **Tanken verrekent** (6g): startbedrag € 86,40 op 1 januari, "telt mee in nog te besteden" aan, een beginstand
+  (`Settlement.isOpening`, € 0). Elke 12e betaalt "Declaraties Werkgever Voorbeeld" de tankbeurten van de maand
+  ervoor terug (in januari het startbedrag); elke geboekte terugstorting is een verrekening met de storting
+  gekoppeld, zoals `SettlementService.settle`. De tankbeurten van de laatste weken staan open.
+- **Regels:** voor alle vaste posten, de tankstations, de rijschool (per kind op de omschrijving) en de jaarrekeningen
+  op spaar. Zoals "Onthoud als regel" ze maakt (`origin` geleerd, 6i): zakgeld per kind ("Kind 1 Voorbeeld": op
+  IBAN, geen bedrag, geen vaste omschrijving, verrekenen met de zakgeldpot **bij geld eruit**, 6f), restaurants,
+  winkels met verrekenen en de declaraties.
 - Banktransacties met sluitende saldoketen en per maand een importbatch. Geboekt t/m `today − 10`; daarna
-  status `nieuw`. De laatste zes geboekte transacties op de betaalrekening staan op "nog nakijken".
+  status `nieuw` (of, met `leaveRecentForImport`, in de voorbeeldzip). De laatste zes geboekte transacties op de
+  betaalrekening staan op "nog nakijken". Pinnamen staan er zoals de bank ze levert ("Bakkerij Voorbeeld
+  >VOORBEELDSTAD13.11.2027"); de boekingen hebben de nette naam.
 - Afwijkingen van het plan (energie in maart, mobiel in februari, salaris met vakantiegeld in mei,
   zorgverzekering in augustus) en één ontbrekende betaling (Water) voor een "te laat".
-- Wekelijks zakgeld, tanken en uit eten met tag, eenmalige inkomsten.
-- Uitgaven met `reimburse` en pot: elke maand op de 27e verrekend in één afgeronde `SavingsTransfer`, zoals
-  `SavingsTransferService` (HFBudget) dat maakt: de gemarkeerde uitgaven hebben `savingsTransferId`; op de dag
-  van de overboeking staan de boekingen van het afvinken (notitie `Verrekening #<id>`: per pot een boeking
-  "Verrekening spaar: <pot>" op de spaarrekening en één diverse boeking "Verrekening spaar" op de betaalrekening,
-  gekoppeld via `counterEntryId`), vastgelegd in `Setting` `savingsTransfer.<id>.entries`; en aan beide kanten
-  hangt de bankregel (tegenrekening = de andere eigen rekening, status `verwerkt`), zodat
-  `SavingsTransferService.unconfirmed` leeg is. De verrekening van de laatste 10 dagen is niet gemaakt: de
-  uitgaven staan open en de bankregels van die dagen zijn `nieuw` (of komen uit de voorbeeld-CSV).
-- Privélening: op 5 januari komt "Schenking familie" binnen (12 × de maandrente, IN divers), op 6 januari gaat
-  dat bedrag naar de pot "Rente privélening" op de spaarrekening (reserveringspot zonder maandbedrag en zonder
-  RES-regel, gekoppeld via `counterEntryId`). Elke rentebetaling (de 28e) heeft `reimburse` met die pot en zit
-  in de spaaroverboeking van de maand erna; de laatste staat altijd open. De regel "Privélening" stelt dit voor.
-- De maandelijkse reservering: één boeking op de betaalrekening, op de spaarrekening gesplitst over de 20
-  potten en gekoppeld via `counterEntryId`. Jaarrekeningen worden rechtstreeks uit een pot betaald.
+- Uitgaven met `reimburse` en pot (zakgeld, kleding per kind, rijlessen, garage, tandarts …, de rente op de
+  privélening): elke maand op de 27e verrekend in één afgevinkte `SavingsTransfer` met de boekingen van het
+  afvinken (notitie `Verrekening #<id>`, `Setting` `savingsTransfer.<id>.entries`) en aan beide kanten de
+  bankregel. In de laatste 10 dagen staat één verrekening die **vastgelegd maar niet afgevinkt** is (op de 27e,
+  anders op `today − 5`); zij dekt de geboekte uitgaven tot `today − 10`, en haar overboeking zit in de zip.
 - Eén afstemming met verschil € 0,00 op `bookedThrough`.
 
-### Voorbeeld-CSV importeren
+Wat de laatste 10 dagen (de voorbeeldzip) altijd bevatten, als die dagen in het jaar vallen: wekelijks zakgeld
+(6f), "Oppas zaterdag" naar "Oppas Voorbeeld" (eigen tekst, 6b), "Extra voor de vakantie" € 250 van betaal naar
+spaar (losse overboeking, 6e), "0712 FRIETKRAAM DEMO S>VOORBEELDSTAD…" (6j), "Terug van schoolreisje" € 12,50
+van Kind 1 (geld erin, 6f) en de overboeking van de open verrekening met spaar.
+
+### Voorbeeldzip importeren
 
 ```swift
-// Eerste start, of "voorbeelddata laden" in een lege database:
-try DemoData.seed(into: db, today: .today())
-
-// Variant voor de demo van het importeren: de laatste 10 dagen van de betaalrekening komen uit een bestand.
-try DemoData.seed(into: db, today: .today(), leaveRecentForImport: true)
-let csv = DemoData.sampleCSV(today: .today())
-try csv.write(to: folder.appendingPathComponent(DemoData.sampleCSVFileName(today: .today())),
-              atomically: true, encoding: .utf8)
+// Zo doet de app het in de voorbeeldmodus:
+let db = try DemoData.openDemo(at: demoURL, today: .today(), afterSeed: DemoSupport.configurePhone)
+let zip = try DemoData.writeSampleArchive(today: .today(), to: FileManager.default.temporaryDirectory)
+// … en daarna het gewone importeren van een zip (HFImport `previewArchive` / `commitArchive`).
 ```
 
-Het bestand sluit aan op het saldo van de `leaveRecentForImport`-variant: het eerste "saldo vóór mutatie" is
-gelijk aan `DemoSummary.checkingBalance`. Importeer het niet in een database die zonder die optie is gevuld:
-daar staan dezelfde regels al als `nieuw`, met een eigen vingerafdruk (`voorbeeld|…`).
+De zip sluit aan op de saldi van de `leaveRecentForImport`-variant: per rekening is het eerste "saldo vóór
+mutatie" gelijk aan het saldo in de app. Importeer hem niet in een database die zonder die optie is gevuld: daar
+staan dezelfde regels al als `nieuw`, met een eigen vingerafdruk (`voorbeeld|…`).
 
-Formaat: 19 kolommen, geen kopregel, komma als scheidingsteken, geen aanhalingstekens, bedragen met een punt
-(`-12.50`), regeleinde LF. Kolommen: 0 datum `dd-mm-jjjj`, 1 eigen IBAN, 2 IBAN tegenpartij, 3 naam tegenpartij,
-4 adres, 5 postcode, 6 plaats (leeg), 7 valuta rekening, 8 saldo vóór mutatie, 9 valuta mutatie, 10 bedrag met
-teken, 11 journaaldatum, 12 valutadatum, 13 interne code, 14 globale code (`PIN`, `INC`, `OVB`), 15 volgnummer,
-16 betalingskenmerk, 17 omschrijving, 18 afschriftnummer.
+Formaat per CSV: 19 kolommen, geen kopregel, komma als scheidingsteken, geen aanhalingstekens, bedragen met een
+punt (`-12.50`), regeleinde LF. Kolommen: 0 datum `dd-mm-jjjj`, 1 eigen IBAN, 2 IBAN tegenpartij, 3 naam
+tegenpartij, 4 adres, 5 postcode, 6 plaats (leeg), 7 valuta rekening, 8 saldo vóór mutatie, 9 valuta mutatie,
+10 bedrag met teken, 11 journaaldatum, 12 valutadatum, 13 interne code, 14 globale code (`PIN`, `INC`, `OVB`),
+15 volgnummer, 16 betalingskenmerk, 17 omschrijving, 18 afschriftnummer.
