@@ -354,6 +354,11 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
 6n. **Losse overboeking bij meer vaste stortingen** (voorstel, nog niet gepland). `DistributionService.recognize`
    (spaarkant): passen er meer vaste stortingen op tegenrekening en geen enkele op bedrag, dan nu "kies welke";
    beter: als het bedrag ver van álle totalen ligt, meteen "lijkt een losse overboeking".
+6n. **Keuzelijsten met posten op alfabet** (wens van 21 november, na test van 6c). In alle post-kiezers
+   (Nakijken "Waar hoort dit bij?", vaste storting "Hoort bij post", regeleditor, splitsen, nieuwe boeking)
+   binnen UIT en IN alfabetisch, hoofdletterongevoelig, Nederlandse sortering; "Divers (geen vaste post)" en
+   "Geen" bovenaan. Op één gedeelde plek (naast `Insight.pickerOrder`). Het maandgrid en lijsten met maanden
+   houden hun eigen volgorde.
 6d. **Versie zichtbaar in Instellingen › Over** — klaar (21 november). `scripts/run.sh` zet bij elke build de
    korte commit-hash (met een `+` als er niet-gecommitte wijzigingen waren) en de bouwdatum in `Info.plist`
    (`HFBuildCommit`, `HFBuildDate`; `CFBundleVersion` is het aantal commits). Over toont bv. "Versie 1.0 ·

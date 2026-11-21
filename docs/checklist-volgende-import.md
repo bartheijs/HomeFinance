@@ -70,3 +70,14 @@ Vink af wat klopt. Klopt iets niet, maak dan een screenshot en noteer wat je zag
 
 - Wat er vanaf december gebeurt met de kindgerelateerde posten (kindgebonden budget en zang- en dansles):
   aanpassen of laten vervallen.
+
+## Eén keer per jaar: de zorgpremie
+
+De premie wordt jaarlijks in één keer betaald en "geleend" van het studiespaargeld. Elke maand gaat 1/12 terug via
+de vaste storting naar de pot *Zorg voorschieten (uit studiegeld)*; aan de betaalkant telt dat als de post van de
+zorgverzekeraar. Bij de jaarbetaling zelf:
+
+- [ ] Vanaf de **spaarrekening** betaald: boek de afschrijving op de pot *Zorg voorschieten*. Geen post.
+- [ ] Vanaf de **betaalrekening** betaald: kies **Divers** met **Verrekenen met spaar: Zorg voorschieten**, maak
+      het bedrag over van spaar naar betaal en vink de verrekening af. **Niet** op de post van de verzekeraar,
+      anders telt de premie dubbel.
