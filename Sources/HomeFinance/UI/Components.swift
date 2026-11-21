@@ -112,6 +112,7 @@ struct ScreenHeader<Trailing: View>: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(.title, design: .rounded).weight(.bold))
+                    .selfTestProbe("scherm-titel")
                 if let subtitle { Text(subtitle).font(.callout).foregroundStyle(.secondary) }
             }
             Spacer(minLength: 12)

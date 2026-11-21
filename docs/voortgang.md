@@ -39,9 +39,9 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
   `errorMessage`, geen fouten in `model.read`/`perform`. Harde limiet 90 s op een eigen thread.
   Aangetoond: met het Regels-scherm tijdelijk weggehaald faalt hij (exitcode 1, "FOUT scherm rules").
   Sinds ronde 17 (6k-3) ook per scherm, en per tabblad van Rapporten en Instellingen, in de gewone én de
-  kleinste venstermaat (1100 × 700): kop zichtbaar, scherm schuift niet horizontaal buiten beeld, zijbalk
-  zichtbaar (meetpunten `scherm`, `scherm-ruimte`, `scherm-kop`; Rapporten kiest zijn tabblad via
-  `.selfTestTabRequests`).
+  kleinste venstermaat (1100 × 700): kop zichtbaar met de titel op één regel (sinds ronde 18), scherm schuift
+  niet horizontaal buiten beeld, zijbalk zichtbaar (meetpunten `scherm`, `scherm-ruimte`, `scherm-kop`,
+  `scherm-titel`; Rapporten kiest zijn tabblad via `.selfTestTabRequests`).
 - **Kerncijfers** (`--kerncijfers <json> [--dag]`, `Insight.keyFigures`): platte, gesorteerde lijst met saldo per
   rekening (en saldo volgens de app tegen het eindsaldo van de laatste import), saldo per pot, besteedbaar nu,
   nog te besteden deze maand, aantallen boekingen en banktransacties per status, open verrekeningen netto en
@@ -322,7 +322,12 @@ gegevens hetzelfde rekent. Uitleg voor de gebruiker staat in de README ("Een tes
         tabbladen naast elkaar, daaronder zijn ze een keuzemenu. In het standaardvenster (1440 breed) blijven het
         dus tabbladen; in het kleinste venster en met een brede zijbalk een menu. Bekeken in snapshots op beide
         maten.
-   4. Instellingen in een smal venster.
+   4. Instellingen in een smal venster. — **klaar** (21 november, ronde 18). De tabbladen (ongeveer 685 punten)
+      staan naast de titel vanaf 1150 punten schermbreedte, daaronder onder de titel; de titel breekt niet meer af
+      ("Instellin-gen"). Zelfde aanpak als Rapporten: vaste keuze op de gemeten breedte, geen `ViewThatFits`.
+      De zelftest controleert nu ook dat de titel van elk scherm op één regel staat (meetpunt `scherm-titel`);
+      op de stand van ronde 17 faalde dat op alle zes tabbladen van Instellingen in de kleinste maat. Bekeken in
+      snapshots op beide maten (tab Tags, langste ondertitel).
    Volgorde van de rondes: 6c (test), 6j, 6h, 6g, 6k-1 t/m 6k-4. Daarna nog te vragen: telefoondashboard
    met "Nog te besteden deze maand", voorbeelddata versie 2.
 6l. **Telefoondashboard voor het gezin** — klaar (21 november), nog niet geïnstalleerd of gecommit. Op de

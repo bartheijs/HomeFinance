@@ -265,12 +265,16 @@ enum SelfTest {
         let right = min(width, area?.maxX ?? width)
         let fmt: (CGRect) -> String = { "x \(Int($0.minX))–\(Int($0.maxX)), y \(Int($0.minY))–\(Int($0.maxY))" }
 
-        // Kop: binnen het venster, onder de werkbalk, tussen zijbalk en rechterrand.
-        let header = probeFrames["scherm-kop"]
+        // Kop: binnen het venster, onder de werkbalk, tussen zijbalk en rechterrand, titel op één regel.
+        let header = probeFrames["scherm-kop"], title = probeFrames["scherm-titel"]
+        let titleFont = NSFont.systemFont(ofSize: NSFont.preferredFont(forTextStyle: .title1).pointSize, weight: .bold)
+        let lineHeight = titleFont.ascender - titleFont.descender + titleFont.leading
         let headerOK = header.map { $0.width > 0 && $0.height > 0 && $0.minY >= top - 0.5 && $0.maxY <= height + 0.5
             && $0.minX >= left - 1 && $0.maxX <= right + 1 } ?? false
-        check(headerOK, "kop zichtbaar: \(where_)"
+        let titleOK = title.map { $0.width > 0 && $0.height < lineHeight * 1.5 } ?? false
+        check(headerOK && titleOK, "kop zichtbaar: \(where_)"
               + (header.map { " kop \(fmt($0))" } ?? ", kop niet gezien")
+              + (title.map { titleOK ? "" : ", titel over meer regels (hoogte \(Int($0.height)))" } ?? ", titel niet gezien")
               + (headerOK ? "" : ", ruimte x \(Int(left))–\(Int(right)) y \(Int(top))–\(Int(height))"))
 
         // Niet horizontaal buiten beeld: het scherm past in de ruimte naast de zijbalk.
