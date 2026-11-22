@@ -109,6 +109,12 @@ public struct PotGoal: Equatable, Sendable {
     public let parts: [GoalPartRow]
     /// Som van de onderdelen (€ 0,00 zonder onderdelen).
     public let partsTotal: Money
+    /// De marge op het doel (`GoalMargin`): zoveel mag het verwachte saldo op de doeldatum onder het doel blijven.
+    public var margin: Money = .zero
+    /// Op koers dankzij de marge: het verwachte saldo op de doeldatum blijft (iets) onder het doel.
+    public var isWithinMargin: Bool {
+        status == .opKoers && (projectedOnTargetDate ?? balance) < targetAmount
+    }
 }
 
 /// Eén onderdeel van een spaardoel: aantal × bedrag per stuk.
@@ -164,6 +170,8 @@ struct ForecastContext {
     typealias RawEvent = (day: Day, amount: Money, label: String, kind: ForecastEventKind, id: String, project: String?)
 
     let today: Day
+    /// Marge op een spaardoel in basispunten (`GoalMargin`).
+    var marginBasisPoints = GoalMargin.defaultBasisPoints
     /// Open losse verwachtingen per pot, op dag.
     var items: [Int64: [ForecastItem]] = [:]
     /// Regels van niet-gearchiveerde vaste stortingen per pot, op volgorde van de stortingen.
@@ -173,6 +181,7 @@ struct ForecastContext {
 
     init(_ db: Database, today: Day, potId: Int64? = nil) throws {
         self.today = today
+        marginBasisPoints = try GoalMargin.basisPoints(db)
         var request = ForecastItem.filter(Column("realizedAt") == nil)
         if let potId { request = request.filter(Column("potId") == potId) }
         for item in try request.order(Column("day"), Column("id")).fetchAll(db) {
@@ -281,11 +290,13 @@ struct ForecastContext {
                 required = Money(cents: (needed + n - 1) / n)
             }
         }
+        // Binnen de marge onder het doel telt als op koers (UX-feedback: 4 cent per maand te weinig is geen actie).
+        let margin = GoalMargin.amount(of: target, basisPoints: marginBasisPoints)
         let status: PotGoalStatus
         if reached { status = .bereikt }
         else if let date = pot.targetDate {
             if date < today { status = .verlopen }
-            else { status = (projected ?? balance) >= target ? .opKoers : .tekort }
+            else { status = (projected ?? balance) >= target - margin ? .opKoers : .tekort }
         } else { status = .zonderDatum }
 
         var reachDate: Day? = reached ? today : nil
@@ -301,7 +312,8 @@ struct ForecastContext {
                        requiredPerMonth: required, currentPerMonth: current,
                        shortfallPerMonth: required.map { $0 - current }, projectedOnTargetDate: projected,
                        status: status, projectedReachDate: reachDate,
-                       parts: parts[potId] ?? [], partsTotal: (parts[potId] ?? []).map(\.amount).sum())
+                       parts: parts[potId] ?? [], partsTotal: (parts[potId] ?? []).map(\.amount).sum(),
+                       margin: margin)
     }
 }
 

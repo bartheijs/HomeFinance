@@ -41,6 +41,29 @@ private let today = Fixture.today   // 15 maart 2027
         try f.db.read { try Insight.potGoal($0, potId: pot, today: day) }
     }
 
+    /// Een klein tekort binnen de marge (standaard 0,5 % van het doel) telt als op koers; met marge 0 % niet.
+    @Test func smallShortfallWithinMarginIsOnTrack() throws {
+        _ = try kinderspaar()
+        try f.db.write { db in
+            try db.execute(sql: "UPDATE pot SET targetAmount = ?, targetDate = ? WHERE id = ?",
+                           arguments: [eur(150, 50), d("2027-07-31"), f.potKind])
+        }
+        // Verwacht op de doeldatum: 25 + 5 × 25 = 150,00; 0,50 tekort. Marge 0,5 % van 150,50 = 0,75.
+        let g = try #require(try goal(f.potKind))
+        #expect(g.projectedOnTargetDate == eur(150))
+        #expect(g.margin == eur(0, 75))
+        #expect(g.status == .opKoers)
+        #expect(g.isWithinMargin)
+        #expect(g.shortfallPerMonth == eur(0, 10))   // het tekort per maand blijft gewoon zichtbaar
+        try f.db.write { try GoalMargin.setBasisPoints($0, 0) }
+        let strict = try #require(try goal(f.potKind))
+        #expect(strict.status == .tekort)
+        #expect(!strict.isWithinMargin)
+        #expect(GoalMargin.text(50) == "0,5 %")
+        #expect(GoalMargin.text(100) == "1 %")
+        #expect(GoalMargin.text(25) == "0,25 %")
+    }
+
     @Test func noTargetAmountGivesNil() throws {
         #expect(try goal(f.potVakantie) == nil)
         #expect(throws: InsightError.potNotFound(999)) { try f.db.read { try Insight.potGoal($0, potId: 999, today: today) } }

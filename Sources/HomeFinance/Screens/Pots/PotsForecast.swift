@@ -79,7 +79,7 @@ enum PotsGoalText {
     static func line(_ goal: PotGoal) -> String {
         switch goal.status {
         case .bereikt: return "doel bereikt"
-        case .opKoers: return "op koers"
+        case .opKoers: return goal.isWithinMargin ? "op koers (binnen de marge)" : "op koers"
         case .tekort:
             if let short = goal.shortfallPerMonth, short > .zero { return "\(self.short(short)) per maand te weinig" }
             return "nog niet op koers"
@@ -97,7 +97,11 @@ enum PotsGoalText {
     static func sentence(_ goal: PotGoal) -> String {
         switch goal.status {
         case .bereikt: return "Het doel is gehaald."
-        case .opKoers: return "Je ligt op koers: met wat je nu stort haal je het doel op tijd."
+        case .opKoers:
+            if goal.isWithinMargin, let projected = goal.projectedOnTargetDate {
+                return "Je ligt op koers: op de doeldatum kom je \((goal.targetAmount - projected).formatted()) tekort, binnen de marge van \(goal.margin.formatted())."
+            }
+            return "Je ligt op koers: met wat je nu stort haal je het doel op tijd."
         case .tekort:
             if let short = goal.shortfallPerMonth, short > .zero {
                 return "Je stort \(self.short(short)) per maand te weinig om het doel op tijd te halen."
@@ -111,10 +115,32 @@ enum PotsGoalText {
 
 /// Het spaardoel van een pot, uitgeschreven.
 struct PotsGoalBlock: View {
+    @Environment(AppModel.self) private var model
     let pot: PotSummary
     let goal: PotGoal
     var onDistributions: () -> Void
     @State private var showParts = false
+
+    /// Marge op het doel, voor alle potjes (`GoalMargin`).
+    private var marginRow: some View {
+        let current = model.read(GoalMargin.defaultBasisPoints) { try GoalMargin.basisPoints($0) }
+        return HStack(alignment: .firstTextBaseline) {
+            Text("Marge (alle potjes)").foregroundStyle(.secondary)
+            Spacer(minLength: 12)
+            Menu(GoalMargin.text(current)) {
+                ForEach(GoalMargin.choices, id: \.self) { choice in
+                    Button(GoalMargin.text(choice)) {
+                        model.perform("Marge op spaardoelen: \(GoalMargin.text(choice))") {
+                            try model.db.write { try GoalMargin.setBasisPoints($0, choice) }
+                        }
+                    }
+                }
+            }
+            .menuStyle(.borderlessButton).fixedSize()
+        }
+        .font(.callout)
+        .help("Blijft het verwachte saldo op de doeldatum zo weinig onder het doel, dan geldt het potje als op koers.")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -136,6 +162,7 @@ struct PotsGoalBlock: View {
                     help: "Volgens je vaste overboekingen.")
                 row("Doel gehaald op", reachText,
                     help: "De eerste dag waarop je het doel haalt als je zo blijft storten.")
+                if goal.targetDate != nil { marginRow }
             }
             if !goal.parts.isEmpty {
                 Button {
