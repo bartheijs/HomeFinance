@@ -5,7 +5,8 @@
 ## UX-ronde (vanaf 21 november 2026)
 
 Strikt gescheiden van de werkende versie: alles op de tak **`ux-ronde`**, de stand daarvóór heeft de markering
-`voor-ux-ronde`. Pas na de test van de gebruiker wordt er samengevoegd. Onderzoek en voorstellen: `docs/ux/`
+`voor-ux-ronde`. Pas na de test van de gebruiker wordt er samengevoegd. **Samengevoegd in `main` op 22 november 2026** (fast-forward, na
+akkoord van de gebruiker; geïnstalleerde versie `7e948a2`). Onderzoek en voorstellen: `docs/ux/`
 (`begrippen-voorstel.md`, `journeys-review.md`). Geen rekenregel, geen migratie; na elke stap een testronde,
 en de kerncijfers met voorbeelddata moeten gelijk blijven aan die van `voor-ux-ronde`.
 
