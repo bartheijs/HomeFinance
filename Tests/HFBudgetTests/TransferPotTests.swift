@@ -124,6 +124,31 @@ import Testing
         }
     }
 
+    /// Potje opheffen: het hele saldo gaat naar een ander potje en het potje wordt gearchiveerd, in één keer.
+    @Test func potjeOpheffenNaarAnderPotje() throws {
+        let fx = try Fixture()
+        try fx.app.write { db in
+            try PotService.moveBetweenPots(db, from: fx.potVakantie.id!, to: fx.potSpaar.id!,
+                                           amount: c(4_000), day: d("2027-02-01"), label: "Schuiven")
+            let verzekering = try PotService.balance(db, potId: fx.potVerzekering.id!)
+            let rekening = try BalanceService.balance(db, accountId: fx.spaar.id!, on: d("2027-12-31"))
+            // Saldo positief zonder bestemming: kan niet.
+            #expect(throws: BudgetError.self) {
+                try PotService.close(db, potId: fx.potSpaar.id!, toPotId: nil, day: d("2027-03-01"))
+            }
+            try PotService.close(db, potId: fx.potSpaar.id!, toPotId: fx.potVerzekering.id!, day: d("2027-03-01"))
+            #expect(try PotService.balance(db, potId: fx.potSpaar.id!) == .zero)
+            #expect(try PotService.balance(db, potId: fx.potVerzekering.id!) == verzekering + c(4_000))
+            #expect(try Pot.fetchOne(db, key: fx.potSpaar.id!)?.archived == true)
+            #expect(try BalanceService.balance(db, accountId: fx.spaar.id!, on: d("2027-12-31")) == rekening)
+            // Een potje in de min moet eerst worden aangevuld.
+            #expect(throws: BudgetError.self) {
+                try PotService.close(db, potId: fx.potVakantie.id!, toPotId: fx.potVerzekering.id!, day: d("2027-03-01"))
+            }
+            #expect(try Pot.fetchOne(db, key: fx.potVakantie.id!)?.archived == false)
+        }
+    }
+
     @Test func potBeherenArchiverenEnVolgorde() throws {
         let fx = try Fixture()
         try fx.app.write { db in

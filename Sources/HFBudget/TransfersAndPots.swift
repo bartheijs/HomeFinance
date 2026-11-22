@@ -340,6 +340,24 @@ public enum PotService {
         }
     }
 
+    /// Heft een pot op: het hele saldo gaat naar een andere pot op dezelfde rekening (via `moveBetweenPots`) en
+    /// daarna wordt de pot gearchiveerd, in één keer. Zonder `toPotId` kan het alleen als het saldo al € 0,00 is.
+    /// Een negatief saldo moet eerst worden aangevuld.
+    public static func close(_ db: Database, potId: Int64, toPotId: Int64?, day: Day) throws {
+        try atomic(db) {
+            let pot = try Check.pot(db, potId)
+            let saldo = try balance(db, potId: potId)
+            guard !saldo.isNegative else { throw BudgetError.potNotEmpty(pot: pot.name, balance: saldo) }
+            if saldo > .zero {
+                guard let toPotId else { throw BudgetError.potNotEmpty(pot: pot.name, balance: saldo) }
+                let to = try Check.pot(db, toPotId)
+                try moveBetweenPots(db, from: potId, to: toPotId, amount: saldo, day: day,
+                                    label: "Potje \(pot.name) opgeheven, naar \(to.name)")
+            }
+            try archive(db, potId: potId)
+        }
+    }
+
     /// Verplaatst een (positief) bedrag van de ene pot naar de andere op dezelfde rekening, als twee
     /// handmatige boekingen die samen nul zijn. Geeft (af, bij) terug.
     @discardableResult

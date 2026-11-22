@@ -44,6 +44,10 @@ struct PotsScreen: View {
                 PotsAnnualSheet()
             case .openings(let id):
                 PotsOpeningSheet(accountId: id, accountName: data?.accountName(id) ?? "de spaarrekening")
+            case .close(let pot):
+                PotsCloseSheet(pot: pot,
+                               candidates: (data?.pickerPots ?? []).filter { $0.accountId == pot.accountId && $0.id != pot.id && !$0.archived },
+                               today: model.today)
             case .move(let pot):
                 PotsMoveSheet(from: pot,
                               candidates: (data?.pickerPots ?? []).filter { $0.accountId == pot.accountId && $0.id != pot.id && !$0.archived },
@@ -318,9 +322,11 @@ struct PotsScreen: View {
         }
     }
 
+    /// Opheffen: zonder saldo meteen; met saldo eerst kiezen waar het geld heen gaat.
     private func archive(_ pot: PotSummary) {
-        model.perform("Potje \(pot.name) gearchiveerd") {
-            try model.db.write { db in try PotService.archive(db, potId: pot.id) }
+        guard pot.balance.isZero else { sheet = .close(pot); return }
+        model.perform("Potje \(pot.name) opgeheven") {
+            try model.db.write { db in try PotService.close(db, potId: pot.id, toPotId: nil, day: model.today) }
         }
     }
 

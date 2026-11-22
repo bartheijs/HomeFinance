@@ -70,8 +70,8 @@ struct PotsDetailPanel: View {
                     if pot.archived {
                         Button("Haal uit archief", systemImage: "archivebox", action: onUnarchive)
                     } else {
-                        Button("Archiveer", systemImage: "archivebox", action: onArchive)
-                            .disabled(!pot.balance.isZero)
+                        Button(pot.balance.isZero ? "Opheffen" : "Opheffen…", systemImage: "archivebox", action: onArchive)
+                            .disabled(pot.balance.isNegative)
                     }
                     if history.isEmpty {
                         Button("Verwijder…", systemImage: "trash", role: .destructive, action: onDelete)
@@ -124,9 +124,9 @@ struct PotsDetailPanel: View {
                 Button("Bewerk", action: onEdit)
                     .keyboardShortcut("e", modifiers: .command)
                     .help("Naam, soort, eigenaar, beginbedrag en spaardoel wijzigen (⌘E)")
-                if !pot.archived && pot.balance.isZero {
-                    Button("Archiveer", action: onArchive)
-                        .help("Een leeg potje die je niet meer gebruikt verdwijnt uit de lijst. De boekingen blijven bewaard.")
+                if !pot.archived && !pot.balance.isNegative {
+                    Button(pot.balance.isZero ? "Opheffen" : "Opheffen…", action: onArchive)
+                        .help("Het potje verdwijnt uit de lijst; de boekingen blijven bewaard. Staat er nog geld in, dan kies je waar het heen gaat.")
                 }
             }
             .controlSize(.regular)

@@ -11,6 +11,8 @@ enum PotsSheet: Identifiable {
     case openings(Int64)
     /// Hulpje "Nieuw jaarbedrag" (UX-stap B3).
     case annual
+    /// Potje opheffen: waar gaat het saldo heen?
+    case close(PotSummary)
 
     var id: String {
         switch self {
@@ -19,6 +21,7 @@ enum PotsSheet: Identifiable {
         case .move(let pot): "move-\(pot.id)"
         case .openings(let id): "openings-\(id)"
         case .annual: "annual"
+        case .close(let pot): "close-\(pot.id)"
         }
     }
 }
@@ -292,6 +295,84 @@ struct PotsEditSheet: View {
 }
 
 // MARK: - Verplaatsen tussen potten
+
+/// Potje opheffen met saldo: naar een ander potje (de app boekt het en archiveert het potje), of naar de
+/// betaalrekening (dan maak je het zelf over; daarna staat het potje op € 0,00 en hef je het op).
+struct PotsCloseSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+
+    let pot: PotSummary
+    /// Andere potjes op dezelfde rekening.
+    let candidates: [PotSummary]
+    let today: Day
+
+    private enum Destination: Hashable { case pot, checking }
+    @State private var destination: Destination = .pot
+    @State private var toId: Int64?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("Potje \(pot.name) opheffen").font(.headline).padding(.top, 16)
+            Form {
+                Section {
+                    LabeledContent("Saldo", value: pot.balance.formatted())
+                    Picker("Het geld gaat naar", selection: $destination) {
+                        Text("Ander potje").tag(Destination.pot)
+                        Text("Betaalrekening").tag(Destination.checking)
+                    }
+                    .pickerStyle(.segmented)
+                    if pot.distributionAmount > .zero {
+                        Label("Er gaat nog \(pot.distributionAmount.formatted()) per maand naar dit potje via Automatisch sparen. Haal het daar ook weg.",
+                              systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Theme.warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if destination == .pot {
+                        Picker("Potje", selection: $toId) {
+                            Text("Kies een potje").tag(Int64?.none)
+                            ForEach(candidates) { other in
+                                Text("\(other.name)  ·  \(other.balance.formatted())").tag(Optional(other.id))
+                            }
+                        }
+                    }
+                } footer: {
+                    Text(destination == .pot
+                         ? "Het hele saldo gaat naar het gekozen potje; daarna is \(pot.name) opgeheven."
+                         : "1. Maak \(pot.balance.formatted()) over van spaar naar betaal.\n2. Boek bij het nakijken de afschrijving op de spaarrekening op \(pot.name).\n3. Het geld telt dan mee bij ‘nog te besteden’ en het potje staat op € 0,00: hef het dan op.")
+                        .font(.callout)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .formStyle(.grouped)
+            .scrollDisabled(true)
+            Divider()
+            HStack {
+                Spacer()
+                Button("Annuleer", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                if destination == .pot {
+                    Button("Verplaats en hef op") { save() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(toId == nil)
+                } else {
+                    Button("Begrepen") { dismiss() }.keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(16)
+        }
+        .frame(width: 480)
+    }
+
+    private func save() {
+        guard let toId else { return }
+        let name = candidates.first { $0.id == toId }?.name ?? "het andere potje"
+        let ok = model.perform("Potje \(pot.name) opgeheven; \(pot.balance.formatted()) naar \(name)") {
+            try model.db.write { db in try PotService.close(db, potId: pot.id, toPotId: toId, day: today) }
+        }
+        if ok { dismiss() }
+    }
+}
 
 struct PotsMoveSheet: View {
     @Environment(AppModel.self) private var model
