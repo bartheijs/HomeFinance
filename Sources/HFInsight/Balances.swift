@@ -65,6 +65,25 @@ public struct ExpectedItem: Identifiable, Equatable, Sendable {
     public let expectedDay: Int?
     /// De verwachte dag is al voorbij.
     public let isLate: Bool
+    /// Bij een inkomst die niet elke maand komt (kwartaal, jaar): het deel dat al meetelt in een maand waarin hij
+    /// niet komt. `plan` is dan dat deel; nil bij een gewone verwachte post.
+    public var share: ExpectedShare? = nil
+}
+
+/// Het deel van een kwartaal- of jaarinkomst dat al meetelt in "nog te besteden deze maand" (wens gebruiker
+/// 22-11-2026: "elke maand een deel meetellen"). Tussen twee uitbetalingen telt elke maand een deel meer mee:
+/// in maand `part` van `of` maanden `part/of` van het bedrag. Omdat nog te besteden van het saldo uitgaat (wat je
+/// vorige maand al uitgaf, is van het saldo af), is het deel cumulatief: in de maand van uitbetaling telt het hele
+/// bedrag (zolang het er nog niet is), daarna weer 1/`of`.
+public struct ExpectedShare: Equatable, Sendable {
+    /// Hoeveelste maand sinds de vorige uitbetaling (1 = de maand erna).
+    public let part: Int
+    /// Aantal maanden tussen twee uitbetalingen.
+    public let of: Int
+    /// Maand (1–12) van de volgende uitbetaling.
+    public let nextMonth: Int
+    /// Het bedrag per uitbetaling.
+    public let fullAmount: Money
 }
 
 /// Besteedbaar, met de simulatie tot het eind van de maand.
@@ -268,6 +287,34 @@ extension Insight {
 
     /// Besteedbaar van een jaar op de peildag, met de simulatie tot het eind van de lopende maand.
     /// Gooit `InsightError.yearNotFound` als het jaar nog geen begroting heeft.
+    /// De delen van inkomsten die niet elke maand komen, voor de lopende maand (zie `ExpectedShare`). Alleen
+    /// inkomsten (IN) met frequentie kwartaal of jaar, in een maand waarin ze niet verwacht worden en waarin er
+    /// niets op geboekt is.
+    static func incomeShares(_ db: Database, budgetYearId: Int64, today: Day) throws -> [ExpectedItem] {
+        let plans = PlanSet(try Q.items(db, yearId: budgetYearId))
+        let booked = Set(try Int64.fetchAll(db, sql: """
+            SELECT DISTINCT e.budgetItemId FROM entry e
+            WHERE e.budgetItemId IS NOT NULL AND e.accountId IN \(Q.betaal) AND \(Q.period) = ? AND e.day <= ?
+            """, arguments: [Q.periodKey(today.year, today.month), today]))
+        var result: [ExpectedItem] = []
+        for item in plans.items where item.direction == .IN && item.frequency != .maand && !item.isReserveLine {
+            let plan = plans.plan(item)
+            let months = item.months.sorted()
+            guard plan > .zero, !months.isEmpty, !months.contains(today.month), !booked.contains(item.id!) else { continue }
+            let m = today.month
+            let next = months.first { $0 > m } ?? months[0] + 12
+            let previous = months.last { $0 < m } ?? months[months.count - 1] - 12
+            let gap = next - previous, part = m - previous
+            guard gap > 1, part > 0, part < gap else { continue }
+            let share = Money(cents: plan.cents * Int64(part) / Int64(gap))
+            result.append(ExpectedItem(id: item.id!, label: item.label, direction: item.direction, plan: share,
+                                       expectedDay: nil, isLate: false,
+                                       share: ExpectedShare(part: part, of: gap, nextMonth: (next - 1) % 12 + 1,
+                                                            fullAmount: plan)))
+        }
+        return result
+    }
+
     public static func spendable(_ db: Database, year: Int, today: Day) throws -> Spendable {
         let budgetYear = try Q.budgetYear(db, year)
         let asOf = Q.asOf(year, today)
@@ -296,6 +343,9 @@ extension Insight {
                                              expectedDay: item.expectedDay,
                                              isLate: item.expectedDay.map { today.day > $0 } ?? false))
             }
+        }
+        if today.year == year {
+            expected += try incomeShares(db, budgetYearId: budgetYear.id!, today: today)
         }
         let expectedTotal = expected.map(\.plan).sum()
         let pending = today.year == year ? try pendingSettlementNet(db) : .zero

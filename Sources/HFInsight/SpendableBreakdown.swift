@@ -60,7 +60,11 @@ public struct SpendableBreakdown: Equatable, Sendable {
         var income: [ExpectedLine] = []
         var expenses: [ExpectedLine] = []
         for item in s.expectedItems {
-            let line = ExpectedLine(id: "post-\(item.id)", title: item.label, amount: item.plan, isLate: item.isLate)
+            var title = item.label
+            if let share = item.share {
+                title += " (\(share.part) van \(share.of) delen, komt in \(Day.monthNamesShort[share.nextMonth - 1]))"
+            }
+            let line = ExpectedLine(id: "post-\(item.id)", title: title, amount: item.plan, isLate: item.isLate)
             if item.plan > .zero { income.append(line) } else if item.plan < .zero { expenses.append(line) }
         }
         if !s.pendingSettlement.isZero {
