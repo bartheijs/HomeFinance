@@ -57,7 +57,7 @@ struct SidebarGroup: Identifiable {
         SidebarGroup(title: "Bijwerken", screens: [.review, .transactions, .tags]),
         SidebarGroup(title: "Begroting", screens: [.budget]),
         SidebarGroup(title: "Sparen", screens: [.pots, .distributions]),
-        SidebarGroup(title: "Inzicht", screens: [.reports, .grid]),
+        SidebarGroup(title: "Inzicht", screens: [.grid]),   // Rapporten tijdelijk uit de zijbalk (wens gebruiker 22-11-2026)
         SidebarGroup(title: "", screens: [.settings]),
     ]
 
