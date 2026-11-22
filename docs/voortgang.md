@@ -190,14 +190,23 @@ Aandachtspunten voor de test door de gebruiker:
 
 Elke testronde GESLAAGD (624 tests, zelftest 205 OK); kerncijfers met peildag 21-11-2026 gelijk.
 
-Nog open uit dezelfde feedback (eerst met de gebruiker bespreken):
-- Kwartaalposten (bv. kinderbijslag) tellen alleen mee in "nog te besteden" in de maand dat ze komen. Elke maand
-  een deel meetellen is een nieuwe rekenregel.
-- Rapporten: de gebruiker vindt ze niet nuttig. Eerst vragen welke vraag ze moeten beantwoorden.
-- Vooruitblik van een potje op basis van eerdere uitgaven (schakelaar per potje, bv. tandarts en auto): nieuwe
-  rekenregel. Eerst afspreken over welke periode het gemiddelde loopt en wat er met uitschieters gebeurt.
-- Afwijkend bedrag op een post: het gedrag klopt al (voldaan, niet te laat, werkelijk bedrag zichtbaar; plan
-  ongewijzigd).
+Daarna, na de keuzes van de gebruiker (1: elke maand een deel; 2: Rapporten tijdelijk weg; 4: zoals geadviseerd):
+
+| Commit | Wat de gebruiker ziet |
+|---|---|
+| `44b2f9d` | Rapporten staat niet meer in de zijbalk (Inzicht heeft alleen Maandgrid). Het scherm bestaat nog. |
+| `f8738a5` | **Rekenregel:** een inkomst per kwartaal of jaar telt tussen twee uitbetalingen elke maand een deel mee in "nog te besteden deze maand": in maand k van g k/g van het bedrag (cumulatief, want nog te besteden gaat uit van het saldo). In de rekensom: "Kinderbijslag (1 van 3 delen, komt in jan)". Alleen inkomsten; besteedbaar nu blijft gelijk. |
+| `52593b2` | **Migratie v11.** Potjes › vooruitblik: schakelaar "Reken met eerdere uitgaven" (gemiddelde van de afgelopen 12 hele maanden, korter bij een jong potje). Eenmalige uitgaven markeer je met rechtsklik bij Mutaties; uitgekomen verwachtingen (bv. het treinabonnement) tellen niet dubbel. Aandacht: "Potje … komt binnen een jaar onder nul". |
+
+**Let op voor de testronde op een kopie:** `nogTeBestedenDezeMaand` verandert bewust door `f8738a5` (met de
+voorbeelddata op 21-11-2026: 14765.97 → 14952.63, één derde van de kinderbijslag). Beoordeel het verschil en maak
+daarna een nieuwe basis. Alle andere kerncijfers bleven gelijk.
+
+Afwijkend bedrag op een post (vraag van de gebruiker): het gedrag klopt al (voldaan, niet te laat, werkelijk bedrag
+zichtbaar; plan ongewijzigd).
+
+Niet doorgeklikt in de echte app: de schakelaar en de markering "eenmalig" bij een potje, het venster Opheffen en
+"Elke maand" bij een verwachting (alleen tests, zelftest en bouwen).
 
 ## Terug naar de code van 16 november (21 november 2026)
 

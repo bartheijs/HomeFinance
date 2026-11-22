@@ -152,6 +152,9 @@ gebruiker ook met de hand kan koppelen.
 | `balance(db, potId:) -> Money` | Som van de boekingen op de spaarrekening met deze pot. |
 | `distribution(db, for:, accountId:) -> [Allocation]?` | **Oude weg**, blijft werken voor bestaande aanroepen; nieuwe code gebruikt `DistributionService`. Eén regel per reserveringspot als het bedrag gelijk is aan de som van hun maandbedragen; anders `nil`. |
 | `moveBetweenPots(db, from:, to:, amount:, day:, label:) -> (from: Entry, to: Entry)` | Twee handmatige boekingen op dezelfde rekening die samen nul zijn. |
+| `close(db, potId:, toPotId:, day:)` | Potje opheffen: het hele saldo naar `toPotId` (via `moveBetweenPots`) en archiveren, in één keer. Zonder `toPotId` alleen bij saldo € 0,00; een negatief saldo eerst aanvullen. |
+| `setForecastFromHistory(db, potId:, _ on:)` | Vooruitblik met eerdere uitgaven aan of uit (v11). `update` laat de waarde staan. |
+| `setForecastOneOff(db, entryId:, _ on:)` | Boeking als eenmalig markeren: telt niet mee in het gemiddelde van de vooruitblik (v11). |
 
 **Spaardoel uit onderdelen.** Aantal ≥ 1, bedrag per stuk ≥ 0, label mag leeg; de volgorde van de lijst is de
 volgorde van de onderdelen (`potId`, `id` en `sortOrder` in de meegegeven onderdelen worden genegeerd). Met
@@ -516,3 +519,14 @@ handmatige boeking tegenover staat.
 Is de post RESERVERINGEN en heeft het jaar RES-regels, dan verhoogt het hulpje ook de RES-regel van het potje (of
 maakt er een), omdat het plan van RESERVERINGEN in het maandgrid de som van de RES-regels is. Zonder RES-regels
 gebeurt dat niet.
+
+## Verwachtingen elke maand (`ForecastService.createMonthly`)
+
+`createMonthly(db, potId:, first:, last:, amount:, label:, project:)` maakt per maand van `first` t/m `last` een
+losse verwachting op dezelfde dag (in een kortere maand de laatste dag), hoogstens `monthlyLimit` (60). Zonder
+project krijgen ze de omschrijving als project.
+
+## Marge op spaardoelen (`GoalMargin`, HFCore)
+
+`GoalMargin.basisPoints(db)` / `setBasisPoints(db, _:)`: de marge in basispunten van het doelbedrag (standaard 50 =
+0,5 %), in de tabel `setting`. HFInsight rekent een spaardoel dat binnen de marge onder het doel blijft als op koers.

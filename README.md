@@ -27,7 +27,7 @@ administratie beginnen**. Je kunt later altijd wisselen via Instellingen › Ove
 
 De zijbalk is ingedeeld naar wat je komt doen: **Vandaag** (Dashboard, Te doen), **Bijwerken**
 (Importeren en nakijken, Transacties, Tags), **Begroting** (Posten), **Sparen** (Potjes, Automatisch sparen) en
-**Inzicht** (Rapporten, Maandgrid), met Instellingen onderaan. Het Dashboard toont "Nog te besteden deze maand" met
+**Inzicht** (Maandgrid; Rapporten staat er tijdelijk niet in), met Instellingen onderaan. Het Dashboard toont "Nog te besteden deze maand" met
 de rekensom eronder en drie kaartjes: Periodieke transacties, Incidentele transacties en Huidig saldo. *Te doen*
 zet alles wat nog open staat bij elkaar, alleen in kaartjes met inhoud: Nog overboeken (met per regel "Nog
 overmaken" of "Afgevinkt, wacht op de bank"), Terug te ontvangen en Tijdelijk geleend van spaar. Bij *Tags* zie je

@@ -552,6 +552,21 @@ er iets meetelt) + nog verwacht deze maand. "Nog verwacht" is netto: `expectedIn
 post, plus een open verrekening met spaar. `addsUp` is waar als de regels samen `spendableEndOfMonth` zijn; getest
 met een fixture en met de voorbeelddata. Vervangt `SpendableExplanation` (de zin).
 
+### Kwartaal- en jaarinkomsten in "nog te besteden" (`ExpectedShare`)
+
+Een inkomst (IN) per kwartaal of jaar telt in een maand waarin hij niet komt (en niet geboekt is) voor een deel mee
+in `Spendable.expectedItems`: in maand `part` van `of` maanden sinds de vorige uitbetaling `part/of` van het bedrag
+(cumulatief, naar beneden afgerond op centen). `ExpectedItem.share` geeft deel, aantal en de maand van de volgende
+uitbetaling. In de maand van uitbetaling telt het hele bedrag zolang het er niet is. Uitgaven worden niet verdeeld.
+
+### Vooruitblik met eerdere uitgaven (`PotHistoryAverage`)
+
+Met `Pot.forecastFromHistory` krijgt de vooruitblik (en daarmee spaardoel en `potForecast`) vanaf de maand na
+vandaag elke 15e een event `.historyAverage` met het gemiddelde van de uitgaven per maand: hele maanden vóór de
+lopende maand, hoogstens 12, zonder `Entry.forecastOneOff` en zonder boekingen waarmee een verwachting is
+uitgekomen. `PotForecast.usesHistory` en `historyAverage` (ook als de schakelaar uit staat). Dashboard:
+`AttentionItem.potsRunningOut(names:)` als zo'n potje binnen een jaar onder nul komt.
+
 ### Incidentele transacties (`incidentalMonth`)
 
 `incidentalMonth(db, year:month:)` geeft alles zonder vaste post op de betaalrekening(en) in één begrotingsmaand:
