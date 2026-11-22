@@ -227,6 +227,44 @@ public enum ForecastService {
         }
     }
 
+    /// Het hoogste aantal maanden dat `createMonthly` in één keer maakt.
+    public static let monthlyLimit = 60
+
+    /// Maakt een verwachting voor elke maand van `first` t/m `last`, steeds op dezelfde dag van de maand (in een
+    /// kortere maand de laatste dag). Bijvoorbeeld een treinabonnement elke maand t/m juli. Zonder project krijgen
+    /// ze de omschrijving als project, zodat ze samen in één blokje staan. Geen schemawijziging: het zijn gewone
+    /// losse verwachtingen, elk apart af te vinken of te wijzigen.
+    @discardableResult
+    public static func createMonthly(_ db: Database, potId: Int64, first: Day, last: Day, amount: Money,
+                                     label: String = "", project: String = "") throws -> [ForecastItem] {
+        try atomic(db) {
+            guard last >= first else {
+                throw BudgetError.validation("De einddatum ligt vóór de eerste datum.")
+            }
+            let months = (last.year - first.year) * 12 + (last.month - first.month) + 1
+            guard months <= monthlyLimit else {
+                throw BudgetError.validation("Dat zijn \(months) maanden; het kan tot \(monthlyLimit) maanden in één keer.")
+            }
+            let trimmedProject = project.trimmingCharacters(in: .whitespaces)
+            let group = trimmedProject.isEmpty ? label.trimmingCharacters(in: .whitespaces) : trimmedProject
+            var items: [ForecastItem] = []
+            for offset in 0..<months {
+                let index = first.month - 1 + offset
+                let year = first.year + index / 12, month = index % 12 + 1
+                var day: Day?
+                for d in stride(from: first.day, through: 1, by: -1) {
+                    if let found = Day(year: year, month: month, day: d) { day = found; break }
+                }
+                guard let day, day <= last else { continue }
+                var item = ForecastItem(potId: potId, day: day, amount: amount, label: label, project: group)
+                try validate(db, &item)
+                try item.insert(db)
+                items.append(item)
+            }
+            return items
+        }
+    }
+
     /// Werkt pot, datum, bedrag, omschrijving en project bij. Of de verwachting is uitgekomen wijzigt alleen via
     /// `markRealized` en `reopen`.
     @discardableResult

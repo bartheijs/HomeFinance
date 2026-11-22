@@ -160,6 +160,31 @@ import Testing
 }
 
 @Suite struct ForecastTests {
+    /// Elke maand t/m een einddatum (bv. een treinabonnement t/m juli): één verwachting per maand, op dezelfde
+    /// dag (in een kortere maand de laatste dag), gegroepeerd onder de omschrijving.
+    @Test func elkeMaandTotEinddatum() throws {
+        let fx = try Fixture()
+        try fx.app.write { db in
+            let items = try ForecastService.createMonthly(db, potId: fx.potSpaar.id!, first: d("2027-01-31"),
+                                                          last: d("2027-04-30"), amount: c(-9_950), label: "Treinabonnement")
+            #expect(items.map(\.day) == [d("2027-01-31"), d("2027-02-28"), d("2027-03-31"), d("2027-04-30")])
+            #expect(items.allSatisfy { $0.amount == c(-9_950) && $0.project == "Treinabonnement" })
+            // Ligt de dag in de laatste maand na de einddatum, dan valt die maand weg.
+            let kort = try ForecastService.createMonthly(db, potId: fx.potSpaar.id!, first: d("2027-05-25"),
+                                                         last: d("2027-07-10"), amount: c(-1_000), label: "x", project: "Eigen")
+            #expect(kort.map(\.day) == [d("2027-05-25"), d("2027-06-25")])
+            #expect(kort.allSatisfy { $0.project == "Eigen" })
+            #expect(throws: (any Error).self) {
+                try ForecastService.createMonthly(db, potId: fx.potSpaar.id!, first: d("2027-05-01"),
+                                                  last: d("2027-04-01"), amount: c(1))
+            }
+            #expect(throws: (any Error).self) {
+                try ForecastService.createMonthly(db, potId: fx.potSpaar.id!, first: d("2027-01-01"),
+                                                  last: d("2032-01-01"), amount: c(1))
+            }
+        }
+    }
+
     @Test func verwachtingBeheren() throws {
         let fx = try Fixture()
         try fx.app.write { db in

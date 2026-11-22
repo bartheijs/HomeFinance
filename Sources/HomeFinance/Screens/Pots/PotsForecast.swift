@@ -699,6 +699,9 @@ struct PotsForecastSheet: View {
     @State private var incoming: Bool
     @State private var amount: Money?
     @State private var label: String
+    /// Elke maand t/m `until` (alleen bij een nieuwe verwachting).
+    @State private var monthly = false
+    @State private var until: Date
 
     init(potId: Int64, potName: String, existing: ForecastItem?, presetProject: String = "", today: Day) {
         self.potId = potId; self.potName = potName; self.existing = existing
@@ -708,6 +711,7 @@ struct PotsForecastSheet: View {
         _incoming = State(initialValue: !(existing?.amount.isNegative ?? false))
         _amount = State(initialValue: existing?.amount.magnitude)
         _label = State(initialValue: existing?.label ?? "")
+        _until = State(initialValue: Calendar.current.date(byAdding: .month, value: 6, to: fallback) ?? fallback)
     }
 
     private var canSave: Bool { (amount ?? .zero) > .zero }
@@ -718,7 +722,14 @@ struct PotsForecastSheet: View {
             Form {
                 Section {
                     LabeledContent("Potje", value: potName)
-                    DatePicker("Datum", selection: $date, displayedComponents: .date)
+                    DatePicker(monthly ? "Eerste keer" : "Datum", selection: $date, displayedComponents: .date)
+                    if existing == nil {
+                        Toggle("Elke maand", isOn: $monthly)
+                            .help("Bijvoorbeeld een abonnement: elke maand op dezelfde dag, tot en met de einddatum.")
+                        if monthly {
+                            DatePicker("Tot en met", selection: $until, in: date..., displayedComponents: .date)
+                        }
+                    }
                     Picker("Richting", selection: $incoming) {
                         Text("Erbij").tag(true)
                         Text("Eraf").tag(false)
@@ -772,11 +783,14 @@ struct PotsForecastSheet: View {
         let signed = incoming ? amount : -amount
         let text = label.trimmingCharacters(in: .whitespacesAndNewlines)
         let day = Day(date: date)
-        let ok = model.perform(existing == nil ? "Verwachting toegevoegd" : "Verwachting bewaard") {
+        let ok = model.perform(existing != nil ? "Verwachting bewaard" : (monthly ? "Verwachtingen toegevoegd, elke maand" : "Verwachting toegevoegd")) {
             try model.db.write { db in
                 if var item = existing {
                     item.day = day; item.amount = signed; item.label = text; item.project = projectName
                     _ = try ForecastService.update(db, item)
+                } else if monthly {
+                    _ = try ForecastService.createMonthly(db, potId: potId, first: day, last: Day(date: until),
+                                                          amount: signed, label: text, project: projectName)
                 } else {
                     _ = try ForecastService.create(db, potId: potId, day: day, amount: signed, label: text,
                                                    project: projectName)
