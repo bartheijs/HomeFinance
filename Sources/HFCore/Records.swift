@@ -145,6 +145,8 @@ public struct Pot: Codable, Identifiable, Equatable, Sendable, FetchableRecord, 
     public var archived: Bool
     /// De dag waarop het spaardoel bereikt moet zijn, of nil (doel zonder datum).
     public var targetDate: Day?
+    /// De vooruitblik rekent ook met de gemiddelde uitgaven uit het verleden (v11).
+    public var forecastFromHistory: Bool = false
 
     public static let databaseTableName = "pot"
     public init(id: Int64? = nil, accountId: Int64, name: String, kind: PotKind, owner: String? = nil,
@@ -276,6 +278,8 @@ public struct Entry: Codable, Identifiable, Equatable, Sendable, FetchableRecord
     /// de maand van `day` (bv. eind november betaald, hoort bij december). nil = de maand van `day`.
     /// Het saldo van de rekening volgt altijd `day`.
     public var period: String?
+    /// Eenmalige uitgave uit een potje: telt niet mee in het gemiddelde van de vooruitblik (v11).
+    public var forecastOneOff: Bool = false
 
     public static let databaseTableName = "entry"
     public init(id: Int64? = nil, accountId: Int64, bankTransactionId: Int64? = nil, day: Day, amount: Money,

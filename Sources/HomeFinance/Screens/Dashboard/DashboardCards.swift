@@ -106,6 +106,9 @@ private struct DashboardAttentionLook {
         case .largeExpenseComing:
             icon = "exclamationmark.circle"; tint = Theme.warning; action = "Bekijk"; target = .dashboard; detail = .fixedItems
             help = "Een grote uitgave die niet elke maand komt, wordt later deze maand verwacht."
+        case .potsRunningOut:
+            icon = "chart.line.downtrend.xyaxis"; tint = Theme.warning; action = "Bekijk"; target = .pots
+            help = "Met de gemiddelde uitgaven uit het verleden komt dit potje binnen een jaar onder nul."
         case .bufferNotReached:
             icon = "exclamationmark.triangle.fill"; tint = Theme.negative; action = nil; target = .dashboard
             help = "Nog te besteden deze maand is negatief."

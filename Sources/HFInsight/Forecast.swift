@@ -10,6 +10,19 @@ public enum ForecastEventKind: Equatable, Sendable {
     case oneOff(forecastItemId: Int64)
     /// De maandelijkse bijschrijving uit een vaste storting (`Distribution`).
     case recurring(distributionId: Int64)
+    /// De gemiddelde uitgaven per maand uit het verleden (`Pot.forecastFromHistory`), één keer per maand.
+    case historyAverage
+}
+
+/// Gemiddelde uitgaven per maand van een pot uit het verleden, voor de vooruitblik (`Pot.forecastFromHistory`).
+/// Over de afgelopen `historyMonths` hele maanden (of korter als de pot jonger is), zonder boekingen die als
+/// eenmalig gemarkeerd zijn (`Entry.forecastOneOff`) en zonder boekingen waarmee een losse verwachting is
+/// uitgekomen (die staan al als verwachting in de vooruitblik).
+public struct PotHistoryAverage: Equatable, Sendable {
+    /// Gemiddeld per maand (negatief of nul).
+    public let perMonth: Money
+    /// Over hoeveel maanden.
+    public let months: Int
 }
 
 /// Eén verwachte mutatie van een pot.
@@ -57,6 +70,11 @@ public struct PotForecast: Equatable, Sendable {
     public let lowestPoint: ForecastPoint
     /// Het verwachte saldo op `until`.
     public var endBalance: Money { events.last?.balanceAfter ?? startBalance }
+    /// De pot rekent met eerdere uitgaven (`Pot.forecastFromHistory`).
+    public var usesHistory: Bool = false
+    /// Het gemiddelde waarmee gerekend wordt (ook als de schakelaar uit staat, om te tonen wat het zou zijn); nil
+    /// als er nog geen hele maand met boekingen is.
+    public var historyAverage: PotHistoryAverage? = nil
 
     /// Het verwachte saldo aan het eind van een dag, of nil buiten `today` … `until`.
     public func balance(on day: Day) -> Money? {
@@ -178,6 +196,8 @@ struct ForecastContext {
     var lines: [Int64: [Line]] = [:]
     /// Onderdelen van het spaardoel per pot.
     var parts: [Int64: [GoalPartRow]] = [:]
+    /// Gemiddelde uitgaven per maand voor potten met `forecastFromHistory` (alleen die tellen in `events`).
+    var averages: [Int64: PotHistoryAverage] = [:]
 
     init(_ db: Database, today: Day, potId: Int64? = nil) throws {
         self.today = today
@@ -192,6 +212,11 @@ struct ForecastContext {
         for part in try partRequest.fetchAll(db) {
             parts[part.potId, default: []].append(GoalPartRow(id: part.id!, label: part.label, quantity: part.quantity,
                                                               unitAmount: part.unitAmount, amount: part.amount))
+        }
+        var flagged = Pot.filter(Column("forecastFromHistory") == true)
+        if let potId { flagged = flagged.filter(Column("id") == potId) }
+        for pot in try flagged.fetchAll(db) {
+            if let average = try Self.historyAverage(db, pot: pot, today: today) { averages[pot.id!] = average }
         }
         let deposit = "e.potId = l.potId AND e.accountId = p.accountId AND e.amount = l.amount AND e.day <= ?"
         var sql = """
@@ -213,6 +238,30 @@ struct ForecastContext {
             lines[r["potId"], default: []].append(
                 Line(distributionId: r["id"], name: r["name"], amount: r["amount"], lastDeposit: whole ?? any))
         }
+    }
+
+    /// Aantal hele maanden waarover het gemiddelde loopt.
+    static let historyMonths = 12
+
+    /// Het gemiddelde van de uitgaven per maand over de hele maanden vóór de lopende maand (hoogstens
+    /// `historyMonths`, vanaf de maand van de eerste boeking op de pot). Nil als er nog geen hele maand is.
+    static func historyAverage(_ db: Database, pot: Pot, today: Day) throws -> PotHistoryAverage? {
+        guard let potId = pot.id,
+              let first = try Day.fetchOne(db, sql: "SELECT MIN(day) FROM entry WHERE potId = ? AND accountId = ?",
+                                           arguments: [potId, pot.accountId]) else { return nil }
+        let monthsSinceFirst = (today.year - first.year) * 12 + (today.month - first.month)
+        let months = min(historyMonths, monthsSinceFirst)
+        guard months > 0 else { return nil }
+        let index = today.year * 12 + (today.month - 1) - months
+        let start = Day(year: index / 12, month: index % 12 + 1, day: 1)!
+        let end = Day(year: today.year, month: today.month, day: 1)!.adding(days: -1)
+        let total = try Money.fetchOne(db, sql: """
+            SELECT COALESCE(SUM(e.amount), 0) FROM entry e
+            WHERE e.potId = ? AND e.accountId = ? AND e.amount < 0 AND e.day >= ? AND e.day <= ?
+              AND e.forecastOneOff = 0
+              AND NOT EXISTS (SELECT 1 FROM forecastItem f WHERE f.realizedEntryId = e.id)
+            """, arguments: [potId, pot.accountId, start, end]) ?? .zero
+        return PotHistoryAverage(perMonth: Money(cents: total.cents / Int64(months)), months: months)
     }
 
     /// De dagen na vandaag t/m `until` waarop een maandelijkse storting verwacht wordt. `lastDeposit` nil = de 25e.
@@ -247,6 +296,15 @@ struct ForecastContext {
             for day in depositDays(lastDeposit: line.lastDeposit, until: until) {
                 raw.append((day, line.amount, line.name, .recurring(distributionId: line.distributionId),
                             "vast-\(line.distributionId)-\(Q.periodKey(day.year, day.month))", nil))
+            }
+        }
+        if let average = averages[potId], average.perMonth < .zero {
+            // Vanaf de maand na vandaag, halverwege de maand: de uitgaven van deze maand zitten al (deels) in het saldo.
+            var (y, m) = today.month == 12 ? (today.year + 1, 1) : (today.year, today.month + 1)
+            while let day = Day(year: y, month: m, day: 15), day <= until {
+                raw.append((day, average.perMonth, "Gemiddelde uitgaven", .historyAverage,
+                            "gem-\(Q.periodKey(y, m))", nil))
+                (y, m) = m == 12 ? (y + 1, 1) : (y, m + 1)
             }
         }
         return raw.sorted { ($0.day, $1.amount, $0.id) < ($1.day, $0.amount, $1.id) }
@@ -359,10 +417,13 @@ extension Insight {
             points.append(ForecastPoint(day: until, balance: running, isForecast: true))
         }
 
-        return PotForecast(potId: potId, potName: pot.name, today: today, until: until,
-                           targetAmount: pot.targetAmount, targetDate: pot.targetDate, startBalance: startBalance,
-                           events: events, overdue: (context.items[potId] ?? []).filter { $0.day <= today },
-                           points: points, lowestPoint: lowest)
+        var forecast = PotForecast(potId: potId, potName: pot.name, today: today, until: until,
+                                   targetAmount: pot.targetAmount, targetDate: pot.targetDate, startBalance: startBalance,
+                                   events: events, overdue: (context.items[potId] ?? []).filter { $0.day <= today },
+                                   points: points, lowestPoint: lowest)
+        forecast.usesHistory = pot.forecastFromHistory
+        forecast.historyAverage = try ForecastContext.historyAverage(db, pot: pot, today: today)
+        return forecast
     }
 
     /// Het spaardoel van een pot op de peildag, of nil als de pot geen doelbedrag heeft.

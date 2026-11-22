@@ -140,6 +140,8 @@ public struct PotHistoryRow: Identifiable, Equatable, Sendable {
     public var id: Int64 { entry.id }
     public let entry: EntryRow
     public let runningBalance: Money
+    /// Als eenmalig gemarkeerd: telt niet mee in het gemiddelde van de vooruitblik (`Entry.forecastOneOff`).
+    public var isForecastOneOff: Bool = false
 }
 
 /// Richting van een overboeking tussen spaar- en betaalrekening.
@@ -348,10 +350,14 @@ extension Insight {
             throw InsightError.potNotFound(potId)
         }
         var running = Money.zero
+        let oneOffs = Set(try Int64.fetchAll(db, sql: "SELECT id FROM entry WHERE potId = ? AND forecastOneOff = 1",
+                                             arguments: [potId]))
         return try entryRows(db, where: "e.potId = ? AND e.accountId = ?", arguments: [potId, accountId],
                              order: "e.day ASC, e.id ASC").map {
             running += $0.amount
-            return PotHistoryRow(entry: $0, runningBalance: running)
+            var row = PotHistoryRow(entry: $0, runningBalance: running)
+            row.isForecastOneOff = oneOffs.contains($0.id)
+            return row
         }
     }
 

@@ -2,6 +2,7 @@ import SwiftUI
 import Charts
 import HFCore
 import HFInsight
+import HFBudget
 
 /// Rechterpaneel: één pot met saldografiek, mutaties en acties.
 struct PotsDetailPanel: View {
@@ -238,6 +239,9 @@ struct PotsDetailPanel: View {
                 if row.entry.bankTransactionId == nil {
                     Text("handmatig").font(.caption2).foregroundStyle(.tertiary)
                 }
+                if row.isForecastOneOff {
+                    Text("eenmalig").font(.caption2).foregroundStyle(.secondary)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 1) {
@@ -250,5 +254,15 @@ struct PotsDetailPanel: View {
         .font(.callout)
         .padding(.vertical, 6)
         .help(row.entry.note.isEmpty ? row.entry.day.dutch : "\(row.entry.day.dutch) · \(row.entry.note)")
+        .contextMenu {
+            if row.entry.amount < .zero {
+                Button(row.isForecastOneOff ? "Niet meer eenmalig" : "Eenmalig (niet in het gemiddelde)") {
+                    let on = !row.isForecastOneOff
+                    model.perform(on ? "Telt niet meer mee in het gemiddelde" : "Telt weer mee in het gemiddelde") {
+                        try model.db.write { try PotService.setForecastOneOff($0, entryId: row.entry.id, on) }
+                    }
+                }
+            }
+        }
     }
 }

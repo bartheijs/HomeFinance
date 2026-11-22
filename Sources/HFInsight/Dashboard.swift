@@ -30,6 +30,8 @@ public enum AttentionItem: Equatable, Sendable {
     case fixedItemsLate(labels: [String])
     /// Spaardoelen die met de huidige stortingen niet op tijd gehaald worden (of al verlopen zijn).
     case potGoalsBehind(names: [String])
+    /// Potjes die met eerdere uitgaven meerekenen en volgens de vooruitblik binnen 12 maanden onder nul komen.
+    case potsRunningOut(names: [String])
     /// Nog te besteden deze maand is negatief: het minimum op de betaalrekening wordt niet gehaald. `shortfall` is
     /// het tekort (positief).
     case bufferNotReached(shortfall: Money)
@@ -75,6 +77,9 @@ public enum AttentionItem: Equatable, Sendable {
         case .potGoalsBehind(let names):
             return names.count == 1 ? "Spaardoel niet op koers: \(names[0])."
                 : "Spaardoelen niet op koers: \(names.joined(separator: ", "))."
+        case .potsRunningOut(let names):
+            return names.count == 1 ? "Potje \(names[0]) komt binnen een jaar onder nul."
+                : "Potjes onder nul binnen een jaar: \(names.joined(separator: ", "))."
         case .bufferNotReached(let shortfall):
             return "Het minimum op je betaalrekening haal je deze maand niet: \(shortfall.formatted()) tekort."
         case .importBalanceDiffers(_, let name, let bank, let app, let day):
@@ -190,6 +195,16 @@ extension Insight {
             }
             .map(\.name)
         if !behind.isEmpty { attention.append(.potGoalsBehind(names: behind)) }
+        // Potjes die met eerdere uitgaven rekenen: komt de vooruitblik binnen een jaar onder nul?
+        let horizon = Day(year: today.year + 1, month: today.month, day: min(today.day, 28))!
+        let runningOut = try Pot.filter(Column("archived") == false && Column("forecastFromHistory") == true)
+            .order(Column("sortOrder"), Column("name")).fetchAll(db)
+            .filter { pot in
+                let f = try potForecast(db, potId: pot.id!, today: today, until: horizon)
+                return f.startBalance >= .zero && f.lowestPoint.balance < .zero
+            }
+            .map(\.name)
+        if !runningOut.isEmpty { attention.append(.potsRunningOut(names: runningOut)) }
         let openingDates = Dictionary(uniqueKeysWithValues: try Row.fetchAll(db, sql: "SELECT id, openingDate FROM account")
             .map { ($0["id"] as Int64, $0["openingDate"] as Day) })
         for a in accounts {

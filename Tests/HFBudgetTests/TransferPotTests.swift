@@ -149,6 +149,24 @@ import Testing
         }
     }
 
+    /// De schakelaar "Reken met eerdere uitgaven" blijft staan als je het potje wijzigt; eenmalig per boeking.
+    @Test func vooruitblikMetEerdereUitgaven() throws {
+        let fx = try Fixture()
+        try fx.app.write { db in
+            try PotService.setForecastFromHistory(db, potId: fx.potVakantie.id!, true)
+            var pot = try Pot.fetchOne(db, key: fx.potVakantie.id!)!
+            #expect(pot.forecastFromHistory)
+            pot.forecastFromHistory = false
+            pot.name = "Vakantie zomer"
+            try PotService.update(db, pot)
+            #expect(try Pot.fetchOne(db, key: fx.potVakantie.id!)?.forecastFromHistory == true)
+            let move = try PotService.moveBetweenPots(db, from: fx.potVakantie.id!, to: fx.potSpaar.id!,
+                                                      amount: c(1_000), day: d("2027-02-01"), label: "x")
+            try PotService.setForecastOneOff(db, entryId: move.from.id!, true)
+            #expect(try Entry.fetchOne(db, key: move.from.id!)?.forecastOneOff == true)
+        }
+    }
+
     @Test func potBeherenArchiverenEnVolgorde() throws {
         let fx = try Fixture()
         try fx.app.write { db in

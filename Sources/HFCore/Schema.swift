@@ -338,6 +338,17 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Vooruitblik van een potje met eerdere uitgaven (wens gebruiker 22-11-2026): per potje aan of uit, en per
+        // boeking de markering "eenmalig" (telt niet mee in het gemiddelde). Bestaande potjes en boekingen: uit.
+        m.registerMigration("v11-forecast-history") { db in
+            try db.alter(table: "pot") { t in
+                t.add(column: "forecastFromHistory", .boolean).notNull().defaults(to: false)
+            }
+            try db.alter(table: "entry") { t in
+                t.add(column: "forecastOneOff", .boolean).notNull().defaults(to: false)
+            }
+        }
+
         return m
     }
 }

@@ -236,6 +236,7 @@ public enum PotService {
             try validate(db, &pot)
             pot.sortOrder = existing.sortOrder
             pot.archived = existing.archived
+            pot.forecastFromHistory = existing.forecastFromHistory   // alleen via setForecastFromHistory
             // Met onderdelen is het spaardoel altijd hun som; een zelf ingevuld bedrag wordt overschreven.
             let parts = try goalParts(db, potId: id)
             if !parts.isEmpty { pot.targetAmount = parts.map(\.amount).sum() }
@@ -337,6 +338,22 @@ public enum PotService {
                                arguments: [saved.map(\.amount).sum(), pot.id])
             }
             return saved
+        }
+    }
+
+    /// Zet de vooruitblik met eerdere uitgaven aan of uit voor een pot.
+    public static func setForecastFromHistory(_ db: Database, potId: Int64, _ on: Bool) throws {
+        try atomic(db) {
+            _ = try Check.pot(db, potId)
+            try db.execute(sql: "UPDATE pot SET forecastFromHistory = ? WHERE id = ?", arguments: [on, potId])
+        }
+    }
+
+    /// Markeert een boeking als eenmalig (telt niet mee in het gemiddelde van de vooruitblik), of haalt dat weg.
+    public static func setForecastOneOff(_ db: Database, entryId: Int64, _ on: Bool) throws {
+        try atomic(db) {
+            _ = try Check.entry(db, entryId)
+            try db.execute(sql: "UPDATE entry SET forecastOneOff = ? WHERE id = ?", arguments: [on, entryId])
         }
     }
 

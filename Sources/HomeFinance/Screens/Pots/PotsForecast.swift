@@ -267,6 +267,23 @@ struct PotsForecastSection: View {
     }
     private var until: Day { max(standOn ?? ahead(months: 6), today.adding(days: 1)) }
 
+    /// Schakelaar "Reken met eerdere uitgaven", met het gemiddelde erbij.
+    private func historyToggle(_ forecast: PotForecast) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle("Reken met eerdere uitgaven", isOn: Binding(get: { forecast.usesHistory }, set: { on in
+                model.perform(on ? "Vooruitblik rekent met eerdere uitgaven" : "Vooruitblik zonder eerdere uitgaven") {
+                    try model.db.write { try PotService.setForecastFromHistory($0, potId: pot.id, on) }
+                }
+            }))
+            .toggleStyle(.switch).controlSize(.small)
+            .help("Elke maand gaat het gemiddelde van de uitgaven van de afgelopen 12 maanden eraf. Eenmalige uitgaven (rechtsklik bij Mutaties) en uitgekomen verwachtingen tellen niet mee.")
+            Text(forecast.historyAverage.map { "Gemiddeld \($0.perMonth.magnitude.formatted()) per maand uitgegeven (\($0.months) mnd)" }
+                 ?? "Nog geen hele maand met uitgaven")
+                .font(.caption)
+        }
+        .font(.callout)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
@@ -276,6 +293,7 @@ struct PotsForecastSection: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let forecast {
+                historyToggle(forecast)
                 chart(forecast)
                 stand(forecast)
                 // Een pot die al in de min staat krijgt deze waarschuwing alleen als hij nog verder zakt.
