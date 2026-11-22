@@ -180,6 +180,25 @@ Aandachtspunten voor de test door de gebruiker:
 - De lege toestand van Te doen ("Er is niets te doen.") is niet in de voorbeelddata te zien (daar staat altijd iets).
 - Op de telefoonpagina staat "Vrij te besteden" nog; dat was geen onderdeel van de feedback.
 
+### Herstelronde 1b: wensen na de test (22 november 2026, gebouwd, nog niet getest door de gebruiker)
+
+| Commit | Wat de gebruiker ziet |
+|---|---|
+| `0cba322` | Spaardoel met een marge (standaard 0,5 % van het doel, te kiezen bij het spaardoel: 0 / 0,5 / 1 / 2 %, voor alle potjes). Een klein tekort, zoals 4 cent per maand, geeft "op koers (binnen de marge)" en geen melding bij Aandacht. Alleen de status verandert. Bewaard in de tabel `setting` (`GoalMargin` in HFCore). |
+| `b44242d` | Potjes › Verwachting toevoegen: "Elke maand" met "Tot en met" (bv. treinabonnement t/m juli). Eén losse verwachting per maand, samen in één blokje (zonder project: de omschrijving als project). |
+| `efbe10d` | Potje opheffen (was Archiveer): met saldo kies je ander potje (de app verplaatst en heft op) of betaalrekening (drie stappen: overmaken, afschrijving op het potje boeken, opheffen). |
+
+Elke testronde GESLAAGD (624 tests, zelftest 205 OK); kerncijfers met peildag 21-11-2026 gelijk.
+
+Nog open uit dezelfde feedback (eerst met de gebruiker bespreken):
+- Kwartaalposten (bv. kinderbijslag) tellen alleen mee in "nog te besteden" in de maand dat ze komen. Elke maand
+  een deel meetellen is een nieuwe rekenregel.
+- Rapporten: de gebruiker vindt ze niet nuttig. Eerst vragen welke vraag ze moeten beantwoorden.
+- Vooruitblik van een potje op basis van eerdere uitgaven (schakelaar per potje, bv. tandarts en auto): nieuwe
+  rekenregel. Eerst afspreken over welke periode het gemiddelde loopt en wat er met uitschieters gebeurt.
+- Afwijkend bedrag op een post: het gedrag klopt al (voldaan, niet te laat, werkelijk bedrag zichtbaar; plan
+  ongewijzigd).
+
 ## Terug naar de code van 16 november (21 november 2026)
 
 - **Testvangnet (ronde 1)**: `scripts/testronde.sh`. De orchestrator draait het na elke wens op een kopie van de
