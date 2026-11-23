@@ -1,0 +1,135 @@
+1
+00:00:00,500 --> 00:00:03,809
+[HomeFinance] HomeFinance: je gezinsbegroting, zonder Excel.
+
+2
+00:00:04,509 --> 00:00:08,500
+[1 · Het probleem] Bij ons stonden de begroting en de spaarpotjes in twee aparte Excels.
+
+3
+00:00:08,500 --> 00:00:11,334
+Elke maand betekende dat: afschriften downloaden,
+
+4
+00:00:11,334 --> 00:00:14,804
+bedragen overtikken en uitzoeken waar het geld gebleven was.
+
+5
+00:00:15,504 --> 00:00:18,033
+[2 · Wat is het?] Daarom is er HomeFinance: een eigen Mac-app.
+
+6
+00:00:18,033 --> 00:00:21,826
+Alles blijft op je eigen computer, zonder account en zonder cloud.
+
+7
+00:00:21,826 --> 00:00:24,987
+Je downloadt het bestand van je bank en importeert het.
+
+8
+00:00:24,987 --> 00:00:26,137
+De rest doet de app.
+
+9
+00:00:26,837 --> 00:00:30,329
+[3 · Dashboard] Het dashboard begint met één getal: nog te besteden deze maand.
+
+10
+00:00:30,329 --> 00:00:35,207
+Daaronder staat de rekensom: het saldo, min wat er minimaal op de rekening moet blijven,
+
+11
+00:00:35,207 --> 00:00:37,867
+plus wat nog terugkomt en wat er nog binnenkomt.
+
+12
+00:00:37,867 --> 00:00:40,528
+Rechts staat Aandacht, met wat je nog moet doen.
+
+13
+00:00:40,528 --> 00:00:44,963
+En onderaan de kaartjes voor periodieke en incidentele transacties en het saldo.
+
+14
+00:00:45,663 --> 00:00:49,285
+[4 · Importeren en nakijken] Na het importeren stelt de app per boeking een post of potje voor.
+
+15
+00:00:49,285 --> 00:00:50,931
+De zekere boek je in één keer.
+
+16
+00:00:50,931 --> 00:00:54,059
+Vink je Voortaan zo indelen aan, dan onthoudt de app dat.
+
+17
+00:00:54,059 --> 00:00:56,474
+Regels komen er alleen met jouw toestemming.
+
+18
+00:00:57,174 --> 00:01:01,157
+[5 · Potjes] Het spaargeld is verdeeld over potjes, zoals vakantie of onderhoud huis.
+
+19
+00:01:01,157 --> 00:01:03,537
+Spaardoelen laten zien of je op koers ligt,
+
+20
+00:01:03,537 --> 00:01:06,856
+en de vooruitblik rekent uit wat er straks in een potje zit.
+
+21
+00:01:07,556 --> 00:01:11,563
+[5 · Automatisch sparen] Automatisch sparen verdeelt de vaste overboeking elke maand over de potjes.
+
+22
+00:01:11,563 --> 00:01:16,371
+Wordt iets duurder, dan rekent het hulpje Nieuw jaarbedrag uit wat je per maand opzij zet.
+
+23
+00:01:17,071 --> 00:01:21,236
+[6 · Te doen] Te doen laat zien wat er nog overgeboekt moet worden tussen de spaar- en de betaalrekening.
+
+24
+00:01:21,936 --> 00:01:25,549
+[6 · Tags] Met tags volg je uitgaven over posten heen, bijvoorbeeld tanken.
+
+25
+00:01:25,549 --> 00:01:29,501
+Staat Krijg ik terug aan, dan houdt de app bij wat je nog terugkrijgt,
+
+26
+00:01:29,501 --> 00:01:31,307
+bijvoorbeeld via een declaratie.
+
+27
+00:01:32,007 --> 00:01:36,419
+[7 · Op de telefoon] Voor het hele gezin is er een pagina op de telefoon: wat er nog te besteden is,
+
+28
+00:01:36,419 --> 00:01:38,597
+de potjes van de kinderen en de buffer.
+
+29
+00:01:38,597 --> 00:01:40,217
+Alleen lezen, zonder account.
+
+30
+00:01:40,917 --> 00:01:45,345
+[8 · Hoe is hij gebouwd?] De app is niet door een ontwikkelteam geschreven, maar gebouwd met AI-agents.
+
+31
+00:01:45,345 --> 00:01:50,119
+In kleine rondes, elk met een eigen opdracht en een vangnet van automatische tests.
+
+32
+00:01:50,119 --> 00:01:53,684
+Elke versie is eerst getest op een kopie van de administratie.
+
+33
+00:01:54,384 --> 00:01:55,116
+[Iets voor jou?] Iets voor jou?
+
+34
+00:01:55,116 --> 00:01:59,088
+Met het bouwpakket kan een agent hem bouwen voor jouw platform en jouw bank.
