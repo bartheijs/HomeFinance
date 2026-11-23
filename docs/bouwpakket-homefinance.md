@@ -13,17 +13,18 @@ schermen met dezelfde opbouw. De techniek mag je zelf kiezen. Waar dit document 
 Inhoud:
 
 1. Opdracht en doel
-2. Spelregels voor de agent
-3. Begrippen
-4. Architectuur
-5. Datamodel
-6. Rekenregels
-7. Import
-8. Schermen
-9. Telefoondashboard, back-up en export, voorbeelddata
-10. Werkwijze en testvangnet
-11. Volgorde van bouwen
-12. Acceptatietests
+2. Triage: twee vragen vooraf
+3. Spelregels voor de agent
+4. Begrippen
+5. Architectuur
+6. Datamodel
+7. Rekenregels
+8. Import
+9. Schermen
+10. Telefoondashboard, back-up en export, voorbeelddata
+11. Werkwijze en testvangnet
+12. Volgorde van bouwen
+13. Acceptatietests
 
 ---
 
@@ -63,12 +64,52 @@ importeert de gebruiker het bankbestand, kijkt de voorstellen na en boekt.
 
 - Een maand bijhouden kost alleen nog: het bankbestand importeren en de voorstellen nakijken.
 - Het berekende saldo van elke rekening sluit op € 0,00 met de bank.
-- "Nog te besteden deze maand" klopt met de Excel-formule (de rekensom in hoofdstuk 6).
+- "Nog te besteden deze maand" klopt met de Excel-formule (de rekensom in hoofdstuk 7).
 - Elk potje heeft een saldo, en de potjes plus "niet toegewezen" zijn samen het saldo van de spaarrekening.
 
 ---
 
-## 2. Spelregels voor de agent
+## 2. Triage: twee vragen vooraf
+
+Houd dit kort. Stel de collega vóór het bouwen **alleen deze twee vragen**, leg per keuze in één of twee zinnen de
+gevolgen uit, en schrijf de antwoorden op in je eigen projectdocumentatie (bijvoorbeeld een bestand `keuzes.md`).
+Begin daarna met ronde 0.
+
+1. **Platform en techniek.** Op welk systeem moet de app draaien (Windows, macOS, Linux, web of mobiel), en met welke
+   taal, welk interface-framework en welke database?
+   *Gevolgen:* bepaalt hoe de testronde de echte app start en de schermen controleert (hoofdstuk 11), hoe een
+   back-up gemaakt wordt (hoofdstuk 10) en welke venstermaten je controleert. Een webversie draait ook lokaal,
+   zonder server op internet en zonder account. Zonder voorkeur: een lokale desktopapp met SQLite.
+2. **Bank en exportformaat.** Bij welke bank of banken staan de rekeningen, en in welk formaat kan de collega de
+   transacties downloaden (CSV, CAMT.053, MT940, PDF)? Vraag om een **voorbeeldbestand met verzonnen of
+   geanonimiseerde regels** (zelfde kolommen of structuur, verzonnen namen, IBAN's en bedragen).
+   *Gevolgen:* bepaalt de inleesmodule (hoofdstuk 8.6). Levert de bank geen saldo per regel, dan vervallen de
+   saldoketen en de naad op saldo en blijft alleen de naad op datum over. Zonder voorbeeldbestand bouw je het
+   algemene profiel met kolommen kiezen en het voorbeeldformaat van hoofdstuk 8.5, en pas je het aan zodra er een
+   bestand is.
+
+### Standaardkeuzes (niet vragen)
+
+Deze keuzes liggen vast. Leg ze **niet** voor; ze kunnen later worden bijgesteld als de collega daarom vraagt.
+
+- **Taal en begrippen**: Nederlands, met de begrippenlijst van hoofdstuk 4. Stel de namen pas bij na een eerste
+  testronde met de gebruiker (les uit de referentie: namen pas na een test vastleggen).
+- **Startsituatie**: beginnen met **beginstanden**, zonder historie: per rekening het saldo op een startdatum, per
+  potje een beginbedrag, en eventueel een startbedrag bij een tag met "Krijg ik terug". Historie importeren (uit
+  Excel of een andere app) is alleen een **latere optie** en hoort niet in de rondes van hoofdstuk 12: het vraagt om
+  volledige en consistente oude gegevens per maand en per post, en in de referentie bleek een historie-import uit
+  Excel te ingewikkeld en staat die in de wacht.
+- **Onderdelen**: eerst de kern (begroting, import, boeken, potjes), daarna de rest in de volgorde van de roadmap.
+  De gebruiker kan onderweg een onderdeel overslaan.
+- **Huishouden**: de app ondersteunt meerdere inkomens, kwartaal- en jaarinkomsten, en potjes per persoon. Dat
+  stelt de gebruiker in de app in, niet vooraf.
+- **Opslag en privacy**: alleen lokaal, met een back-up naar een map naar keuze. Echte gegevens komen nooit in
+  code, tests of voorbeelden.
+- **Werkwijze**: kleine rondes met een testronde zoals in hoofdstuk 11, aangepast aan het gekozen platform.
+
+---
+
+## 3. Spelregels voor de agent
 
 Deze regels zijn hard. Ze komen uit de bouw van de referentie, waar elke overtreding een echte fout opleverde.
 
@@ -88,14 +129,14 @@ Deze regels zijn hard. Ze komen uit de bouw van de referentie, waar elke overtre
    IBAN's in tests en voorbeelden hebben de vorm `NL00TEST0000000001`. Bedrijven heten "Bakkerij Voorbeeld",
    "Energie Test BV". Personen heten "Ouder 1", "Kind 1".
 7. **Interface in het Nederlands.** Alle teksten, foutmeldingen en exportkoppen zijn Nederlands, met de namen uit
-   hoofdstuk 3. Identifiers in de code mogen Engels zijn.
+   hoofdstuk 4. Identifiers in de code mogen Engels zijn.
 8. **Geen regel verdwijnt stil.** Bij import wordt elke regel van het bankbestand een banktransactie of een gemelde
    fout. Bij een fout in één bestand wordt niets geïmporteerd.
 9. **Alles of niets.** Elke schrijfactie (boeken, afvinken, importeren, een hulpje dat drie dingen tegelijk zet)
    draait in één databasetransactie.
 10. **Banktransacties zijn onveranderlijk.** De gegevens van de bank worden nooit gewijzigd; de gebruiker wijzigt
     alleen boekingen.
-11. **Modules kennen elkaar niet** (zie hoofdstuk 4).
+11. **Modules kennen elkaar niet** (zie hoofdstuk 5).
 12. **Nooit de echte administratie aanraken.** Tests en zelftests werken op een database in het geheugen, op
     voorbeelddata of op een kopie. Weiger in testopties een pad naar de echte gegevensmap.
 13. **Een developer reviewt** de code voordat de app de enige administratie van een gezin wordt. Tot dan draait de
@@ -103,11 +144,11 @@ Deze regels zijn hard. Ze komen uit de bouw van de referentie, waar elke overtre
 
 ---
 
-## 3. Begrippen
+## 4. Begrippen
 
 Gebruik deze namen in de interface, letterlijk. Ze zijn na een test met de gebruiker vastgelegd. De
 identifiers in de referentiecode hebben soms een oudere naam; die staat in de laatste kolom, zodat je het
-datamodel in hoofdstuk 5 kunt lezen.
+datamodel in hoofdstuk 6 kunt lezen.
 
 | Begrip in de interface | Uitleg van één zin | Naam in datamodel en code |
 |---|---|---|
@@ -164,7 +205,7 @@ datamodel in hoofdstuk 5 kunt lezen.
 
 ---
 
-## 4. Architectuur
+## 5. Architectuur
 
 ### Modules
 
@@ -187,7 +228,7 @@ Afspraken:
 
 - De lees-module rekent zelf met SQL op de tabellen. Ze roept de schrijfmodule niet aan, ook niet voor iets dat
   daar al bestaat. Waar beide dezelfde regel nodig hebben (bijvoorbeeld "welke boekingen zijn door het afvinken van
-  een overboeking met spaar gemaakt"), lezen ze dezelfde opgeslagen markering (zie `setting` in hoofdstuk 5) en is
+  een overboeking met spaar gemaakt"), lezen ze dezelfde opgeslagen markering (zie `setting` in hoofdstuk 6) en is
   er een integratietest die de echte schrijfweg gebruikt.
 - Alle schrijffuncties weigeren met een Nederlandse foutmelding die het scherm direct kan tonen.
 - Elke module beschrijft zijn publieke functies in een eigen document (in de referentie één Markdown-bestand per
@@ -209,7 +250,7 @@ Hoe jij dat doet is vrij, zolang een scherm na een wijziging elders nooit een ve
 
 ---
 
-## 5. Datamodel
+## 6. Datamodel
 
 Platformneutraal eindschema. Typen: `int` (64 bits), `geld` (int in centen, met teken), `tekst`, `dag` (tekst
 `yyyy-MM-dd`), `maand` (tekst `yyyy-MM`), `bool`, `tijdstip` (datum en tijd, voor "aangemaakt op"). Elke tabel met
@@ -514,12 +555,12 @@ Verschil = berekend − werkelijk.
 
 ---
 
-## 6. Rekenregels
+## 7. Rekenregels
 
-Alle regels hieronder zijn exact. De voorbeelden gebruiken verzonnen bedragen. Hoofdstuk 12 bevat ze nog eens als
+Alle regels hieronder zijn exact. De voorbeelden gebruiken verzonnen bedragen. Hoofdstuk 13 bevat ze nog eens als
 acceptatietests met de verwachte uitkomst.
 
-### 6.1 Basis
+### 8.1 Basis
 
 - **Saldo van een rekening op dag D** = `openingBalance` + som van alle boekingen op die rekening met `day ≤ D`.
   Boekingen met een datum ná de peildag tellen niet mee in saldi, vrij te besteden en potsaldi (het maandgrid
@@ -535,7 +576,7 @@ acceptatietests met de verwachte uitkomst.
   cijfers erachter is een decimaalteken, anders een duizendtalscheiding.
 - **Tonen**: `€ 1.234,56` en `-€ 45,50`.
 
-### 6.2 Begrotingsmaand: "Hoort bij maand"
+### 8.2 Begrotingsmaand: "Hoort bij maand"
 
 - Een boeking telt voor de begroting in de maand van `period` als die gezet is, anders in de maand van `day`.
 - `period` ligt hoogstens **twee maanden** vóór of na de maand van de datum. De maand van de datum zelf wordt als
@@ -552,7 +593,7 @@ acceptatietests met de verwachte uitkomst.
 Voorbeeld: het salaris van € 3.000,00 komt op 28 februari binnen en is bedoeld voor maart. Met "Hoort bij maand:
 maart" staat het in de maartkolom van het grid; het saldo van 28 februari bevat het wel.
 
-### 6.3 Posten, plan en het maandgrid
+### 8.3 Posten, plan en het maandgrid
 
 - **Plan per keer.** `planAmount` is het bedrag per keer dat de post voorkomt. Een maandpost komt in alle 12
   maanden; een kwartaal- of jaarpost alleen in `expectedMonths`.
@@ -596,7 +637,7 @@ maart" staat het in de maartkolom van het grid; het saldo van 28 februari bevat 
 - **Afvinken** kan per post per maand, niet voor RES-regels, wel voor RESERVERINGEN, niet in een afgesloten jaar.
   Een afgevinkte post zonder boeking telt als voldaan, niet als open of te laat en niet in "nog verwacht".
 
-### 6.4 Vrij te besteden
+### 8.4 Vrij te besteden
 
 ```
 Vrij te besteden = saldo van alle betaalrekeningen op de peildag
@@ -610,14 +651,14 @@ Vrij te besteden = saldo van alle betaalrekeningen op de peildag
   afschrijving, −). Uitstaand = som van alle gemarkeerde boekingen op betaalrekeningen t/m de peildag, **met nul
   als ondergrens**.
 - **Komt nog terug** = per tag met "Krijg ik terug" én "Tel mee bij ‘nog te besteden’" het openstaande bedrag
-  (6.8), alleen als het **positief** is en alleen in het lopende jaar.
+  (7.8), alleen als het **positief** is en alleen in het lopende jaar.
 - Op de betaalrekening staat geen geld met een bestemming: alles wat gereserveerd is, staat in een potje op spaar.
 - **Trendgrafiek** (vrij te besteden per maandeinde, op het Dashboard › Verloop van het jaar en op de telefoon):
   per maandeinde t/m de peildag `saldo − minimaal − tijdelijk geleend`, **zonder** "komt nog terug". (In de
   referentie is dit een bekende kleine afwijking die later gelijkgetrokken wordt met het hoofdgetal; bouw het zo,
   maar houd de berekening op één plek zodat dat makkelijk kan.)
 
-### 6.5 Nog te besteden deze maand: de rekensom
+### 8.5 Nog te besteden deze maand: de rekensom
 
 Het hoofdgetal van het Dashboard en de telefoon. Het Dashboard toont het als rekensom waarvan de regels **exact**
 optellen tot het hoofdgetal:
@@ -675,7 +716,7 @@ te laat) · Verzekering − € 480,00 (jaarpost in maart) · RESERVERINGEN − 
 Kwartaaluitkering + € 200,00 (2 van 3 delen van € 300,00, komt in apr) · Nog over te boeken met spaar + € 45,00.
 Huur (− € 1.200,00) is al geboekt en telt dus niet. Vrij te besteden is € 1.410,00.
 
-### 6.6 Potjes en de spaarrekening
+### 8.6 Potjes en de spaarrekening
 
 - **Saldo van een potje** = som van de boekingen op de spaarrekening met dat `potId`. Een gemarkeerde uitgave op
   de betaalrekening met een `potId` (Nog overboeken) telt **niet** in het potsaldo; pas de boeking van het
@@ -701,7 +742,7 @@ Huur (− € 1.200,00) is al geboekt en telt dus niet. Vrij te besteden is € 
   eerst UIT, dan IN, RES laatst, binnen de groep zo op alfabet. "Overig (geen vaste post)" en "Geen" staan bovenaan.
   Het maandgrid en het jaarplan houden hun eigen volgorde (`sortOrder`).
 
-### 6.7 Automatisch sparen en de koppeling met een post
+### 8.7 Automatisch sparen en de koppeling met een post
 
 - Een **Automatisch sparen** heeft een naam, een herkomstrekening (betaal), een doelrekening (spaar) en per
   potje een bedrag per maand (> 0, een potje hoogstens één keer, het potje hoort bij de doelrekening). Het
@@ -709,7 +750,7 @@ Huur (− € 1.200,00) is al geboekt en telt dus niet. Vrij te besteden is € 
 - De verdeling over de potjes komt **uit Automatisch sparen**, niet uit de RES-regels. Spaardoelen, de
   vooruitblik, potbedragen per maand en de exports gebruiken Automatisch sparen.
 - **Telt in je begroting als**: een UIT-post op de betaalrekening kan eraan gekoppeld zijn; zijn opgeslagen plan
-  is dan altijd − het totaal (zie 6.3). Bij een nieuw jaar (kopiëren) gaat de koppeling mee.
+  is dan altijd − het totaal (zie 7.3). Bij een nieuw jaar (kopiëren) gaat de koppeling mee.
 - **Ketenstrook** (alleen weergave), overal met dezelfde zinnen:
   - bij een potje: "Krijgt € 37,50 per maand via Automatisch sparen: <naam> (post <post>)." Bij meer
     overboekingen: "… via 2 vaste overboekingen:" met een lijstje;
@@ -722,10 +763,10 @@ Huur (− € 1.200,00) is al geboekt en telt dus niet. Vrij te besteden is € 
 - **Bij het boeken**: aan de spaarkant wordt een herkende overboeking geboekt als één boeking per regel van de
   verdeling, met label "<naam>: <potje>".
 
-### 6.8 Herkenning van overboekingen: Automatisch sparen tegenover een losse overboeking
+### 8.8 Herkenning van overboekingen: Automatisch sparen tegenover een losse overboeking
 
-Bij elke nieuwe banktransactie wordt in deze **volgorde** gezocht: eerst overboekingen met spaar (6.9), dan
-Automatisch sparen, dan regels (6.13). IBAN's worden altijd vergeleken zonder spaties en hoofdletterongevoelig.
+Bij elke nieuwe banktransactie wordt in deze **volgorde** gezocht: eerst overboekingen met spaar (7.9), dan
+Automatisch sparen, dan regels (7.13). IBAN's worden altijd vergeleken zonder spaties en hoofdletterongevoelig.
 
 **Doelkant** (bijschrijving op de spaarrekening van een Automatisch sparen):
 
@@ -761,7 +802,7 @@ de andere kant) en tellen op elke rekening gewoon mee in het saldo. Nakijken en 
 de andere: "+ € 250,00 op Spaarrekening, 4 mrt · wacht nog op een plek" met "Bekijk". Met de hand koppelen mag ook
 (alleen verschillende rekeningen en tegengestelde bedragen vereist).
 
-### 6.9 Nog overboeken (met spaar)
+### 8.9 Nog overboeken (met spaar)
 
 - Een boeking op een betaalrekening kan gemarkeerd worden met `reimburse` + `potId` (schakelaar "Nog overboeken
   met spaar"): een **uitgave** "komt uit het potje", een **bijschrijving** "gaat naar het potje". Niet bij bedrag
@@ -798,7 +839,7 @@ de andere: "+ € 250,00 op Spaarrekening, 4 mrt · wacht nog op een plek" met "
   van € … op <dag> is nog niet gezien in een bankbestand." Bij meer dan één: "N overboekingen (samen € …) zijn nog
   niet gezien in een bankbestand, de oudste van <dag>."
 
-### 6.10 Tags, Krijg ik terug en Tel mee
+### 8.10 Tags, Krijg ik terug en Tel mee
 
 - **Tags staan alleen op boekingen van een betaalrekening.** Een tag op spaar wordt geweigerd. Een tag telt niet
   als extra uitgave; een boeking met twee tags telt bij beide tags mee.
@@ -830,14 +871,14 @@ de andere: "+ € 250,00 op Spaarrekening, 4 mrt · wacht nog op een plek" met "
 - **Tel mee bij ‘nog te besteden’** (`countsInSpendable`, standaard uit): het openstaande bedrag telt als "Komt
   nog terug: <tag>" mee in vrij te besteden en nog te besteden, alleen als het positief is en in het lopende jaar.
 
-### 6.11 Minimaal op de rekening en de melding
+### 8.11 Minimaal op de rekening en de melding
 
 - "Minimaal op je betaalrekening aan het eind van de maand" is één bedrag per jaar, in te stellen bij Posten en
   bij de eerste start.
-- Het zit al in de rekensom (6.5). Is **nog te besteden negatief**, dan meldt Aandacht dat het minimum aan het
+- Het zit al in de rekensom (7.5). Is **nog te besteden negatief**, dan meldt Aandacht dat het minimum aan het
   eind van de maand niet gehaald wordt, met het tekort (= − nog te besteden).
 
-### 6.12 Spaardoel, vooruitblik en verwachtingen
+### 8.12 Spaardoel, vooruitblik en verwachtingen
 
 **Verwachtingen** (`forecastItem`): een bedrag met teken bij een potje op een dag. Ze tellen **nergens** anders
 in mee dan in de vooruitblik en het spaardoel. Een verwachting wordt "uitgekomen" (afgevinkt) met de echte
@@ -892,7 +933,7 @@ nog te komen (open).
   doel.
 - **Aandacht**: spaardoelen met status `tekort` of `verlopen` (dus buiten de marge).
 
-### 6.13 Regels en "Voortaan zo indelen"
+### 8.13 Regels en "Voortaan zo indelen"
 
 **Voorwaarden** (alle ingevulde moeten kloppen): tegenpartij-naam bevat; tegenpartij-IBAN gelijk; omschrijving
 bevat trefwoord; bedrag exact (met teken); optioneel alleen voor een rekening. Tekst hoofdletter- en
@@ -914,7 +955,7 @@ voorwaarden (`accountId` telt mee) → laagste id.
 
 **Voorstel**: de post wordt per jaar op label gezocht (hoofdletterongevoelig) in het jaar van de **datum van de
 transactie**; bestaat het jaar of de post niet, dan geen post en een melding ("De post 'X' bestaat niet in 2028.").
-Omschrijving: die van de regel, anders de voorgestelde omschrijving (7.4), anders "Onbekend". Tags: die van de
+Omschrijving: die van de regel, anders de voorgestelde omschrijving (8.4), anders "Onbekend". Tags: die van de
 regel, maar leeg op een spaarrekening.
 
 **Richting bij Nog overboeken** (`reimburseDirection`): een regel zet alleen in zijn richting om naar Nog
@@ -965,7 +1006,7 @@ gebruiken hetzelfde vinkje en dezelfde voorstellen:
 
 Tellers overal dezelfde regel: "Nog 3 na te kijken · 4 zeker". Twijfelgevallen eerst.
 
-### 6.14 Maandbalans en wat-als
+### 8.14 Maandbalans en wat-als
 
 - **Maandbalans** = geplande inkomsten per maand − geplande uitgaven per maand. Per post: plan per maand = plan ×
   aantal keer per jaar ÷ 12, afgerond op centen. RES-regels doen niet mee; RESERVERINGEN en posten bij een
@@ -975,7 +1016,7 @@ Tellers overal dezelfde regel: "Nog 3 na te kijken · 4 zeker". Twijfelgevallen 
   plan van" kiest; dan wordt elk wat-als-bedrag het plan en worden alle wat-als-bedragen gewist. Posten met een
   berekend plan (RESERVERINGEN, posten bij Automatisch sparen) worden overgeslagen en gemeld.
 
-### 6.15 Hulpje "Nieuw jaarbedrag"
+### 8.15 Hulpje "Nieuw jaarbedrag"
 
 Zet een jaarlijkse kost in één keer goed: potje + regel in Automatisch sparen + post + optioneel een verwachting.
 
@@ -991,7 +1032,7 @@ Zet een jaarlijkse kost in één keer goed: potje + regel in Automatisch sparen 
 - Is de post RESERVERINGEN en heeft het jaar RES-regels, dan verhoogt het hulpje ook de RES-regel van dat potje
   (of maakt er een), zodat het grid meegaat.
 
-### 6.16 Saldo controleren en afstemmen
+### 8.16 Saldo controleren en afstemmen
 
 - **Afstemmen**: de gebruiker voert het banksaldo op een dag in; verschil = berekend − werkelijk; moet € 0,00 zijn.
   Elke controle wordt vastgelegd.
@@ -1003,7 +1044,7 @@ Zet een jaarlijkse kost in één keer goed: potje + regel in Automatisch sparen 
   het eindsaldo van het bestand. Overgeslagen transacties tellen niet in het saldo en geven dus een verschil,
   tenzij er een handmatige boeking tegenover staat.
 
-### 6.17 Omschrijvingen
+### 8.17 Omschrijvingen
 
 - De omschrijving van een boeking komt uit de regel of van de gebruiker; de tekst van de bank blijft bewaard.
 - **Totalen per omschrijving**: overige boekingen op betaal gegroepeerd op genormaliseerde omschrijving (spaties
@@ -1016,7 +1057,7 @@ Zet een jaarlijkse kost in één keer goed: potje + regel in Automatisch sparen 
   woord of een woord korter dan 4 letters telt als anders ("Zakgeld Kind 1" en "Zakgeld Kind 2" zijn verschillend).
 - **Samenvoegen**: alle boekingen én regels met de ene schrijfwijze krijgen de andere, ook in afgesloten jaren.
 
-### 6.18 Grenzen in Aandacht (constanten)
+### 8.18 Grenzen in Aandacht (constanten)
 
 | Grens | Waarde |
 |---|---|
@@ -1031,9 +1072,9 @@ Zet een jaarlijkse kost in één keer goed: potje + regel in Automatisch sparen 
 
 ---
 
-## 7. Import
+## 8. Import
 
-### 7.1 De stappen
+### 9.1 De stappen
 
 1. **Lezen.** Elke regel van het bestand wordt een banktransactie of een gemelde fout ("Regel 12: ongeldig
    bedrag"). Geen regel verdwijnt stil. Meldingen: ongeldige datum, ongeldig bedrag, ongeldig saldo, onbekende
@@ -1043,7 +1084,7 @@ Zet een jaarlijkse kost in één keer goed: potje + regel in Automatisch sparen 
 3. **Importeren** in één databasetransactie. Met foute regels weigert de import, tenzij de gebruiker bewust "foute
    regels overslaan" kiest. Bij een fout in één bestand van een zip wordt niets van de hele zip geïmporteerd.
 4. **Voorstellen**: de regels, Automatisch sparen en Nog overboeken doen per nieuwe transactie een voorstel met
-   zekerheid (hoofdstuk 6). Twijfelgevallen eerst, daarna boeken.
+   zekerheid (hoofdstuk 7). Twijfelgevallen eerst, daarna boeken.
 5. **Nieuwe boekingen** uit een import krijgen `reviewed = false` ("nog niet gecontroleerd") tot de gebruiker ze
    heeft bekeken.
 6. **Wachtrij**: geïmporteerde transacties blijven `nieuw` tot ze geboekt of overgeslagen zijn, ook na het
@@ -1051,7 +1092,7 @@ Zet een jaarlijkse kost in één keer goed: potje + regel in Automatisch sparen 
 7. **Controle achteraf**: zie 6.16. Sluit het saldo na een import niet aan terwijl er op die rekening niets meer
    wacht, dan meldt Aandacht: "Het saldo van <rekening> sluit niet aan: bank € …, app € … op <dag>."
 
-### 7.2 Saldoketen
+### 9.2 Saldoketen
 
 - Alleen als **elke** gelezen regel een saldo heeft (anders: "niet te controleren").
 - Saldo vóór mutatie + bedrag = saldo vóór mutatie van de volgende regel (in tijdsvolgorde). Levert de bank het
@@ -1064,7 +1105,7 @@ Zet een jaarlijkse kost in één keer goed: potje + regel in Automatisch sparen 
 - Beginsaldo = saldo vóór de eerste meegaande regel; eindsaldo = saldo na de laatste regel. Beide worden getoond en
   bewaard.
 
-### 7.3 Dubbelen
+### 9.3 Dubbelen
 
 - **Vingerafdruk** per regel = SHA-256 over: rekening-id, dag, bedrag, IBAN van de tegenpartij, volgnummer van de
   bank, afschriftnummer, omschrijving, en een **volgnummer voor verder gelijke regels binnen hetzelfde bestand**
@@ -1074,7 +1115,7 @@ Zet een jaarlijkse kost in één keer goed: potje + regel in Automatisch sparen 
   allebei binnenkomen.
 - De vingerafdruk wordt binnen de importtransactie opnieuw gecontroleerd.
 
-### 7.4 Eerste import: aansluiten op het beginsaldo (de naad)
+### 9.4 Eerste import: aansluiten op het beginsaldo (de naad)
 
 Alleen bij de eerste import van een rekening (nog geen enkele banktransactie). Het bestand begint meestal vóór
 de begindatum; de vingerafdruk kent die regels niet. Volgorde: **eerst op saldo, dan op datum, dan met de hand.**
@@ -1097,7 +1138,7 @@ de begindatum; de vingerafdruk kent die regels niet. Volgorde: **eerst op saldo,
 Regels die niet meegaan blijven grijs zichtbaar in de voorvertoning, tellen niet als nieuw of dubbel, en de
 saldoketen wordt over het hele bestand gecontroleerd. Na de eerste import doet de vingerafdruk het werk.
 
-### 7.5 Het voorbeeldformaat van de referentiebank
+### 9.5 Het voorbeeldformaat van de referentiebank
 
 De referentiebank levert bij "download transacties" **één zip met één CSV per rekening**. De bestandsnaam begint
 met het IBAN van de rekening, bijvoorbeeld `NL00TEST0000000001-13-03-2027T13_33_15.csv`.
@@ -1148,7 +1189,7 @@ tellen niet mee. Regelnummers wijzen naar de regel in het bestand.
 het beginsaldo van het afschrift; de keten sluit als beginsaldo + som = eindsaldo. Gebruik per rekening óf CSV óf
 PDF, anders komen regels dubbel binnen (andere omschrijving, andere vingerafdruk).
 
-### 7.6 Een andere bank: een eigen inleesmodule
+### 9.6 Een andere bank: een eigen inleesmodule
 
 Het formaat hierboven is een **voorbeeld**. Een andere bank krijgt een **eigen inleesprofiel** binnen de
 importmodule (een kolomindeling, of een eigen lezer voor een ander bestandstype). De rest van de app merkt daar
@@ -1180,7 +1221,7 @@ niets van. Bouw daarnaast:
 
 Zonder saldo werkt de import nog (geen keten, naad alleen op datum), maar valt de controle "sluit op € 0,00" weg.
 
-### 7.7 Namen opschonen en de voorgestelde omschrijving
+### 9.7 Namen opschonen en de voorgestelde omschrijving
 
 **Opschonen van een naam** (voor de omschrijving en de naam van een nieuwe regel; regels matchen altijd op de
 ruwe tekst, bestaande boekingen worden niet hernoemd):
@@ -1214,9 +1255,9 @@ eigen tekst bij:
 - geen tegenpartij: dan de naam uit de omschrijving.
 
 Een omschrijving uit een regel gaat altijd voor. Een via "Voortaan zo indelen" gemaakte regel legt de eigen tekst
-niet vast (zie 6.13).
+niet vast (zie 7.13).
 
-### 7.8 Downloadadvies
+### 9.8 Downloadadvies
 
 Op Transacties staat welke bankbestanden de gebruiker moet downloaden: "Bijwerken: download bij de bank de
 CSV-export (zip, één bestand per rekening) van <rekeningen>, van <dag> tot en met <vandaag>." De begindag is de
@@ -1226,9 +1267,9 @@ aanwijzen per rekening de laatste banktransactie.
 
 ---
 
-## 8. Schermen
+## 9. Schermen
 
-### 8.1 UX-lessen (gelden voor elk scherm)
+### 10.1 UX-lessen (gelden voor elk scherm)
 
 Deze lessen komen uit een test met de gebruiker en zijn bindend:
 
@@ -1240,7 +1281,7 @@ Deze lessen komen uit een test met de gebruiker en zijn bindend:
   te scheiden. Ook kaartjes tonen in en uit apart.
 - **Nergens € 0,00 als het eigenlijk "nog niet" betekent.** Toon het plan, het werkelijke bedrag, of het plan met
   "afgevinkt".
-- **Eén ding, één woord, overal** (hoofdstuk 3). Een koppeling staat aan beide kanten met dezelfde zin.
+- **Eén ding, één woord, overal** (hoofdstuk 4). Een koppeling staat aan beide kanten met dezelfde zin.
 - **Bij een openstaand bedrag: zeg wat de volgende stap is**, met een knop naar de plek waar je het rechtzet.
 - **Lege kaartjes niet tonen.** Een kaartje verschijnt alleen als er iets in staat.
 - **Riskante knoppen kleiner.** "Sla over" (haalt een transactie uit het saldo) is kleiner dan "Boek".
@@ -1252,7 +1293,7 @@ Deze lessen komen uit een test met de gebruiker en zijn bindend:
 - **Licht en donker** worden allebei ondersteund.
 - **Bedragvelden rekenen** (`249*4`).
 
-### 8.2 Eerste start
+### 10.2 Eerste start
 
 Bij de eerste start kiest de gebruiker tussen **rondkijken met voorbeelddata** en **eigen administratie
 beginnen**. Wisselen kan later bij Instellingen › Over. Eigen administratie beginnen vraagt minimaal: rekeningen
@@ -1260,7 +1301,7 @@ beginnen**. Wisselen kan later bij Instellingen › Over. Eigen administratie be
 de posten, en de potjes met beginbedrag (de app rekent het niet toegewezen deel uit). Met voorbeelddata start de app
 op het Dashboard; met de eigen administratie mag het startscherm Transacties of Dashboard zijn.
 
-### 8.3 Zijbalk
+### 10.3 Zijbalk
 
 Ingedeeld naar wat je komt doen. Eén lijst in de code, die zowel de echte zijbalk als de zelftest leest.
 
@@ -1270,16 +1311,16 @@ Ingedeeld naar wat je komt doen. Eén lijst in de code, die zowel de echte zijba
 | **Bijwerken** | Importeren en nakijken · Transacties · Tags | Nakijken: wachtende banktransacties · Transacties: nog niet gecontroleerd · Tags: tags met iets terug te ontvangen |
 | **Begroting** | Posten | |
 | **Sparen** | Potjes · Automatisch sparen | |
-| **Inzicht** | Maandgrid (en Rapporten, zie 8.15) | |
+| **Inzicht** | Maandgrid (en Rapporten, zie 9.15) | |
 | *(onderaan, zonder kop)* | Instellingen | |
 
 "Nog overboeken" heeft geen eigen regel in de zijbalk; je komt er via Te doen, de balk op Transacties en het
 Dashboard. Staat de app daar, dan is er in de zijbalk niets gemarkeerd.
 
-### 8.4 Dashboard
+### 10.4 Dashboard
 
 - **Kop**: "Dashboard" met daaronder de datum voluit ("woensdag 10 maart 2027") en rechts de knop Importeren.
-- **Nog te besteden deze maand** als groot getal, met de **rekensom** eronder (6.5). "Nog verwacht deze maand" is
+- **Nog te besteden deze maand** als groot getal, met de **rekensom** eronder (7.5). "Nog verwacht deze maand" is
   één regel met een pijltje; uitgeklapt de verwachte inkomsten en uitgaven per post (met "te laat" en de delen van
   kwartaalinkomsten) en "Nog over te boeken met spaar". Geen grijze uitlegtekst en geen "Vrij te besteden" op het
   Dashboard. Zolang er banktransacties op betaal wachten: waarschuwing met knop Boeken. Geen jaar: "Er is nog geen
@@ -1295,7 +1336,7 @@ Dashboard. Staat de app daar, dan is er in de zijbalk niets gemarkeerd.
   - overboekingen met spaar die na 5 dagen nog niet in een bankbestand gezien zijn (opent Te doen);
   - tijdelijk geleend van spaar dat nog uitstaat;
   - per tag nog terug te ontvangen;
-  - grote uitgave op komst (6.18);
+  - grote uitgave op komst (7.18);
   - spaardoelen niet op koers (buiten de marge);
   - potjes die binnen een jaar onder nul komen;
   - saldo na import sluit niet aan (alleen als er op die rekening niets meer wacht);
@@ -1308,23 +1349,23 @@ Dashboard. Staat de app daar, dan is er in de zijbalk niets gemarkeerd.
   - *Incidentele transacties* (overig deze maand): in, uit en de drie grootste uitgaven. Klik → **Incidentele
     transacties**.
   - *Huidig saldo*: betaal, spaar en totaal; niet aanklikbaar.
-- Link **Verloop van het jaar**: grafieken vrij te besteden per maandeinde (6.4) en in en uit per maand.
+- Link **Verloop van het jaar**: grafieken vrij te besteden per maandeinde (7.4) en in en uit per maand.
 
-### 8.5 Vaste posten (achter het kaartje Periodieke transacties)
+### 10.5 Vaste posten (achter het kaartje Periodieke transacties)
 
 Bovenaan drie getallen: nog binnen te komen, nog af te gaan, en het saldo daarvan. Daaronder **Inkomsten** en
 **Uitgaven** apart, elk in "Nog te komen" en "Verwerkt". Per post: plan, werkelijk bedrag, of plan met "afgevinkt";
 nergens € 0,00. Filter Alles / In / Uit. Geen link naar het maandgrid en geen info-icoon (uitleg als tooltip op de
 titel). Maand kiesbaar.
 
-### 8.6 Incidentele transacties (achter het kaartje Incidentele transacties)
+### 10.6 Incidentele transacties (achter het kaartje Incidentele transacties)
 
 Drie kaartjes naast elkaar: **totalen** (totaal in, totaal uit, saldo), **uitgaven per tag** (alle tags met bedrag,
 plus "Zonder tag") en **de 5 grootste uitgaven**. Daaronder alle transacties zonder vaste post van die
 begrotingsmaand, te sorteren op datum en op bedrag (oplopend en aflopend) en te filteren op Alles / In / Uit. Geen
 links naar andere pagina's. Maand kiesbaar.
 
-### 8.7 Te doen
+### 10.7 Te doen
 
 Alleen kaartjes met inhoud; zijn ze allemaal leeg, dan één regel "Er is niets te doen." De teller in de zijbalk is
 het aantal kaartjes.
@@ -1337,7 +1378,7 @@ het aantal kaartjes.
 - **Terug te ontvangen**: per tag met Krijg ik terug het openstaande bedrag, met een link naar de open boekingen.
 - **Tijdelijk geleend van spaar**: wat er nog uitstaat, met een link naar de gemarkeerde boekingen in Transacties.
 
-### 8.8 Importeren en nakijken
+### 10.8 Importeren en nakijken
 
 - **Importeren**: een zip of CSV slepen of kiezen. De voorvertoning per bestand: rekening, aantal nieuw, al bekend,
   fouten (per regel), de saldoketen en de naad. Knop Importeren; bij fouten "foute regels overslaan" als bewuste
@@ -1354,19 +1395,19 @@ het aantal kaartjes.
   Tanken"), de andere helft van een eigen overboeking ("+ € 250,00 op Spaarrekening, 4 mrt · wacht nog op een plek"
   met "Bekijk"), een losse overboeking naar spaar ("Niet de vaste overboeking: één potje kiezen" / "Toch de vaste
   overboeking …"), Automatisch sparen met verdeling en "verschil naar …", de overboeking met spaar ("Afvinken en
-  koppelen"), en de waarschuwing bij Nog overboeken op een eigen overboeking (6.8).
+  koppelen"), en de waarschuwing bij Nog overboeken op een eigen overboeking (7.8).
 - "Boek de zekere" zet de boekingen in Nakijken op **nog niet gecontroleerd** (in Transacties op gecontroleerd;
   bewust verschillend).
-- Onderaan de controle van het saldo na de import (6.16): klopt het berekende saldo met het eindsaldo van het
+- Onderaan de controle van het saldo na de import (7.16): klopt het berekende saldo met het eindsaldo van het
   bestand zodra alles geboekt is.
 - In de voorbeeldmodus de knop **Voorbeeldbestand importeren**.
 
-### 8.9 Transacties
+### 10.9 Transacties
 
 - Een lijst zoals in een bank-app, per rekening (kaartjes met saldo bovenaan), nieuwste eerst, met zoeken en
   filters: periode of maand, post, potje, tag, overig, nog niet gecontroleerd, Nog overboeken, nog terug te
   ontvangen, bedrag van/tot, in/uit.
-- Onder de rekeningkaarten het **downloadadvies** (7.8). Een balk naar Nog overboeken als daar iets openstaat.
+- Onder de rekeningkaarten het **downloadadvies** (8.8). Een balk naar Nog overboeken als daar iets openstaat.
 - Wachtende banktransacties staan er ook (met een puntje), met **dezelfde** voorstellen, aantallen en hetzelfde
   vinkje als in Nakijken. "Boek de zekere" zet hier op gecontroleerd.
 - Detail van een boeking: alle velden te wijzigen behalve (bij een banktransactie) bedrag, dag en rekening;
@@ -1375,14 +1416,14 @@ het aantal kaartjes.
   boeking toevoegen (zonder banktransactie).
 - Bij een boeking op een potje: rechtsklik "Eenmalig (niet in het gemiddelde)".
 
-### 8.10 Tags
+### 10.10 Tags
 
 Eén scherm, links de tags, rechts per tag: uitgaven deze maand en dit jaar (per maand), en bij Krijg ik terug
 "Nog terug te ontvangen: € …" met de open boekingen en de geschiedenis van oude terugbetalingen. Beheer: aanmaken,
 naam, kleur, schakelaars **Krijg ik terug** en **Tel mee bij ‘nog te besteden’**, startbedrag met dag. Verwijderen
 wordt geweigerd als de tag terugbetalingen heeft. Een klik op "n boekingen" opent Transacties gefilterd op de tag.
 
-### 8.11 Posten
+### 10.11 Posten
 
 Het jaarplan: jaar kiezen, **jaar aanmaken** (leeg of kopiëren van een vorig jaar: posten, koppelingen en RES-regels
 mee, zonder boekingen, vinkjes en wat-als), **afsluiten** en heropenen. Het veld "Minimaal op je betaalrekening aan
@@ -1390,10 +1431,10 @@ het eind van de maand". De posten op volgorde (slepen), per post naam, richting,
 en dag, met de **ketenstrook** ("Gaat via Automatisch sparen: X naar n potjes"). De opengeklapte RESERVERINGEN toont
 de opbouw uit Automatisch sparen alleen-lezen met "Verdeling wijzigen bij Automatisch sparen"; de RES-regels in de
 groep "RES-regels (oude opbouw)" met hun som per maand, en de waarschuwing als ze uit de pas lopen. Daaronder de
-**maandbalans** met wat-als (6.14). Een post verwijderen met boekingen kan alleen als die boekingen overig mogen
+**maandbalans** met wat-als (7.14). Een post verwijderen met boekingen kan alleen als die boekingen overig mogen
 worden.
 
-### 8.12 Potjes
+### 10.12 Potjes
 
 - Overzicht per groep (Reserveringspotjes, Spaarpotjes; spaarpotjes per eigenaar gegroepeerd), met per potje het
   saldo en een balkje voor het spaardoel. Bovenaan saldo spaarrekening, niet toegewezen en "In de min, gedekt door
@@ -1404,28 +1445,28 @@ worden.
   (echt saldo doorgetrokken, verwacht gestippeld, doellijn) met "Stand op <datum>"; verwachtingen ("Elke maand" t/m),
   projecten; de schakelaar "Reken met eerdere uitgaven" met het gemiddelde; bij een negatief potje wanneer het weer
   op nul staat; **Opheffen…**. Bewerken: naam, soort, eigenaar, beginbedrag.
-- Knoppen **Nieuw potje** en **Nieuw jaarbedrag…** (6.15). De zin "Verwachtingen tellen nergens anders in mee"
+- Knoppen **Nieuw potje** en **Nieuw jaarbedrag…** (7.15). De zin "Verwachtingen tellen nergens anders in mee"
   staat bij de vooruitblik.
 
-### 8.13 Automatisch sparen
+### 10.13 Automatisch sparen
 
 Een eigen scherm. Per vaste overboeking: naam, van (betaalrekening) en naar (spaarrekening), de verdeling over
 potjes (potje en bedrag, toevoegen, wijzigen, weghalen, volgorde), het totaal, en "Telt in je begroting als: post
 <post>" (koppelen of ontkoppelen) met de ketenstrook en de waarschuwing als de RES-regels anders optellen. Nieuw,
 archiveren, verwijderen.
 
-### 8.14 Maandgrid (onder Inzicht)
+### 10.14 Maandgrid (onder Inzicht)
 
 Het jaaroverzicht zoals de Excel: posten als rijen, plan en jan–dec en jaar als kolommen, de lopende maand
 gemarkeerd, toekomstige en nog open bedragen in een rustiger (maar leesbare) stijl. Onder het grid de totaalrijen
-(6.3). **Vaste legenda van één regel**: Klopt / Wijkt af (± € X) / Nog verwacht / Te laat / Afgevinkt. Boven het
+(7.3). **Vaste legenda van één regel**: Klopt / Wijkt af (± € X) / Nog verwacht / Te laat / Afgevinkt. Boven het
 grid: "Juni: 5 van 15 voldaan · 3 te laat". Klik op een cel: een venster met de boekingen, de status in woorden,
 "Voldaan (afvinken)", de ketenstrook bij een post met Automatisch sparen, en bij "Te laat" een hint als een
 wachtende banktransactie lijkt te passen ("Er wacht een banktransactie van € 150,00 die hierbij past" met een knop
 die Nakijken op die transactie opent). Dubbelklik om een boeking toe te voegen. "Toon opbouw van RESERVERINGEN"
 klapt de regels van Automatisch sparen uit. Klik op IN/UIT overig toont die boekingen.
 
-### 8.15 Rapporten
+### 10.15 Rapporten
 
 Tabbladen: **Overzicht** (jaaroverzicht: op de rekening op 1-1, IN, UIT, op de rekening, minimaal, tijdelijk
 geleend, vrij te besteden, overig, gemiddelden per verstreken maand), **Vrij te besteden** (per maandeinde),
@@ -1436,7 +1477,7 @@ samenvoegen), **Budget tegen werkelijk** (per post plan en werkelijk t/m nu, ver
 In de referentie staat Rapporten **tijdelijk niet** in de zijbalk (wens van de gebruiker); de afspraak is het terug
 te zetten onder Inzicht, met Maandgrid eronder. Bouw het scherm, en zet het onder Inzicht vóór Maandgrid.
 
-### 8.16 Instellingen
+### 10.16 Instellingen
 
 Tabbladen (in een smal venster onder de titel):
 
@@ -1449,16 +1490,16 @@ Tabbladen (in een smal venster onder de titel):
 - **Telefoon**: zie 9.1.
 - **Over**: versie, wisselen tussen eigen administratie en voorbeelddata.
 
-### 8.17 Tooltips en uitleg
+### 10.17 Tooltips en uitleg
 
-Elk begrip uit hoofdstuk 3 heeft zijn uitlegzin als tooltip op de plek waar het voor het eerst op een scherm staat
+Elk begrip uit hoofdstuk 4 heeft zijn uitlegzin als tooltip op de plek waar het voor het eerst op een scherm staat
 (bijvoorbeeld bij de titel of het veld). Geen grijze zinnen in beeld.
 
 ---
 
-## 9. Telefoondashboard, back-up en export, voorbeelddata
+## 10. Telefoondashboard, back-up en export, voorbeelddata
 
-### 9.1 Telefoondashboard
+### 11.1 Telefoondashboard
 
 Geen hosting en geen app op de telefoon: de app schrijft **één statische pagina** (HTML, en dezelfde inhoud als
 PDF) naar een cloudmap naar keuze die de gezinsleden op hun telefoon kunnen openen. Alleen lezen.
@@ -1476,7 +1517,7 @@ Inhoud, in deze volgorde:
 2. **Voor het gezin**: per gekozen eigenaar (een persoon of een groep, uit `pot.owner`) een kaart met het totaal en
    de potjes met saldo. Alleen de eigenaren die de gebruiker aanvinkt.
 3. **Gezamenlijke spaarpot**: één gekozen potje met het saldo nu en de verwachte stand over 3, 6 en 12 maanden
-   (dezelfde vooruitblik als bij het potje, 6.12). Daaronder een datumveld "Stand op een eigen datum" en een
+   (dezelfde vooruitblik als bij het potje, 7.12). Daaronder een datumveld "Stand op een eigen datum" en een
    inklapbare lijst "Stand per maand". De app zet de verwachte stand in de pagina tot een instelbaar aantal maanden
    vooruit (standaard 36, te kiezen 12 … 120): per maand voor de lijst en per dag waarop de stand verandert voor het
    datumveld (de **peildatum**). Het ingebouwde script toont de stand op de gekozen dag; vóór vandaag of na het
@@ -1490,7 +1531,7 @@ met potjes voor de gezamenlijke spaarpot, het aantal maanden vooruit, en de opti
 gekozen is, staan de onderdelen er niet op. Opgeslagen in `setting` `publish.options` (JSON; onbekende of
 ontbrekende velden krijgen de standaard, zodat oudere instellingen gewoon gelezen worden).
 
-### 9.2 Back-up en herstel
+### 11.2 Back-up en herstel
 
 - Een back-up is een **consistente kopie** van de database via de backup-API van de database (bij SQLite de
   online-backup-API), nooit een bestandskopie van een database die open is. Eén los bestand, veilig in een
@@ -1506,7 +1547,7 @@ ontbrekende velden krijgen de standaard, zodat oudere instellingen gewoon geleze
   back-upinstellingen van deze computer blijven; al het andere komt uit de back-up. Gaat er iets mis, dan wordt de
   veiligheidskopie teruggezet. Een back-up van een nieuwere versie wordt geweigerd.
 
-### 9.3 Exports (kopieën om te lezen, geen back-up)
+### 11.3 Exports (kopieën om te lezen, geen back-up)
 
 - **CSV-export**: per tabel één `<tabel>.csv`: kopregel met kolomnamen, puntkomma als scheidingsteken, CRLF,
   UTF-8 met BOM, bedragen als `1234,56` (geen duizendtalscheiding), dagen als `2027-01-31`, ja/nee als `1`/`0`,
@@ -1527,7 +1568,7 @@ ontbrekende velden krijgen de standaard, zodat oudere instellingen gewoon geleze
   Bedragen als echte getallen met opmaak `#.##0,00`, datums als echte datumcellen, totalen als `SUM`-formules met
   de uitkomst erbij, kop en eerste kolom bevroren.
 
-### 9.4 Voorbeelddata
+### 11.4 Voorbeelddata
 
 De app heeft een **voorbeeldmodus** met een verzonnen gezin, om de app te demonstreren en om de zelftest op te
 draaien. Eisen:
@@ -1540,7 +1581,7 @@ draaien. Eisen:
   andere of onbekende versie wordt vanzelf leeggemaakt en opnieuw gevuld. Hoog de versie op bij elke wijziging.
   Weiger het vullen van een database die al rekeningen of een jaar heeft.
 - **De laatste 10 dagen ontbreken** van beide rekeningen. Nakijken › "Voorbeeldbestand importeren" schrijft een zip
-  in het formaat van 7.5 met precies die dagen en importeert hem met de gewone zip-import. De zip sluit aan op de
+  in het formaat van 8.5 met precies die dagen en importeert hem met de gewone zip-import. De zip sluit aan op de
   saldi (het eerste saldo vóór mutatie is gelijk aan het saldo in de app).
 - **Namen**: personen "Ouder 1", "Ouder 2", "Kind 1", "Kind 2"; bedrijven met "Voorbeeld" of "Test" in de naam;
   IBAN's `NL00TEST…`.
@@ -1573,24 +1614,24 @@ Wat erin moet zitten (zodat elk scherm en elke rekenregel iets laat zien):
 
 ---
 
-## 10. Werkwijze en testvangnet
+## 11. Werkwijze en testvangnet
 
-### 10.1 Bouwen in kleine rondes
+### 12.1 Bouwen in kleine rondes
 
 - Bouw in **kleine rondes**: één wens, één onderdeel of één rekenregel per ronde, op een eigen tak, in commits die
   elk apart terug te draaien zijn.
-- **Elke ronde eindigt met een testronde** (10.2). Pas als die geslaagd is, gaat de ronde naar de hoofdtak.
+- **Elke ronde eindigt met een testronde** (11.2). Pas als die geslaagd is, gaat de ronde naar de hoofdtak.
 - **Eerst installeren, dan de gebruiker laten testen.** Na een geslaagde testronde wordt de nieuwe versie
   geïnstalleerd (de app die de gebruiker echt start) en daarna pas test de gebruiker. Nooit "het werkt in de
   tests" laten testen op een versie die niet geïnstalleerd is.
-- Rekenregels krijgen **tests met uitgewerkte, verzonnen voorbeelden**, zoals in hoofdstuk 12. Elke module een
+- Rekenregels krijgen **tests met uitgewerkte, verzonnen voorbeelden**, zoals in hoofdstuk 13. Elke module een
   eigen testset met een database in het geheugen.
 - Een rekenregel wijzigen is een **eigen besluit** van de gebruiker. Een UX-ronde verandert alleen teksten,
-  indeling en weergave; de kerncijfers (10.2) moeten dan gelijk blijven.
+  indeling en weergave; de kerncijfers (11.2) moeten dan gelijk blijven.
 - Houd een **voortgangsbestand** bij: wat per ronde gebouwd is, wat getest is (en wat niet), wat openstaat. Dat is
   het overdrachtspunt tussen werksessies.
 
-### 10.2 De testronde
+### 12.2 De testronde
 
 Eén script dat vier dingen doet en eindigt met **TOTAAL: GESLAAGD** of **TOTAAL: NIET GESLAAGD**. Alle uitvoer gaat
 naar een map buiten de broncode.
@@ -1636,7 +1677,7 @@ back-up bij afsluiten en geen telefoonpagina), voorbeelddata in een nieuw tijdel
 logbestand, en alleen de kerncijfers schrijven (zonder venster) met een peildag. Let op: zorg dat een bestandspad op
 de opdrachtregel niet als "document openen" wordt opgevat (in de referentie opende de app dan geen venster).
 
-### 10.3 De lessen
+### 12.3 De lessen
 
 1. **Tests en schermafbeeldingen alleen zijn niet genoeg.** In de referentie waren alle tests groen en zagen de
    schermafbeeldingen er goed uit, terwijl de geïnstalleerde app bij de gebruiker een lege zijbalk toonde. De
@@ -1666,13 +1707,14 @@ de opdrachtregel niet als "document openen" wordt opgevat (in de referentie open
 
 ---
 
-## 11. Volgorde van bouwen
+## 12. Volgorde van bouwen
 
-Een voorgestelde roadmap. Elke ronde eindigt met een testronde; vanaf ronde 3 met zelftest en kerncijfers.
+Een voorgestelde roadmap. Elke ronde eindigt met een testronde; vanaf ronde 3 met zelftest en kerncijfers. Ronde 0
+begint pas als de twee vragen van de triage (hoofdstuk 2) beantwoord en vastgelegd zijn.
 
 | Ronde | Wat | Klaar als … |
 |---|---|---|
-| 0 | **Testvangnet en skelet.** Project met de modules uit hoofdstuk 4, lege schermen in de zijbalk, testscript met bouwen en tests. | Het script geeft GESLAAGD; de echte app start en toont de zijbalk met alle regels. |
+| 0 | **Testvangnet en skelet.** Project met de modules uit hoofdstuk 5, lege schermen in de zijbalk, testscript met bouwen en tests. | Het script geeft GESLAAGD; de echte app start en toont de zijbalk met alle regels. |
 | 1 | **Kern.** Geld in centen (lezen, rekenen in velden, tonen), dag, het hele schema als eerste migratie, database in het geheugen voor tests. | Acceptatietests A1–A3 slagen; een tweede migratie kan worden toegevoegd zonder de eerste te wijzigen. |
 | 2 | **Import.** CSV lezen, profiel van de referentiebank, algemeen profiel, zip, saldoketen, dubbelen, naad op saldo/datum/hand, importbatch. Scherm Importeren met voorvertoning. | B1–B7 slagen; een voorbeeldzip importeert foutloos en een tweede keer niets nieuws. |
 | 3 | **Boeken en rekeningen.** Boeken, splitsen, overslaan, handmatige boekingen, saldo, afstemmen (ook automatisch), eigen overboekingen koppelen. Scherm Transacties (basis) en Instellingen › Rekeningen. Zelftest en kerncijfers in het script. | C1–C3 slagen; het berekende saldo sluit op het eindsaldo van een import. |
@@ -1690,18 +1732,36 @@ Een voorgestelde roadmap. Elke ronde eindigt met een testronde; vanaf ronde 3 me
 | 15 | **Telefoondashboard.** | De pagina toont op 375 punten breed zonder schuiven hetzelfde hoofdgetal als het Dashboard; het datumveld werkt en zonder script staat de lijst er. |
 | 16 | **UX-ronde.** Alle schermen langs de lessen van 8.1, beide venstermaten, licht en donker; daarna een test met de gebruiker en een herstelronde. | De zelftest is groen op alle schermen en venstermaten; de kerncijfers zijn ongewijzigd ("geen verschillen"); de gebruiker heeft getest en de namen goedgekeurd. |
 
+**Wat de triage verandert aan de roadmap**
+
+| Uitkomst van de triage | Gevolg |
+|---|---|
+| Platform web | Ronde 0: de testronde start een lokale server en een browser; de zelftest loopt de pagina's langs in twee schermbreedtes. Ronde 13: back-up als download of naar een map, niet via een databasebestand naast de app (afhankelijk van de opslag in de browser of op de lokale server). |
+| Platform mobiel | Ronde 15 (telefoondashboard) vervalt: de app zelf is dan de telefoonweergave. De zelftest controleert een smalle en een brede maat. |
+| Andere desktop (Windows, Linux) | Geen verschil in rondes; alleen de techniek van de zelftest en de mappen voor gegevens en back-up. |
+| Bank levert CSV met saldo per regel | Ronde 2 zoals beschreven, met een eigen profiel voor die bank. |
+| Bank levert CSV zonder saldo | Ronde 2 zonder saldoketen en naad op saldo; naad alleen op datum en met de hand. Automatisch afstemmen (ronde 3) vervalt; afstemmen met de hand blijft. Acceptatietests B1–B3 en B6 vervallen of worden aangepast. |
+| Bank levert CAMT.053 of MT940 | Ronde 2 krijgt een eigen lezer voor dat formaat (saldo meestal per afschrift: reken het saldo per regel uit vanaf het beginsaldo, zoals bij een PDF). De rest van de import blijft gelijk. |
+| Alleen PDF | Ronde 2 met de PDF-lezer als hoofdroute; plan extra tijd en test met het voorbeeldbestand. |
+| Geen voorbeeldbestand | Ronde 2 met het algemene profiel, kolommen kiezen en het formaat van 8.5; het bankprofiel volgt zodra er een bestand is. |
+| Meer dan één bank | Ronde 2 krijgt per bank een profiel; de zip-route alleen voor banken die een zip leveren. |
+
+De standaardkeuzes veranderen de roadmap niet. Slaat de gebruiker onderweg een onderdeel over (bijvoorbeeld tags met
+"Krijg ik terug" of het telefoondashboard), dan vervalt die ronde met de bijbehorende acceptatietests; de kern
+(rondes 0 t/m 7 en 9) blijft altijd.
+
 Daarna: schaduwdraaien naast de Excel tot een developer de code heeft gereviewd en de cijfers een paar maanden
 gelijk zijn.
 
 ---
 
-## 12. Acceptatietests
+## 13. Acceptatietests
 
 Met deze scenario's toon je aan dat jouw app hetzelfde rekent als de referentie. Maak van elk scenario een
 automatische test op een database in het geheugen. Alle gegevens zijn verzonnen. Bedragen in euro's; in de test
 zijn het centen.
 
-### 12.1 De basisopzet (fixture)
+### 13.1 De basisopzet (fixture)
 
 Tenzij een scenario iets anders zegt, geldt deze opzet en is **vandaag woensdag 10 maart 2027**.
 
@@ -1738,7 +1798,7 @@ storting was op 25-02-2027.
 **Tegenpartijen**: Energie Test BV `NL00TEST0000000050`, Kind 1 Voorbeeld `NL00TEST0000000070`, Bakkerij Voorbeeld
 `NL00TEST0000000080`, een onbekende `NL00TEST0000000099`.
 
-### 12.2 A — Kern
+### 13.2 A — Kern
 
 | ID | Gegeven | Verwacht |
 |---|---|---|
@@ -1748,9 +1808,9 @@ storting was op 25-02-2027.
 | A4 | Post UIT met plan + € 10,00 opslaan | geweigerd (UIT ≤ 0) |
 | A5 | Tweede post met isReserveTotal in 2027 | geweigerd (hoogstens één per jaar) |
 
-### 12.3 B — Import
+### 13.3 B — Import
 
-Bestand X (formaat 7.5) voor de betaalrekening, drie regels:
+Bestand X (formaat 8.5) voor de betaalrekening, drie regels:
 
 | Regel | Datum | Saldo vóór | Bedrag | Tegenpartij | Code | Omschrijving |
 |---|---|---|---|---|---|---|
@@ -1772,7 +1832,7 @@ Bestand X (formaat 7.5) voor de betaalrekening, drie regels:
 | B10 | Een zip met een bestand voor IBAN `NL00TEST0000000555` (onbekend) | dat bestand gaat niet mee: "Geen rekening met IBAN … gevonden."; de rest wel |
 | B11 | Een zip met een pad `../x.csv` | hele archief geweigerd |
 
-### 12.4 C — Boeken, saldo en eigen overboekingen
+### 13.4 C — Boeken, saldo en eigen overboekingen
 
 | ID | Gegeven / actie | Verwacht |
 |---|---|---|
@@ -1786,7 +1846,7 @@ Bestand X (formaat 7.5) voor de betaalrekening, drie regels:
 | C8 | Import geheel geboekt, berekend saldo op de laatste dag = eindsaldo bestand | automatisch een afstemming met verschil € 0,00 (één per rekening per dag) |
 | C9 | Boeking met tag op de spaarrekening | geweigerd |
 
-### 12.5 D — Posten, maandgrid en status
+### 13.5 D — Posten, maandgrid en status
 
 Boekingen op de betaalrekening in 2027: februari: Salaris niet geboekt, Energie − € 162,40 op 06-02; maart: Huur
 − € 1.200,00 op 01-03, een pinbetaling − € 35,00 overig op 04-03. Verder niets.
@@ -1806,7 +1866,7 @@ Boekingen op de betaalrekening in 2027: februari: Salaris niet geboekt, Energie 
 | D11 | Jaar 2028 kopiëren van 2027 | zelfde posten, RES-regels en koppeling met Automatisch sparen; geen boekingen, vinkjes of wat-als |
 | D12 | 2027 afsluiten en dan een boeking van maart wijzigen | geweigerd |
 
-### 12.6 E — Regels en omschrijvingen
+### 13.6 E — Regels en omschrijvingen
 
 Regels: R-Energie (IBAN NL00TEST0000000050, bedrag − € 150,00 → post Energie, priority 10); R-Zakgeld (IBAN
 NL00TEST0000000070, geen bedrag → overig, Nog overboeken met potje Spaargeld Kind 1, richting **eruit**,
@@ -1835,7 +1895,7 @@ priority 20).
 | E16 | Energie Test BV / OVB / "Factuur 2027-0012" | Energie Test (rechtsvorm weg; zakelijke tekst) |
 | E17 | Energie Test BV / INC / "Termijn maart" | Energie Test |
 
-### 12.7 F — Potjes en Automatisch sparen
+### 13.7 F — Potjes en Automatisch sparen
 
 | ID | Gegeven / actie | Verwacht |
 |---|---|---|
@@ -1853,7 +1913,7 @@ priority 20).
 | F12 | Onderhoud opheffen met saldo € 600,00 naar Vakantie | Vakantie € 900,00; Onderhoud € 0,00 en opgeheven; saldo spaar ongewijzigd |
 | F13 | Potje opheffen met negatief saldo zonder doel | geweigerd |
 
-### 12.8 G — Nog overboeken en tijdelijk geleend
+### 13.8 G — Nog overboeken en tijdelijk geleend
 
 | ID | Gegeven / actie | Verwacht |
 |---|---|---|
@@ -1867,7 +1927,7 @@ priority 20).
 | G8 | Tijdelijk geleend: + € 300,00 op 05-03, − € 100,00 op 20-03 (beide gemarkeerd) | uitstaand op 10-03 € 300,00; op 25-03 € 200,00 |
 | G9 | Daarna − € 250,00 op 28-03 (gemarkeerd) | uitstaand op 31-03 € 0,00 (niet negatief) |
 
-### 12.9 H — Tags
+### 13.9 H — Tags
 
 Tag Tanken met Krijg ik terug vanaf 01-01-2027, startbedrag € 50,00 op 01-01-2027. Boekingen op betaal met de tag:
 − € 40,00 (03-03), − € 30,00 (08-03).
@@ -1883,7 +1943,7 @@ Tag Tanken met Krijg ik terug vanaf 01-01-2027, startbedrag € 50,00 op 01-01-2
 | H7 | Tag op een boeking op spaar | geweigerd |
 | H8 | Oude werkwijze: terugbetaling vastleggen voor de twee boekingen plus startbedrag | bedrag € 50,00 − (− € 70,00) = € 120,00; daarna openstaand € 0,00; startbedrag niet meer te wijzigen tot ongedaan |
 
-### 12.10 I — Vrij en nog te besteden
+### 13.10 I — Vrij en nog te besteden
 
 | ID | Gegeven | Verwacht |
 |---|---|---|
@@ -1900,7 +1960,7 @@ Tag Tanken met Krijg ik terug vanaf 01-01-2027, startbedrag € 50,00 op 01-01-2
 | I11 | Twee banktransacties op betaal wachten | waarschuwing bij het getal met knop Boeken |
 | I12 | Grote uitgave: Verzekering − € 480,00 verwacht en niet geboekt in maart | Aandacht "grote uitgave op komst"; een maandpost van − € 300,00 niet |
 
-### 12.11 J — Spaardoel en vooruitblik
+### 13.11 J — Spaardoel en vooruitblik
 
 Spaargeld Kind 1: saldo € 400,00 op 10-03-2027, doel € 1.200,00 op 31-12-2027, in Automatisch sparen € 80,00 per
 maand (laatste echte storting 25-02), een open verwachting − € 100,00 op 15-06-2027, marge 0,5 %.
@@ -1920,7 +1980,7 @@ maand (laatste echte storting 25-02), een open verwachting − € 100,00 op 15-
 | J11 | Verwachting "Elke maand" van 31-01-2027 t/m 30-04-2027, € 25,00, zonder project | 31-01, 28-02, 31-03, 30-04; project = de omschrijving |
 | J12 | Potje met schakelaar aan, nu € 100,00, gemiddelde − € 50,00, geen stortingen | Aandacht "Potje … komt binnen een jaar onder nul" |
 
-### 12.12 K — Hulpje, maandbalans en wat-als
+### 13.12 K — Hulpje, maandbalans en wat-als
 
 | ID | Gegeven / actie | Verwacht |
 |---|---|---|
@@ -1929,7 +1989,7 @@ maand (laatste echte storting 25-02), een open verwachting − € 100,00 op 15-
 | K3 | Maandbalans 2027 | inkomsten 3.000 + 100 = € 3.100,00; uitgaven 1.200 + 150 + 40 + 400 = € 1.790,00; over € 1.310,00 per maand |
 | K4 | Wat-als Salaris € 3.200,00 | over € 1.510,00; het plan blijft € 3.000,00 tot "Maak hier het plan van" |
 
-### 12.13 L — Overig
+### 13.13 L — Overig
 
 | ID | Gegeven / actie | Verwacht |
 |---|---|---|
