@@ -722,3 +722,12 @@ Daarna: proefdraai opnieuw. Pas importeren als de jaren kloppen. Proefdraai-hulp
 - "Gereserveerd" op de betaalrekening is vervallen; dat geld gaat naar een pot op de spaarrekening.
 - "Tijdelijk anti-rood" volgt uit boekingen met de markering *tijdelijk geleend van spaar*.
 - Back-up naar iCloud Drive; dashboard voor de telefoon als bestand in een cloudmap (geen hosting).
+
+## Later (afspraak 23 november 2026)
+
+Drie kleine afwijkingen tussen app en spec, gevonden bij het bijwerken van de spec:
+1. **Rapporten** staat niet meer in de zijbalk (onder Inzicht staat alleen Maandgrid); terugzetten, met Maandgrid
+   eronder.
+2. **"Vrij te besteden"** staat nog op de telefoonpagina (onder het hoofdgetal en als titel van de trendgrafiek) en in
+   Rapporten; weghalen of hernoemen, net als op het Dashboard.
+3. **Trendgrafiek** rekent zonder "Komt nog terug"; gelijk trekken met het hoofdgetal.
