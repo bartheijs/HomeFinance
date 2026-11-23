@@ -19,7 +19,7 @@ UX-ronde kan in één stap (markering `voor-ux-ronde`).*
 | A2 | Status in woorden | Maandgrid: legenda onder het grid, "x van y voldaan · z te laat" erboven. Open een cel die te laat is. |
 | A3 | Potlabel | Transacties: bij een boeking uit een potje of voorgeschoten staat dat erbij; in het detail "nog over te boeken / nog terug te krijgen". |
 | B1 | Verdeling uit Automatisch sparen | Maandgrid of Posten: klap Reserveringen open; je ziet de verdeling over potjes. |
-| B2 | Koppelingen aan beide kanten | Open een potje (bijv. Spaar B&D): "Krijgt € … per maand via …". Open de post Sparen: "Gaat via … naar 1 potje". Klik door naar de andere kant. |
+| B2 | Koppelingen aan beide kanten | Open een potje (bijv. de gezamenlijke spaarpot): "Krijgt € … per maand via …". Open de post Sparen: "Gaat via … naar 1 potje". Klik door naar de andere kant. |
 | B3 | Hulpje Nieuw jaarbedrag | Potjes › Nieuw jaarbedrag…: vul een voorbeeld in en lees de samenvatting. **Annuleer** als je het niet echt wilt aanmaken. |
 | C1 | Nieuwe zijbalk | Posten en Automatisch sparen staan nu in de zijbalk; Regels onder Instellingen. |
 | C2 | Botsingen | "Nog overboeken" (was Verrekenen met spaar), "Voorgeschoten" (Tanken), "banktransactie". |

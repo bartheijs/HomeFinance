@@ -45,7 +45,7 @@ ABN AMRO, Dyme, Revolut en het Nibud (bronnen onderaan). Dit is een voorstel: de
 
 De app laat elke koppeling zien op beide plekken, met dezelfde woorden:
 
-- **Bij een post** (Begroting en maandgrid): "Gaat via *Automatisch sparen: Extra spaar* naar 1 potje (*Spaar B&D*)."
+- **Bij een post** (Begroting en maandgrid): "Gaat via *Automatisch sparen: Extra spaar* naar 1 potje (*Spaar gezin*)."
 - **Bij een potje**: "Krijgt € 500 per maand via *Automatisch sparen: Extra spaar* (post *Sparen*)."
 - **Bij Automatisch sparen**: zoals nu, plus "Telt in je begroting als: *Sparen*".
 - **Bij een boeking met "Nog overboeken"**: "Hoort bij potje *X* — nog over te boeken: € Y. Maak één overboeking van

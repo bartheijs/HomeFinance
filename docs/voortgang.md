@@ -681,12 +681,12 @@ Daarna: proefdraai opnieuw. Pas importeren als de jaren kloppen. Proefdraai-hulp
 - Dashboard: "Nog te besteden deze maand" (besteedbaar eind van de maand) is het hoofdgetal; "Besteedbaar nu" staat eronder.
 - Administratie van de gebruiker hersteld (met kopie `homefinance-voor-herstel-november.sqlite`): 11 posten voor
   november afgevinkt die vóór de start op 8 november betaald waren, 3 posten afgevinkt als "vervalt in november"
-  (kindgebonden budget, schoonmaak, zang- en dansles), kinderbijslag op € 283,33 per maand (€ 850 / 3) op zijn
+  (kindgebonden budget, schoonmaak, zang- en dansles), kinderbijslag als een derde van het kwartaalbedrag per maand op zijn
   verzoek: telt zo in het maandoverzicht en in de forecast.
 - Vergelijking met de Excel van de gebruiker: saldi en alle 35 potten gelijk aan zijn Excel (2). "Nog te besteden" in
-  november wijkt € 448,25 af van zijn Excel-forecast: + € 283,33 kinderbijslag per maand, + € 187,50 rente-reservering
+  november wijkt af van zijn Excel-forecast, volledig verklaard: kinderbijslag per maand, een rente-reservering
   die in de Excel apart op de betaalrekening staat (in de app hoort die in een pot op spaar; nog niet overgemaakt),
-  − € 22,58 werkelijke tegen geplande bedragen.
+  en het verschil tussen werkelijke en geplande bedragen.
 - De open punten van die dag zijn klaar (commit `9cba8b0`): open verrekeningen met spaar tellen mee in "nog te
   besteden", de voorbeelddata heeft bankregels bij de verrekeningen en de meldingen staan in één regel.
 
